@@ -1,0 +1,637 @@
+"""`wolf` — the whole public surface.
+
+Seven verbs, four of which never touch the endpoint:
+
+* `run` plays a game and writes the JSONL. `--mock` plays it without an endpoint, which is
+  the configuration CI runs on; `--dry-run` is the budget tool (plan §11: assemble every
+  prompt, land it on disk, make zero API calls).
+* `replay` prints a chronicle from a JSONL that already exists, and `--seat`/`--god` choose
+  whose eyes the printout has.
+* `audit` answers "what did this game cost, and how often did the engine paper over the
+  model" for one file, which is the same arithmetic `batch`/`compare` do over many.
+* `export` writes the single shareable HTML file (plan §9), and `watch` tails a game that is
+  still being played. Both read the log and nothing else: if the endpoint is offline tomorrow
+  the demo still works, because the log — not a re-run — is the artifact.
+* `batch` plays N games × K config arms on paired deal seeds, and `compare` either refuses
+  that batch or reports it. The pair is the whole of plan §8's 两配置对比 protocol: the exit
+  code says which of the two happened (0 = a verdict, 1 = a refusal, 2 = the command itself
+  was wrong), so a script can branch without parsing prose.
+
+There is deliberately one renderer per concern, shared by all five: `render_chronicle` for the
+text timeline, `render_html`/`render_live` for the two views. A live view and a post-mortem that
+format events differently are two truths about the same file, and the whole point of the log is
+that there is only one.
+"""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import json
+import random
+import sys
+from collections import Counter
+from pathlib import Path
+from statistics import mean
+from typing import Any
+
+from . import batch, metrics, render_html, render_live
+from .compress import render_line
+from .config import Config, ConfigError
+from .events import (Event, EventLog, Kind, LogDamage, empty_notice, meta_notice, seq_damage,
+                     seq_notice, torn_notice)
+from .game import DRAW_DAY_LIMIT, GameResult, play
+from .info import percept_for
+
+PRIVATE_HINT = "〔私有〕"
+FALLBACK_HINT = "〔引擎代打〕"
+
+
+def build_config(name: str = "default") -> Config:
+    """One place where a Config is made, so a batch axis is a diff of two of these."""
+    cfg = Config()
+    if name == "test":
+        cfg.temperature_ladder = (0.9,)
+    return cfg
+
+
+def make_actors(cfg: Config, seed: int, *, mock: bool):
+    """Seat -> actor. `mock` synthesises instead of replaying a script: an empty script makes
+    every seat fall back to the engine, and the timeline then proves only that the state
+    machine does not crash. See MockActor's two-mode docstring."""
+    from .actors import LlmActor, MockActor
+
+    if mock:
+        return {s: MockActor(s, synthesize=True, rng=random.Random(seed * 100 + s))
+                for s in range(1, cfg.seat_count + 1)}
+    raise ValueError("make_actors(mock=False) 需要 transport；由 cmd_run 构造")
+
+
+# ------------------------------------------------------------------------------- run
+def _run_and_close(coro_factory, transport):
+    """One event loop for the requests *and* for `aclose()`, because that is the only pairing
+    that works: `httpx.AsyncClient` binds its sockets to the loop that opened them, so closing
+    from a second `asyncio.run` reaches into a closed loop and dies with `RuntimeError: Event
+    loop is closed`. Dying inside a `finally` is the expensive part — the traceback replaces
+    the exit code a wrapper script branches on. Measured 2026-09-22T05:23:33Z: a game that
+    finished (`draw_day_limit`, 60 events) returned 1.
+    """
+    async def body():
+        try:
+            return await coro_factory()
+        finally:
+            if transport is not None:
+                await transport.aclose()
+    return asyncio.run(body())
+
+
+def _games_error(games: int) -> str | None:
+    """One floor for both verbs that take `--games`. Zero games produce nothing, and `batch`'s
+    summary line then reads `pair_keys[0]` on an empty list — the crash, not the verdict, would
+    hand back the exit code. Checked before a directory is made: an empty batch folder is still a
+    folder `compare` will open.
+    """
+    return None if games >= 1 else (f"--games 要至少 1 局（收到 {games}）："
+                                    "不足 1 局什么都不产，比较也没有分母")
+
+
+def _seat_error(seat: int | None, path: Path) -> str | None:
+    """`--seat` names a chair, and the roster it has to be in comes from the file — not from a
+    second copy of the 9. `render_html.seats_of` is the same reader the vote matrix draws its
+    rows from.
+
+    Before this, `--seat 10` printed the public timeline with exit code 0, byte-identical to
+    leaving `--seat` out: a seat number past the table is the command being wrong, and rc 0 is a
+    verdict. Checked before a line is printed for the same reason #58 checks `--games` before a
+    directory is made.
+
+    Quiet when there is no roster to check against — a file with no 开局记录 gets `empty_notice`'s
+    sentence, and "this file has no seat 42" would be a claim about a table nobody has been shown.
+    """
+    if seat is None:
+        return None
+    seats = render_html.seats_of(EventLog.read_records(path)[0])
+    if not seats or seat in seats:
+        return None
+    return (f"--seat 要在这局的名册里（{seats[0]}-{seats[-1]}，共 {len(seats)} 席），收到 {seat}："
+            "越界的座位号是命令写错了，不是引擎拒绝出结论")
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    if (err := _games_error(args.games)) is not None:
+        print(f"配置错误：{err}", file=sys.stderr)
+        return 2
+    cfg = build_config()
+    if args.max_days is not None:
+        # Goes through the same `apply_overrides` the batch arms use, so the cap that lands in
+        # the manifest is the one that entered `config_hash` — a hand-patched attribute here
+        # would let two runs claim the same hash while playing to different lengths.
+        cfg = batch.apply_overrides(cfg, {"max_days": args.max_days})
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    seeds = [args.seed + i for i in range(args.games)]
+
+    if args.dry_run:
+        return _cmd_dry_run(cfg, seeds, out)
+
+    transport = None
+    if not args.mock:
+        from .transport import HttpTransport
+
+        try:
+            # Checked here, not in `chat()`: the transport only reads the env var when it
+            # sends, so a missing key used to surface as an uncaught ConfigError from the
+            # middle of the first night — after the log file had been created and one seat's
+            # turn had already been thrown away.
+            cfg.require_key()
+            transport = HttpTransport(cfg)
+        except ConfigError as e:
+            print(f"配置错误：{e}", file=sys.stderr)
+            return 2
+    return _run_and_close(lambda: _run_many(cfg, seeds, out, args, transport), transport)
+
+
+async def _run_many(cfg: Config, seeds: list[int], out: Path, args, transport) -> int:
+    rc = 0
+    for seed in seeds:
+        actors = (make_actors(cfg, seed, mock=True) if transport is None
+                  else _llm_actors(cfg, transport))
+        res = await play(cfg=cfg, deal_seed=seed, out_dir=out, actors=actors)
+        print(_summary_line(res), flush=True)
+        if not args.quiet:
+            for line in render_chronicle_file(res.path, god=args.god):
+                print(line)
+        if res.terminal not in metrics.DECISIVE | {DRAW_DAY_LIMIT}:
+            # A draw is an answer; an outage is not. Returning 1 for both means a wrapper script
+            # that retries on failure re-burns a batch of legal results, and plan §12 R10's
+            # pre-registered adjudication reads as a crash.
+            rc = 1
+    return rc
+
+
+def _llm_actors(cfg: Config, transport):
+    """收 seed 的是发牌（`play(deal_seed=...)`）和 mock 座位的人格抽样（`make_actors`），不是这里。"""
+    from .actors import LlmActor
+    from .llm import LLM
+    llm = LLM(transport, cfg)
+    return {s: LlmActor(llm, cfg, s) for s in range(1, cfg.seat_count + 1)}
+
+
+def _summary_line(res: GameResult) -> str:
+    return (f"[{res.game_id}] {res.terminal} winner={res.winner or '-'} day={res.days} "
+            f"events={res.events} fallback={res.fallbacks} retry={res.retries} "
+            f"timeout={res.timeouts} overflow={res.context_overflows} "
+            f"completion={res.completion_tokens} {res.wallclock_s:.1f}s -> {res.path}")
+
+
+# --------------------------------------------------------------------- one renderer
+def render_chronicle_file(path: Path, *, god: bool = False, as_seat: int | None = None
+                          ) -> list[str]:
+    events, meta, torn = EventLog.read_split(path)
+    lines = render_chronicle(events, god=god, as_seat=as_seat)
+    # The transcript ends here, and a reader cannot tell that apart from a game that ended here
+    # unless it says so — including in a seat's own view, which is the one people act on. The
+    # other ways a transcript misleads are a file with no manifest at all, a manifest with nothing
+    # after it, and a numbering that isn't 1,2,3: same rule, four sentences, one owner each
+    # (`events.py`). The numbering sentence comes before the cut, which is about the file's tail.
+    for notice in (meta_notice(meta), empty_notice(events, meta), seq_notice(events),
+                   torn_notice(torn)):
+        if notice:
+            lines.append(f"〔{notice}〕")
+    return lines
+
+
+def render_chronicle(events: list[Event], *, god: bool = False, as_seat: int | None = None,
+                     show_fallback: bool = True) -> list[str]:
+    """`as_seat` is not a filter for convenience — it *is* the isolation property made
+    visible: give a colleague the same file with `--seat 3` and they watch a different game,
+    on purpose."""
+    if as_seat is not None:
+        shown = percept_for(as_seat, events).events
+    elif god:
+        shown = events
+    else:
+        shown = [e for e in events if e.visibility == "all"]
+    private = {e.seq for e in events if e.visibility != "all"}
+    out = []
+    for e in shown:
+        line = render_line(e)
+        if e.seq in private:
+            line = f"{line}{PRIVATE_HINT}"
+        if show_fallback and e.result.get("fallback"):
+            line = f"{line}{FALLBACK_HINT}"
+        out.append(line)
+    return out
+
+
+# --------------------------------------------------------------------------- dry run
+def _cmd_dry_run(cfg: Config, seeds: list[int], out: Path) -> int:
+    """Assemble every prompt a game would send; call nothing.
+
+    The cheapest way to iterate on plan §5's budget table, so it is the everyday command
+    rather than the exotic one. It plays a *mock* game to reach the states: day 1 alone never
+    exercises the folding path, which is the code most likely to produce the HTTP 400 this
+    exists to prevent.
+    """
+    per_phase: dict[str, list[int]] = {}
+    over = 0
+    total = 0
+    ptok = ctok = 0
+    for seed in seeds:
+        actors = make_actors(cfg, seed, mock=True)
+        res = asyncio.run(play(cfg=cfg, deal_seed=seed, out_dir=out, actors=actors))
+        dump = out / f"g{seed:08d}.prompts.jsonl"
+        dump.unlink(missing_ok=True)
+        for actor in actors.values():
+            for ctx in actor.turns:  # every prompt this seat was handed, attempts included
+                p = ctx.prompt
+                per_phase.setdefault(ctx.phase.value, []).append(p.total_tokens)
+                over += int(p.over_ceiling)
+                total += 1
+                ptok += p.total_tokens
+                ctok += cfg.token_budget_for(ctx.phase)
+                with dump.open("a", encoding="utf-8") as fh:
+                    fh.write(json.dumps({
+                        "seat": ctx.seat, "phase": ctx.phase.value, "attempt": ctx.attempt,
+                        "total_tokens": p.total_tokens, "region_tokens": p.region_tokens,
+                        "over_ceiling": p.over_ceiling, "shrink": p.shrink,
+                        "messages": [{"role": m["role"], "content": m["content"]}
+                                     for m in p.messages],
+                    }, ensure_ascii=False) + "\n")
+        print(f"[{res.game_id}] {res.terminal} day={res.days} prompts -> {dump.name}")
+    usable = _print_census(cfg, per_phase, over, total, ptok, ctok, len(seeds))
+    return 0 if usable else 1
+
+
+def _print_census(cfg: Config, per_phase: dict[str, list[int]], over: int, total: int,
+                  ptok: int, ctok: int, games: int) -> bool:
+    """Print the census; return whether it is a conclusion (False = nothing was captured)."""
+    print(f"\n== prompt 长度普查（{total} 次装配，零 API 调用；天花板 "
+          f"{cfg.tokens.absolute_ceiling}，目标 {cfg.tokens.target}）==")
+    if not per_phase:
+        # An empty census is the failure mode worth naming: `turns` would be empty if the
+        # agent ever handed an actor a prompt it never stored, and the run would look clean.
+        print("没有捕获到任何 prompt —— 装配钩子失效了，这本身就是失败。")
+        return False
+    for phase in sorted(per_phase, key=lambda k: -max(per_phase[k])):
+        s = sorted(per_phase[phase])
+        p95 = s[min(len(s) - 1, int(0.95 * len(s)))]
+        print(f"  {phase:14s} n={len(s):4d} p50={int(mean(s)):5d} p95={p95:5d} max={max(s):5d}")
+    print(f"  超天花板：{over}")
+    # 墙钟 = 每局调用次数 × 每次的解码量。这两个乘数以前只有 plan §187 的一句估算在兜着，
+    # 而它们今天是可以零请求量出来的：局数、prompt token、按 `token_budget_for` 计价的完成
+    # 预算。剩下的未知量只有端点的吞吐与每次固定开销——那两格在 `docs/calibration.md`。
+    print(f"  成本合计（{games} 局 · {total / max(games, 1):.1f} 次/局）：{total} 次调用 · "
+          f"prompt {ptok} tok · 完成预算 {ctok} tok"
+          f"（按 max_tokens 的上限算，非实测生成长度；每局硬顶 "
+          f"{cfg.max_game_completion_tokens}）")
+    return True
+
+
+# ----------------------------------------------------------------------------- audit
+def cmd_audit(args: argparse.Namespace) -> int:
+    """One JSON object per game: the file's shape, then M2–M8 over it.
+
+    Every rate here is `metrics.py`'s, not a second implementation of it. `audit` used to
+    compute its own `fallback_rate` over *all events* while the batch report counts *decision
+    turns* — two denominators, two numbers, one file. That is the same class of mistake as the
+    `act`/`action` field-name trap m8 fell into, and the fix is the same: one function, pinned
+    by a test.
+
+    `--calibration` is the only way external data enters this object, and it is opt-in for that
+    reason: the default output has to stay a function of the log, recomputable on a machine
+    where `data/calibration.json` has a different life. When it is given, the file it read — and
+    what it concluded about that file — is printed next to the number that depends on it.
+    """
+    g = metrics.read_game(Path(args.file))
+    events, meta = g.events, g.meta
+    cal = (metrics.load_calibration(args.calibration, expect_model=meta.get("model"))
+           if args.calibration else None)
+    asks = [e for e in events if e.request]
+    kinds = Counter(e.kind for e in events)
+    tokens = [int(e.request.get("total_tokens_est") or 0) for e in asks]
+    folds = [int(e.request.get("compactions") or 0) for e in asks]
+    # `None` when no request carries it, rather than 0: the field landed after the first batches
+    # were written, and "no prompt sat on the day floor" is good news nobody measured there.
+    floor = ([v for v in (e.request.get("b2_over_cap") for e in asks) if v is not None]
+             or None)
+    # One pass over the requests, shared with `wolf compare`'s per-arm table: the card cells below
+    # are lifted out of it rather than recomputed here, because two readings of one field is how a
+    # single-file verdict and an arm-level verdict start disagreeing.
+    check = metrics.region_budget_check(g)
+    flags = Counter(f.split(":")[0] for e in events for f in e.result.get("flags", ()))
+    print(json.dumps({
+        "meta": {k: meta.get(k) for k in ("game_id", "deal_seed", "config_hash",
+                                          "actor_kinds", "model", "reproducible")},
+        "synthetic": g.is_synthetic,
+        "events": len(events),
+        "terminal": g.terminal,
+        # A count, never the bytes: the cut line can be a wolf chat. `null` for a file that ends
+        # on a complete record, so `1` here cannot be confused with "the normal case".
+        "torn_tail": None if not g.torn_tail else g.torn_extent,
+        # The same three counts `replay` puts in its sentence, as numbers: `events: 3` alone
+        # reads as "this game had three events" when the file actually lost one in the middle.
+        "seq_damage": seq_damage(events),
+        "days": g.days,
+        # `null` means the log carries no verdict, which is not the same claim as `false`. The
+        # threshold sits in the same payload record, so a reader who wants to re-check this one
+        # bit can; nothing here recomputes the fallback *count*, because `m3_gate` already owns
+        # that number and a second copy of a rate is how two answers for one file get written.
+        "degraded_game": g.degraded_game,
+        "kinds": dict(kinds),
+        "speech_acts": dict(Counter(str(e.payload.get("act")) for e in events
+                                    if e.kind == Kind.SPEECH)),
+        # The other half of that distribution: what the judge asked each seat to do, and how often
+        # it got that. `speech_acts` alone reads as a behavioural verdict when it may be a property
+        # of the assignment table, and plan §7's first defence is about the pair.
+        "assignment": metrics.assignment_compliance(events),
+        "soft_flags": dict(flags),
+        "prompt_tokens_est": {"max": max(tokens, default=0),
+                              "mean": int(mean(tokens)) if tokens else 0},
+        # §5 的整段区域几何买的就是"端点复用前缀"，而这是链条上唯一说得出它有没有兑现的一格。
+        # `reuse_ratio: null` 说的是这批日志里没有一次调用报过 `cached_tokens`，不是复用率为 0。
+        "prefix_cache": metrics.prefix_cache_reuse(events),
+        # Different quantities, deliberately not collapsed into one "compactions" number:
+        # `max_rounds` is how many days the fold front advanced inside one prompt, `prompts_folded`
+        # counts prompts sent with a folded chronicle, `events` counts the distinct fold states the
+        # log has a `Kind.COMPACTION` marker for. Only the last one is a cache-flush ledger; a log
+        # from before the marker existed reads 0 there while the other two are non-zero, which is
+        # the honest difference between "never folded" and "folded, but nobody wrote it down".
+        # The last two answer a different question: the day floor lets B2 finish folding without
+        # meeting `regions.b2`, so `b2_prompts_on_the_floor` counts those prompts and
+        # `b2_worst_over_tokens` how far the worst one went — both read the excess assemble wrote
+        # per prompt, and `null` says the field had not been written yet, not that it was 0.
+        # The pair after them is the C side of the same problem: the shipped `region_tokens` is
+        # measured *after* the card is thinned, so the only evidence that a prompt ever lost an
+        # accusation line is the count assemble wrote at send time. Its unit is lines, not tokens.
+        "compactions": {"max_rounds": max(folds, default=0),
+                        "prompts_folded": sum(1 for x in folds if x),
+                        "events": kinds.get(Kind.COMPACTION, 0),
+                        "b2_prompts_on_the_floor": None if floor is None
+                        else sum(1 for x in floor if int(x) > 0),
+                        "b2_worst_over_tokens": None if floor is None
+                        else max((int(x) for x in floor), default=0),
+                        "card_prompts_thinned": check["card_prompts_thinned"],
+                        "card_worst_claims_dropped": check["card_worst_claims_dropped"]},
+        "region_budget_check": check,
+        "m2_illegal": metrics.m2_illegal_rate(events),
+        "m3_gate": metrics.m3_gate_pressure(events),
+        "m4_hallucination": metrics.m4_hallucination_rates(events),
+        "m5_style": metrics.m5_style_collapse(events),
+        "m6_belief_action": metrics.m6_belief_action(events),
+        **({"calibration": cal} if cal else {}),
+        "m7_cost": metrics.m7_cost_profile(
+            events,
+            constants=cal["constants"] if cal and cal["usable"] else None,
+            calibration_note=cal["note"] if cal and not cal["usable"] else None),
+        "m8_strategy": metrics.m8_strategy_proxies(events),
+    }, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_replay(args: argparse.Namespace) -> int:
+    if (err := _seat_error(args.seat, Path(args.file))) is not None:
+        print(f"配置错误：{err}", file=sys.stderr)
+        return 2
+    for line in render_chronicle_file(Path(args.file), god=args.god, as_seat=args.seat):
+        print(line)
+    return 0
+
+
+# ------------------------------------------------------------------ export / watch
+def cmd_export(args: argparse.Namespace) -> int:
+    """One HTML file, written from the log alone. This is the artifact that leaves the laptop,
+    so `--god` is opt-in: the default view is the one that is safe to send."""
+    src = Path(args.file)
+    out = Path(args.out) if args.out else src.with_suffix(".html")
+    render_html.write_report(src, out, god=args.god)
+    print(f"复盘 -> {out}")
+    return 0
+
+
+def cmd_watch(args: argparse.Namespace) -> int:
+    """Tail a game as it is played, or `--once` for a frame in a script. `--seat` opens straight
+    into one seat's head; `g` and the digits get there from the keyboard."""
+    if (err := _seat_error(args.seat, Path(args.file))) is not None:
+        print(f"配置错误：{err}", file=sys.stderr)
+        return 2
+    return render_live.watch(Path(args.file), god=args.god, reveal_seat=args.seat,
+                             one_shot=args.once)
+
+
+# ------------------------------------------------------------------------------- batch / compare
+def _coerce(raw: str) -> Any:
+    """`--set` arrives as text; the config field it lands on decides the reading.
+
+    `apply_overrides` type-checks against the current value, so a wrong reading is an error
+    message rather than a silently different arm — which is why "1" is not a bool here.
+    """
+    t = raw.strip()
+    if t in ("true", "false"):
+        return t == "true"
+    if t.startswith("["):
+        # Tuple-valued fields (`temperature_ladder`) are treatment variables too, and the
+        # repro line prints them as JSON — so the reader has to accept what the writer wrote.
+        return json.loads(t)
+    for cast in (int, float):
+        try:
+            return cast(t)
+        except ValueError:
+            continue
+    return t
+
+
+def _parse_sets(pairs: list[str], names: list[str]) -> dict[str, dict[str, Any]]:
+    """`--set B.temperature=0.6` → `{"B": {"temperature": 0.6}}`, refusing an unknown arm.
+
+    The arm name is required on every pair: `--set temperature=0.6` would have to guess which
+    arm to apply to, and a guess here is the difference between two arms and two batches.
+    """
+    per: dict[str, dict[str, Any]] = {n: {} for n in names}
+    for pair in pairs:
+        arm, _, rest = pair.partition(".")
+        key, sep, raw = rest.partition("=")
+        if not sep or arm not in per:
+            raise batch.BadOverride(
+                f"--set {pair}: 写成 <臂名>.<字段>=<值>，臂名要在 --configs 里列过（{('、'.join(names))}）")
+        try:
+            per[arm][key] = _coerce(raw)
+        except ValueError as e:
+            raise batch.BadOverride(f"--set {pair}: 值读不出来（{e}）") from e
+    return per
+
+
+def _canary_probe(cfg: Config, transport) -> "batch.ProbeFn":
+    """The real endpoint's canary executor: five fixed prompts, temp 0, one call each.
+
+    Kept out of `batch.py` so the batch layer stays testable with the endpoint offline — the
+    abort-on-mismatch logic is worth more than a live probe would be if it can only be proven
+    against a running server.
+    """
+    from .llm import EndpointUnavailable, LLM
+
+    llm = LLM(transport, cfg)
+
+    async def probe(prompt: str) -> dict[str, Any]:
+        res = await llm.complete([{"role": "user", "content": prompt}],
+                                 max_tokens=80, temperature=0.0, phase_key="canary")
+        if not res.ok:
+            raise EndpointUnavailable(res.error[:160])
+        return {"answer": res.text.strip(), "latency_s": round(res.latency_s, 3),
+                "completion_tokens": res.completion_tokens}
+
+    return probe
+
+
+def cmd_batch(args: argparse.Namespace) -> int:
+    names = [n.strip() for n in args.configs.split(",") if n.strip()]
+    if len(set(names)) != len(names) or not names:
+        print("配置错误：--configs 要列出互不重名的臂，例如 --configs A,B", file=sys.stderr)
+        return 2
+    if (err := _games_error(args.games)) is not None:
+        print(f"配置错误：{err}", file=sys.stderr)
+        return 2
+    base = build_config()
+    arms: list[batch.Arm] = []
+    try:
+        per = _parse_sets(args.set, names)
+        for name in names:
+            try:
+                arms.append(batch.Arm(name, batch.apply_overrides(base, per[name]),
+                                      overrides=tuple(per[name])))
+            except batch.BadOverride as e:
+                # Name the arm: with two of them on the command line, "配置里没有 temp" does
+                # not say whose typo it is, and that is the one thing the reader has to fix.
+                raise batch.BadOverride(f"{name}: {e}") from e
+    except batch.BadOverride as e:
+        print(f"配置错误：{e}", file=sys.stderr)
+        return 2
+
+    transport = canary = None
+    if not args.mock:
+        from .transport import HttpTransport
+
+        try:
+            base.require_key()  # before any game is played, same reason as cmd_run
+            transport = HttpTransport(base)
+            canary = _canary_probe(base, transport)
+        except ConfigError as e:
+            print(f"配置错误：{e}", file=sys.stderr)
+            return 2
+    try:
+        res = _run_and_close(lambda: batch.run_batch(arms, games=args.games, seed0=args.seed0,
+                                                     out_dir=Path(args.out), mock=args.mock,
+                                                     transport=transport,
+                                                     canary=batch.NO_CANARY if canary is None
+                                                     else canary), transport)
+    except batch.BatchAborted as e:
+        print(f"批次中止：{e}", file=sys.stderr)
+        return 1
+    print(f"批次 -> {res.out_dir}（{res.n_logs} 局日志，seed0={res.pair_keys[0]}，"
+          f"canary {res.canary.get('terminal')}，终态 {res.terminal}）")
+    return 0 if res.terminal == "ok" else 1
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    """Refuse or conclude, and write whichever of the two it is. Exit 0 only on a verdict of OK
+    so a script can branch on it; a rejection is a report too, so it lands on disk as well."""
+    d = Path(args.dir)
+    if not (d / "run_manifest.json").exists():
+        print(f"配置错误：{d} 里没有 run_manifest.json，不是 wolf batch 产出的目录", file=sys.stderr)
+        return 2
+    axis = tuple(a.strip() for a in args.axis.split(",") if a.strip())
+    out = batch.compare(d, axis=axis)
+    dst = Path(args.out) if args.out else d / "comparison.md"
+    dst.write_text(out["markdown"], encoding="utf-8")
+    print(out["markdown"])
+    print(f"{out['verdict']} -> {dst}")
+    return 0 if out["verdict"] == "OK" else 1
+
+
+# ------------------------------------------------------------------------------- main
+def build_parser() -> argparse.ArgumentParser:
+    """The `wolf` surface, as an object.
+
+    `main()` used to build it inline, which left the option sets uninspectable without spawning
+    a process — so a doc telling a reader to type `--frobnicate` had nothing to check it against.
+    `tests/test_doc_citations.py` reads this instead of running the CLI.
+    """
+    ap = argparse.ArgumentParser(prog="wolf", description="狼人杀多智能体博弈数据引擎")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+
+    r = sub.add_parser("run", help="打一局（--mock 不需要端点）")
+    r.add_argument("--seed", type=int, default=7)
+    r.add_argument("--games", type=int, default=1)
+    r.add_argument("--out", default="data")
+    r.add_argument("--mock", action="store_true", help="用合成替身打牌，不碰端点")
+    r.add_argument("--dry-run", action="store_true", help="装配全部 prompt 并落盘，零 API 调用")
+    r.add_argument("--god", action="store_true", help="时间线里显示私有事件")
+    r.add_argument("--quiet", action="store_true", help="只打汇总行")
+    r.add_argument("--max-days", type=int, default=None,
+                   help="覆盖日数上限（默认取 Config.max_days）；打到上限即判平局 draw_day_limit")
+    r.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("replay", help="复盘一个 JSONL（离线可演示）")
+    p.add_argument("file")
+    p.add_argument("--seat", type=int, default=None, help="只看这个座位能看到的")
+    p.add_argument("--god", action="store_true", help="上帝视角")
+    p.set_defaults(func=cmd_replay)
+
+    a = sub.add_parser("audit", help="一局的质量与成本计数")
+    a.add_argument("file")
+    a.add_argument("--calibration", metavar="PATH", default=None,
+                   help="读 scripts/calibrate.py 的 sidecar，把拟合常数喂给 M7 的 drift 自检；"
+                        "不给就不碰文件系统（audit 的默认输出只是日志的函数）")
+    a.set_defaults(func=cmd_audit)
+
+    x = sub.add_parser("export", help="把一个 JSONL 导出成单文件复盘 HTML（离线）")
+    x.add_argument("file")
+    x.add_argument("-o", "--out", default=None, help="默认写在日志同名 .html")
+    x.add_argument("--god", action="store_true", help="上帝视角：含私有事件与心里想")
+    x.set_defaults(func=cmd_export)
+
+    w = sub.add_parser("watch", help="直播一个 JSONL（只读，端点可关）")
+    w.add_argument("file")
+    w.add_argument("--god", action="store_true", help="以上帝视角开场（键盘 g 切换）")
+    w.add_argument("--seat", type=int, default=None,
+                   help="开局即看这个座位（键盘 1-9 直达、enter 逐席走、esc 收回）")
+    w.add_argument("--once", action="store_true", help="只打一帧就退出（脚本/截图用）")
+    w.set_defaults(func=cmd_watch)
+
+    b = sub.add_parser("batch", help="N 局 × K 配置的可配对批次（plan §8 第 1 条）")
+    b.add_argument("--configs", required=True, help="臂名，逗号分隔，例如 A,B")
+    b.add_argument("--set", action="append", default=[], metavar="臂.字段=值",
+                   help="某臂的覆盖项，可重复，例如 --set B.temperature=0.6")
+    b.add_argument("--games", type=int, default=20, help="每臂几局（两臂共用同一批 deal_seed）")
+    b.add_argument("--seed0", type=int, default=1000)
+    b.add_argument("--out", required=True, help="批次目录，每个臂一个子目录")
+    b.add_argument("--mock", action="store_true", help="合成桌：只证明管线，永不进结论")
+    b.set_defaults(func=cmd_batch)
+
+    c = sub.add_parser("compare", help="两臂配对检验；不合格就拒绝并写明原因")
+    c.add_argument("dir", help="batch 产出的目录")
+    c.add_argument("--axis", default="", help="声明的处理轴，逗号分隔，例如 temperature")
+    c.add_argument("-o", "--out", default=None, help="默认写在批次目录的 comparison.md")
+    c.set_defaults(func=cmd_compare)
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ns = build_parser().parse_args(argv)
+    try:
+        return ns.func(ns)
+    except LogDamage as e:
+        # 本模块的 docstring 早把 2 留给"命令本身不对"，而 `events.py` 攒出这句话（哪个文件、第几
+        # 行、缺哪些键）的意义就在这一行：让它穿过来越终端的人读到的是 traceback，那句话掉在最后。
+        print(f"日志读不下去：{e}", file=sys.stderr)
+        return 2
+    except OSError as e:
+        # 同一条腿的另一半：路径打错（FileNotFoundError）、把目录当日志（IsADirectoryError）、
+        # 输出落不下（写侧的同一个类）此前都是 traceback + rc 1，而 1 在这里是"引擎拒绝"——
+        # 一次拼错的文件名会被脚本读成"这批数据不可比"。`str(e)` 自带路径和 errno，不重抄。
+        print(f"路径用不了：{e}", file=sys.stderr)
+        return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

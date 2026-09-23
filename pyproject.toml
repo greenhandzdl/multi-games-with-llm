@@ -1,0 +1,31 @@
+[project]
+name = "wolfengine"
+version = "0.1.0"
+description = "Multi-agent game data engine: LLM agents play Chinese Werewolf; verifiable-reward trajectories."
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.27",
+    "pydantic>=2.7",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-asyncio>=0.23"]
+
+[project.scripts]
+wolf = "wolfengine.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/wolfengine"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = "-q --strict-markers"
+markers = [
+    "network: hits the real inference endpoint (deselect with -m 'not network')",
+]

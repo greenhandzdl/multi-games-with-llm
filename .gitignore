@@ -1,0 +1,17 @@
+# Trajectories contain full prompts and can be large. Never committed.
+data/
+*.jsonl
+
+# The API key value must only ever live in the shell environment.
+.env
+.env.local
+*.key
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+dist/
+build/
+*.egg-info/
+.DS_Store

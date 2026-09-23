@@ -1,0 +1,1062 @@
+"""The three commands CI and the demo both depend on.
+
+`--dry-run` is the budget tool (plan §11): the claim under test is not "it printed something"
+but "it assembled every prompt while physically unable to send one". A test that only counts
+lines would still pass if someone wired a real call into it, which is the exact regression
+this command exists to avoid.
+
+`replay` is the demo: it must work with the endpoint offline, from the JSONL alone. That is
+the same file, so `--seat` (one player's view) and `--god` (the audience's) are asserted as
+differing by exactly the private events — the isolation property, checked through the UI
+rather than through the prompt builder.
+"""
+
+from __future__ import annotations
+
+import json
+import html as html_mod
+from pathlib import Path
+from types import SimpleNamespace
+
+import httpx
+import pytest
+
+from wolfengine import batch, cli, metrics
+from wolfengine.config import Config
+from wolfengine.state import Phase
+from wolfengine.transport import HttpTransport
+
+SEED = 7
+
+
+@pytest.fixture
+def no_network(monkeypatch):
+    """Any attempt to reach the endpoint fails the test, loudly, with a count to assert on.
+
+    Blocked at two layers on purpose. Patching only `HttpTransport.chat` would go quiet if a
+    refactor ever posted through `client` directly, and `--dry-run`'s whole claim is about the
+    absence of a request, not about the absence of one particular function call.
+    """
+    calls: list[int] = []
+
+    async def boom(self, messages, **kw):
+        calls.append(1)
+        raise AssertionError(f"--dry-run 不得调用端点（第 {len(calls)} 次）")
+
+    async def post_boom(self, *a, **kw):
+        calls.append(1)
+        raise AssertionError(f"--dry-run 发出了 HTTP 请求（第 {len(calls)} 次）")
+
+    monkeypatch.setattr(HttpTransport, "chat", boom)
+    monkeypatch.setattr(httpx.AsyncClient, "post", post_boom)
+    monkeypatch.setattr(httpx.AsyncClient, "request", post_boom)
+    monkeypatch.delenv(Config().api_key_env, raising=False)
+    return calls
+
+
+@pytest.fixture(scope="module")
+def played(tmp_path_factory):
+    out = tmp_path_factory.mktemp("clidata")
+    rc = cli.main(["run", "--mock", "--seed", str(SEED), "--quiet", "--out", str(out)])
+    assert rc == 0
+    return out, sorted(out.glob(f"*_g{SEED:08d}.jsonl"))[0]
+
+
+# ---------------------------------------------------------------------------- dry run
+def test_dry_run_assembles_every_prompt_without_calling(no_network, tmp_path):
+    rc = cli.main(["run", "--dry-run", "--seed", str(SEED), "--out", str(tmp_path)])
+    assert rc == 0
+    assert no_network == [], "the endpoint was reached"
+    dump = tmp_path / f"g{SEED:08d}.prompts.jsonl"
+    rows = [json.loads(l) for l in dump.read_text(encoding="utf-8").splitlines()]
+    assert len({r["seat"] for r in rows}) == 9, "a seat never got a prompt"
+    assert all(r["messages"] and r["region_tokens"] for r in rows)
+    # The whole point of the command: the numbers that drive §5's budget table.
+    assert all(r["total_tokens"] > 0 for r in rows)
+    assert sum(r["over_ceiling"] for r in rows) == 0, "a mock game blew the context ceiling"
+
+
+def test_dry_run_reports_the_phases_it_reached(no_network, tmp_path, capsys):
+    cli.main(["run", "--dry-run", "--seed", str(SEED), "--out", str(tmp_path)])
+    printed = capsys.readouterr().out
+    for phase in ("night_wolf", "night_witch", "night_seer", "day_speech", "day_vote"):
+        assert phase in printed, f"{phase} missing from the dry-run report:\n{printed}"
+
+
+# ------------------------------------------------------------- the per-game cost inventory
+# Spelled by hand, on purpose: it is the second ruler the guards below compare against.
+SPEECH_PHASES_BY_HAND = {"day_speech", "day_pk_speech", "last_words"}
+
+
+def test_only_the_three_prose_phases_are_billed_the_speech_budget():
+    """140 tok 和 60 tok 的分岔口只由一张名单决定，而这张名单此前活在一个内联三元组里。
+
+    每局的墙钟 = 每局调用次数 × 每次的解码量，plan §187 的"8–12 局/小时"和
+    `max_game_completion_tokens` 这根硬顶都建立在这条分岔上。给 `night_wolf` 换成发言级预算、
+    新增一个发言阶段却忘了进名单、或者改个阶段名——两句散文都会变假，而没有任何用例会红。
+    名单抄在测试里（而不是调用被测函数得来），漂移就只能以红的形式发生。
+    """
+    cfg = Config()
+    priced = {p.value: cfg.token_budget_for(p) for p in Phase}
+    assert priced == {p.value: (cfg.max_tokens_speech if p.value in SPEECH_PHASES_BY_HAND
+                                else cfg.max_tokens_action) for p in Phase}, priced
+    # 反向对照：两档预算若相等，上面那条等式就是由常量相等自证的假绿。
+    assert cfg.max_tokens_speech != cfg.max_tokens_action
+    assert len(priced) == len(tuple(Phase)), "有阶段没被定价"
+
+
+def test_the_census_prices_a_game_in_calls_tokens_and_completion_budget(
+        no_network, tmp_path, capsys):
+    """普查要把"这局会花掉什么"印成三个数，而不是留给人按 9×4.5 心算。"""
+    cli.main(["run", "--dry-run", "--seed", str(SEED), "--out", str(tmp_path)])
+    printed = capsys.readouterr().out
+    rows = [json.loads(line) for line in
+            (tmp_path / f"g{SEED:08d}.prompts.jsonl").read_text(encoding="utf-8").splitlines()]
+    cfg = Config()
+    calls = len(rows)
+    ptok = sum(r["total_tokens"] for r in rows)
+    ctok = sum(cfg.max_tokens_speech if r["phase"] in SPEECH_PHASES_BY_HAND
+               else cfg.max_tokens_action for r in rows)
+    assert calls >= 40 and ptok > 0 and ctok > 0, "这条线空转了：三格里有格是 0"
+    assert f"{calls} 次调用" in printed, f"没有印出每局调用次数：\n{printed}"
+    assert f"{ptok} tok" in printed, f"prompt token 合计与落盘的 dump 不符：\n{printed}"
+    assert f"完成预算 {ctok} tok" in printed, \
+        f"完成预算与 `token_budget_for` 之和不符（名单漂移？）：\n{printed}"
+    # 上限不是实测：印出来的必须是"按 max_tokens 的上限"，并把每局硬顶一起给出。
+    assert f"硬顶 {cfg.max_game_completion_tokens}" in printed, printed
+    assert "上限" in printed and "实测" in printed, \
+        "没有声明这个数是上限而不是实测生成长度——读者会当结论用"
+
+
+def test_dry_run_over_a_batch_writes_one_dump_per_seed(no_network, tmp_path):
+    cli.main(["run", "--dry-run", "--seed", "11", "--games", "3", "--out", str(tmp_path)])
+    assert no_network == []
+    assert sorted(p.name for p in tmp_path.glob("*.prompts.jsonl")) == \
+        ["g00000011.prompts.jsonl", "g00000012.prompts.jsonl", "g00000013.prompts.jsonl"]
+
+
+def test_an_empty_census_refuses_to_conclude(no_network, tmp_path, capsys, monkeypatch):
+    """普查自己说"这本身就是失败"的那一刻，退出码不能还是 0。
+
+    `_print_census` 那句空普查是为"装配钩子失效"写的（一局跑了、一个 prompt 都没存下来），
+    而 `_cmd_dry_run` 以前无论印什么都 `return 0`。这里把 `play` 换成不记录任何上下文的假手，
+    走的正是那条真空分支——断言只认两件事：那句话印出来了，退出码是"拒绝出结论"的那个。
+    """
+    async def fake_play(**kw):
+        return SimpleNamespace(game_id="g-empty", terminal="good_win", days=1)
+
+    monkeypatch.setattr(cli, "play", fake_play)
+    monkeypatch.setattr(cli, "make_actors", lambda cfg, seed, *, mock: {})
+    rc = cli.main(["run", "--dry-run", "--seed", "11", "--games", "2", "--out", str(tmp_path)])
+    printed = capsys.readouterr().out
+    assert "没有捕获到任何 prompt" in printed, printed
+    assert rc == 1, f"rc={rc}：普查那句自报失败，退出码却是一份结论"
+    assert no_network == []
+
+
+def test_the_batch_loader_ignores_the_prompt_dumps(no_network, tmp_path):
+    """`--dry-run` writes its dump next to the games that produced it, because both take the
+    same `--out`. So one folder legitimately holds two kinds of `*.jsonl` — and `read_dir` is
+    the batch layer's entry point (M1's denominator, and every comparison in plan §8's two-config
+    protocol). A loader that dies on the other artifact of its own tool cannot be pointed at
+    `data/`, which is the only directory the demo ever uses.
+    """
+    cli.main(["run", "--dry-run", "--seed", str(SEED), "--out", str(tmp_path)])
+    assert no_network == []
+    games = metrics.read_dir(tmp_path)
+    assert len(games) == 1, sorted(p.name for p in tmp_path.glob("*.jsonl"))
+    assert games[0].game_id == f"g{SEED:08d}"
+    # M1 must survive a batch of one stand-in table: it reports None with a note, not a crash
+    # and not a 0% win rate (plan §11 — a mock table never enters the corpus).
+    rate = metrics.m1_win_rate(games)
+    assert rate["good_win_rate"] is None and rate["n_synthetic_excluded"] == 1
+
+
+def test_the_batch_reader_skips_the_dump_by_the_same_name_as_the_writer(no_network, tmp_path):
+    """`compare` never goes through `read_dir`: `batch.read_arm` walks the arm folder with its own
+    copy of "this name is not a trajectory". That copy had no assertion behind it — turning it into
+    one that never matches left all three test files green (`/tmp/mut_predup.py` P2,
+    2026-09-22T01:14:10Z), which is what "a branch nobody reads" looks like when it is a `continue`.
+
+    Written against the real writer rather than a hand-made filename: the predicate is a copy of an
+    f-string in `cli.py`, so a test carrying its own literal proves only that two literals still
+    agree with each other, not that the folder the tool actually produces loads.
+    """
+    cli.main(["run", "--dry-run", "--seed", str(SEED), "--out", str(tmp_path)])
+    assert no_network == []
+    dump = f"g{SEED:08d}.prompts.jsonl"
+    names = sorted(p.name for p in tmp_path.glob("*.jsonl"))
+    assert dump in names, f"写入方没把转储落在这个目录里，用例就在空转：{names}"
+    rows = batch.read_arm(tmp_path)
+    assert [Path(r["path"]).name for r in rows] == [n for n in names if n != dump], \
+        f"批次读取器读到的不是「除了转储的那一份」：{names} → {[r['path'] for r in rows]}"
+    assert rows[0]["game_id"] == f"g{SEED:08d}", rows
+
+
+# ------------------------------------------------------------------------------ run
+def test_a_real_run_without_the_key_says_which_variable_is_missing(monkeypatch, capsys,
+                                                     tmp_path):
+    monkeypatch.delenv(Config().api_key_env, raising=False)
+    out = tmp_path / "nokey"
+    rc = cli.main(["run", "--seed", "3", "--out", str(out)])
+    err = capsys.readouterr().err
+    assert rc == 2 and "WOLF_LLM_API_KEY" in err, f"rc={rc} err={err!r}"
+    assert not list(out.glob("*.jsonl")), "it started a game it could not play"
+
+
+# ---------------------------------------------------------------------------- replay
+def test_replay_prints_the_public_timeline_and_only_that(played):
+    _, path = played
+    cap = _replay(played, [])
+    assert "[e1] 法官：开局座位" in cap
+    assert "狼队私聊" not in cap, "the audience view showed the wolf channel"
+    assert "你的身份是" not in cap, "the audience view dealt roles in the open"
+    assert "查验" not in cap, "the audience view read the seer's result"
+
+
+def test_god_view_is_exactly_the_private_events(played):
+    """`--god` must *add* lines, never rewrite a public one: the audience's timeline and a
+    player's timeline are the same append-only render, and if they were two renderers the
+    demo would disagree with itself."""
+    _, path = played
+    plain, god = _replay(played, []).splitlines(), _replay(played, ["--god"]).splitlines()
+    public = set(plain)
+    assert [ln for ln in god if ln in public] == plain, "god view reworded a public line"
+    hidden = [ln for ln in god if ln not in public]
+    events = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines()
+              if json.loads(l)["seq"] != 0]
+    private = [e for e in events if e["visibility"] != "all"]
+    assert len(hidden) == len(private), f"{len(hidden)} extra lines for {len(private)} private events"
+    assert {"deal", "wolf_chat", "notice", "seer_result", "night_action"} \
+        >= {e["kind"] for e in private}
+    assert "game_over" not in {e["kind"] for e in private}, "the result must stay public"
+
+
+def test_a_seat_replay_sees_its_own_night_and_nobody_elses(played):
+    seer = _replay(played, ["--seat", "7"])
+    assert "1号是狼人" in seer or "你查验的1号" in seer, seer[-400:]
+    assert "狼队私聊" not in seer
+    witch = _replay(played, ["--seat", "5"])
+    assert "狼队私聊" not in witch and "你查验的" not in witch
+    villager = _replay(played, ["--seat", "3"])
+    for line in ("狼队私聊", "倒在了狼刀下", "你查验的"):
+        assert line not in villager, f"{line} leaked into seat 3's replay"
+
+
+def test_sitting_at_a_seat_wins_over_the_god_view_on_the_same_file(played):
+    """views.md 里"`--seat` 与 `--god` 同时给时坐进某一位优先"以前只有散文撑着。
+
+    `render_chronicle` 的那一支 `if as_seat is not None: ... elif god:` 从来没被任何用例同时给过两个
+    参数——仓库里 `god=True` 的那几处都在别的文件、且只给一个参数，所以把两支换序也不会有人红。
+    07:55:40Z 在同一份日志上量过四种给法（`/tmp/seat_precedence.out`）：只给 `--god` 的是 104 行
+    `8918d0e775a1`，凡是句子里出现 `--seat 3` 的三份都是同一份 81 行 `dd111ac69f24`。
+    """
+    seat = _replay(played, ["--seat", "3"])
+    both = _replay(played, ["--god", "--seat", "3"])
+    swapped = _replay(played, ["--seat", "3", "--god"])
+    god = _replay(played, ["--god"])
+    assert both == seat == swapped, "给了座位之后 `--god` 还能改变输出——座位不是那一支的第一判据"
+    assert "狼队私聊" in god, "这份夹具里没有私有事件，三方比对无从分辨"
+    assert "狼队私聊" not in seat, "3 号看见了自己桌子之外的东西，那个相等就是两边都漏了"
+
+
+@pytest.mark.parametrize("verb", ["replay", "watch"])
+@pytest.mark.parametrize("seat", ["0", "10", "-1"])
+def test_a_seat_that_is_not_at_the_table_is_refused_before_the_timeline(played, capsys,
+                                                                        verb, seat):
+    """`--seat 10` 印的是公开视图、退出码 0，和什么都不填逐字节相同（06:24:14Z 实测三份
+    sha `e090c3f68af3`）：九人桌上没有第 10 把椅子，而这句话以前没有 owner，于是"点了一个
+    不存在的座位"这件事在终端上长得像一次成功的查询。名册读的是开局记录里的 `seats`，和
+    `render_html` 画票型矩阵用的是同一份——不在这里另数一遍 1..9。
+    """
+    _, path = played
+    argv = [verb, str(path), "--seat", seat] + (["--once"] if verb == "watch" else [])
+    rc = cli.main(argv)
+    cap = capsys.readouterr()
+    assert rc == 2, f"rc={rc} out={cap.out[:80]!r}：越界的座位号是命令写错了，不是引擎拒绝"
+    assert cap.out == "", "报错之前不该先印一份看着正常的时间线"
+    assert cap.err.startswith("配置错误：") and "--seat" in cap.err, cap.err
+    assert seat in cap.err, f"要把收到的那个号说回去：{cap.err!r}"
+    assert "1-9" in cap.err and "9 席" in cap.err, f"要说出这一局的名册：{cap.err!r}"
+    assert "Traceback" not in cap.err
+
+
+def test_the_two_ends_of_the_roster_are_still_seats(played, capsys):
+    """名册的两端都得放行，否则"什么号都拒"也能骗过上一条：1 号和 9 号是真实存在的椅子。
+    """
+    _, path = played
+    for seat in ("1", "9"):
+        assert cli.main(["replay", str(path), "--seat", seat]) == 0, f"{seat} 号被拒了"
+        printed = capsys.readouterr().out
+        assert "〔私有〕" in printed, f"{seat} 号连自己的身份牌都看不到：{printed[:120]!r}"
+
+
+@pytest.mark.parametrize("seat", ["3", "42"])
+def test_a_seat_view_of_a_file_with_nothing_after_the_manifest_says_the_sentence(tmp_path, played,
+                                                                                 capsys, seat):
+    """两个方向同一条用例。没有开局记录就没有名册，"这局没有 42 号"这句无从谈起，范围检查要在
+    这儿让路——那份文件有自己的那句话（"这一局只有开局记录"）和退出码 0，是 `#53` 定过的。而**
+    真号**在这里也不许炸：修前实测（06:35:46Z）`--seat 3` 与 `--seat 42` 都是
+    `IndexError: list index out of range`、rc 1，同一个文件不带 `--seat` 时那句照印、rc 0。
+    那个 1 是 traceback 给的，不是判据给的。
+    """
+    _, path = played
+    stub = tmp_path / "manifest-only.jsonl"
+    stub.write_text(path.read_text(encoding="utf-8").splitlines()[0] + "\n", encoding="utf-8")
+    assert cli.main(["replay", str(stub), "--seat", seat]) == 0
+    printed = capsys.readouterr()
+    assert "只有开局记录" in printed.out, printed
+    assert printed.err == "" and "Traceback" not in printed.out, printed
+
+
+def test_replay_needs_nothing_but_the_file(played):
+    """The demo has to survive the endpoint being down. `replay` takes a path, prints text,
+    and reads no `request`/`response` field to decide what happened — the log line itself is
+    enough, which is why the same bytes can drive the live terminal and the HTML."""
+    _, path = played
+    events = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines()]
+    assert events[0]["seq"] == 0 and events[-1]["payload"]["terminal"] in \
+        ("good_win", "wolf_win", "draw_day_limit")
+    lines = _replay(played, ["--god"]).splitlines()
+    assert lines[-1].startswith("[e77]") or "获胜" in lines[-1], lines[-1]
+    assert not any("prompt_tokens" in ln or "latency" in ln for ln in lines), \
+        "the timeline is printing call bookkeeping instead of game facts"
+
+
+# ------------------------------------------------------------------------------ audit
+def test_audit_counts_match_the_log_it_was_handed(played, capsys):
+    """Recomputed here from the raw lines, with a *different* definition of "decision turn"
+    than `metrics.decisions()` uses: this counts the events whose `result` carries a `fallback`
+    key — the shape `agent.py` publishes — while metrics counts by event kind plus `meta`. Two
+    independent readings of the same file must agree, or one of them is counting something else.
+    """
+    _, path = played
+    assert cli.main(["audit", str(path)]) == 0
+    printed = capsys.readouterr().out
+    stats = _last_json_block(printed)
+    events = [json.loads(l) for l in path.read_text(encoding="utf-8").splitlines()
+              if json.loads(l)["seq"] != 0]
+    turns = [e for e in events if "fallback" in e["result"]]
+    assert stats["events"] == len(events)
+    assert stats["kinds"]["speech"] == len([e for e in events if e["kind"] == "speech"])
+    assert stats["terminal"] == events[-1]["payload"]["terminal"]
+    assert stats["synthetic"] is True, "a mock table must announce itself in its own audit"
+    assert stats["m3_gate"]["n_turns"] == len(turns)
+    assert stats["m3_gate"]["fallback_rate"] == round(
+        sum(1 for e in turns if e["result"].get("fallback")) / len(turns), 4)
+    assert stats["m2_illegal"]["n_turns"] == len(turns)
+    assert stats["m4_hallucination"]["n_speech"] == len(
+        [e for e in events if e["kind"] == "speech" and e["payload"].get("text")])
+    assert stats["compactions"]["events"] == stats["kinds"].get("compaction", 0)
+
+
+def test_audit_prints_metrics_and_nothing_else(played, capsys):
+    """`audit` is machine-readable by contract: one JSON object, no prose to parse around it,
+    and the numbers are the M-keys a batch report also uses — not a parallel set of names for
+    the same quantities."""
+    _, path = played
+    cli.main(["audit", str(path)])
+    stats = _last_json_block(capsys.readouterr().out)
+    assert set(stats) == {"meta", "synthetic", "events", "terminal", "torn_tail", "seq_damage",
+                          "days", "kinds", "speech_acts", "assignment", "soft_flags",
+                          "prompt_tokens_est", "prefix_cache",
+                          "compactions",
+                          "region_budget_check", "degraded_game",
+                          "m2_illegal", "m3_gate", "m4_hallucination", "m5_style",
+                          "m6_belief_action", "m7_cost", "m8_strategy"}
+    assert not any(k in stats for k in ("fallback_rate", "latency_s", "repair_rung")), \
+        "a second denominator for a rate metrics already owns"
+
+
+def test_audit_reads_the_fold_rounds_out_of_the_requests_it_writes_them_into(tmp_path, played,
+                                                                             capsys):
+    """`compactions` 的键是几个不同的量，谁都不能替谁回答"这局折叠得厉害吗"。
+
+    - `max_rounds`：单个 prompt 的折叠点推进过几天（`request.compactions`，每 prompt 一个数）
+    - `prompts_folded`：有多少个 prompt 带着折叠发出
+    - `events`：日志里有几格 `Kind.COMPACTION`，即出现过几种不同的折叠状态
+    - `b2_prompts_on_the_floor` / `b2_worst_over_tokens`：天地板生效到何种程度——折到底仍然超
+      软预算的那些 prompt 有几个、最狠的一个超了多少 tok（读 `request.b2_over_cap`）
+    - `card_prompts_thinned` / `card_worst_claims_dropped`：主张卡被动过刀的 prompt 有几个、
+      最狠的一条被砍掉几条指控（读 `request.card_claims_dropped`；单位是**条**不是 tok，因为
+      那一刀砍的是行，而一行值多少 tok 随主张措辞变）
+
+    前两个从 request 里读，所以手工往一份复制的日志里写 3 和 1 就能推动它们；第三个只能由
+    真的标记事件推动（见 `tests/test_live_path.py::test_a_fold_the_model_was_shown_leaves_a_marker_in_the_log`）。
+    一份"2 个折叠 prompt、0 格标记"的日志必须照实报 0：把它读成"这局没折叠"就是拿一个量替
+    另一个量撒谎——标记落地之前跑的批次全都是这个形状。
+    """
+    _, path = played
+    # 先量一份没被改过的：出厂预算下那一桌从没动过刀，所以两格都该是"测过了，没超"的 0。
+    # 这一句必须是 0 而不是 null——`payload_for_log` 漏掉这个键，读出来的就是 null，而 null
+    # 在那两格里说的是"这份日志还没这个字段"，一句完全不同的话。
+    assert cli.main(["audit", str(path)]) == 0
+    clean = _last_json_block(capsys.readouterr().out)["compactions"]
+    assert clean["card_prompts_thinned"] == 0 and clean["card_worst_claims_dropped"] == 0, clean
+    lines = path.read_text(encoding="utf-8").splitlines()
+    seeded = 0
+    for i, ln in enumerate(lines):
+        rec = json.loads(ln)
+        if rec["seq"] != 0 and rec.get("request"):
+            rec["request"]["compactions"] = [3, 1][seeded]
+            rec["request"]["b2_over_cap"] = [96, 0][seeded]
+            rec["request"]["card_claims_dropped"] = [4, 0][seeded]
+            lines[i] = json.dumps(rec, ensure_ascii=False)
+            seeded += 1
+            if seeded == 2:
+                break
+    assert seeded == 2, "this fixture log has no per-turn request records"
+    forged = tmp_path / "forged.jsonl"
+    forged.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    assert cli.main(["audit", str(forged)]) == 0
+    stats = _last_json_block(capsys.readouterr().out)
+    assert stats["compactions"] == {"max_rounds": 3, "prompts_folded": 2, "events": 0,
+                                    "b2_prompts_on_the_floor": 1, "b2_worst_over_tokens": 96,
+                                    "card_prompts_thinned": 1,
+                                    "card_worst_claims_dropped": 4}, stats["compactions"]
+
+    # 一格标记只动 `events`：另两个数读的是 request，折叠状态数不能替它们作证。
+    marker = {"seq": 999, "kind": "compaction", "day": 2, "phase": "day_speech", "actor": None,
+              "t_wall": 0.0, "visibility": "all",
+              "payload": {"summary": "第1天：发言8人。 出局：无人。", "window": 4,
+                          "folded_days": [1], "_idem": "compaction:4:1"},
+              "request": {}, "response": {}, "attempts": [], "result": {}}
+    marked = tmp_path / "marked.jsonl"
+    marked.write_text("\n".join(lines + [json.dumps(marker, ensure_ascii=False)]) + "\n",
+                      encoding="utf-8")
+    assert cli.main(["audit", str(marked)]) == 0
+    stats = _last_json_block(capsys.readouterr().out)
+    assert stats["compactions"] == {"max_rounds": 3, "prompts_folded": 2, "events": 1,
+                                    "b2_prompts_on_the_floor": 1, "b2_worst_over_tokens": 96,
+                                    "card_prompts_thinned": 1,
+                                    "card_worst_claims_dropped": 4}, stats["compactions"]
+    assert stats["kinds"]["compaction"] == 1, "events 和 kinds 必须是同一个数，不是两份账"
+
+    # 字段落地之前的日志读成 `null`，不是 0："`b2_prompts_on_the_floor`: 0" 是一句好消息，
+    # 而这份文件从没被测过地板，把它印成好消息就是替作者撒了个没人撒过的谎。
+    lines2 = forged.read_text(encoding="utf-8").splitlines()
+    stripped = 0
+    for i, ln in enumerate(lines2):
+        rec = json.loads(ln)
+        if rec.get("request") and "b2_over_cap" in rec["request"]:
+            del rec["request"]["b2_over_cap"]
+            lines2[i] = json.dumps(rec, ensure_ascii=False)
+            stripped += 1
+    assert stripped >= 2, "这份日志没带上这一格，剥不了"
+    old = tmp_path / "before-the-field.jsonl"
+    old.write_text("\n".join(lines2) + "\n", encoding="utf-8")
+    assert cli.main(["audit", str(old)]) == 0
+    gone = _last_json_block(capsys.readouterr().out)["compactions"]
+    assert gone["b2_prompts_on_the_floor"] is None and gone["b2_worst_over_tokens"] is None, gone
+    assert gone["prompts_folded"] == 2, "同一份文件里另三个键照常读数，null 只属于没落盘的那一个"
+    assert gone["card_prompts_thinned"] == 1 and gone["card_worst_claims_dropped"] == 4, \
+        "剥掉 b2 的证人不能顺手把刀的读数一起抹掉：两格读的是不同的字段"
+
+
+def test_a_log_without_the_knife_count_reports_it_as_unmeasured(played, tmp_path, capsys):
+    """`card_claims_dropped` 缺席的那两格必须是 `null`，不是 0——和 b2 那一族同一个理由。
+
+    反向对照在同一份文件里做完：只剥这一格，`b2_worst_over_tokens` 就得照常是数字。少了这半句，
+    "把没找到的字段读成 0"这种写法可以一次污染两格而只红一条断言；而"这一批没有一个 prompt 被
+    削过主张卡"是一句好消息，只有真的逐条数过才配印出来。
+    """
+    _, path = played
+
+    def strip(rec):
+        req = rec.get("request")
+        if req and "card_claims_dropped" in req:
+            del req["card_claims_dropped"]
+        return rec
+
+    lines = [json.dumps(strip(json.loads(ln)), ensure_ascii=False)
+             for ln in path.read_text(encoding="utf-8").splitlines()]
+    assert sum("card_claims_dropped" in ln for ln in lines) == 0, "剥不干净，这一条就没测到东西"
+    old = tmp_path / "before-the-knife-field.jsonl"
+    old.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    assert cli.main(["audit", str(old)]) == 0
+    gone = _last_json_block(capsys.readouterr().out)["compactions"]
+    assert gone["card_prompts_thinned"] is None and gone["card_worst_claims_dropped"] is None, gone
+    assert gone["b2_worst_over_tokens"] == 0, "另一格的读数不该被牵连"
+
+
+def test_audit_prints_an_unrecorded_verdict_as_null_not_as_false(played, tmp_path, capsys):
+    """`degraded_game` 这一格不存在时，audit 要打印 `null`，不能打印 `false`。
+
+    单个文件是唯一读者：这条判定的意义在于"退化局别混进结论"，而字段落地之前跑的批次在磁盘
+    上永远存在。缺失误读成好消息，一份旧日志就会自己声明"这局引擎没替任何人做主"——没有人
+    写过这个结论。反向对照（同一份文件删掉这一格之前必须报 `false`）证明 `null` 是那两行字节
+    造成的，不是 audit 从来不看这一格。
+    """
+    _, path = played
+    assert cli.main(["audit", str(path)]) == 0
+    before = _last_json_block(capsys.readouterr().out)
+    assert before["degraded_game"] is False, before
+
+    lines = path.read_text(encoding="utf-8").splitlines()
+    stripped = 0
+    for i, ln in enumerate(lines):
+        rec = json.loads(ln)
+        if rec.get("kind") == "game_over" and "degraded_game" in rec["payload"]:
+            del rec["payload"]["degraded_game"]
+            del rec["payload"]["degraded_threshold"]
+            lines[i] = json.dumps(rec, ensure_ascii=False)
+            stripped += 1
+    assert stripped == 1, "this fixture log carries no verdict to strip"
+    old = tmp_path / "before-the-field.jsonl"
+    old.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    assert cli.main(["audit", str(old)]) == 0
+    assert _last_json_block(capsys.readouterr().out)["degraded_game"] is None
+
+
+def test_audit_carries_no_fill_rate_for_a_table_that_never_called(played, capsys):
+    """`m7_cost` 的兑现率要顺着 audit 一起出去，而 mock 桌上它必须是 null。
+
+    audit 是这个读数面向产品的那一面（一份日志 → 一份 JSON → 批次报告）。替身桌从没发过 HTTP
+    请求，`request` 里没有 `max_tokens`、`response` 里没有 `completion_tokens`；要是这里落成
+    0.0，一份 mock 产物就在声称"模型一个 token 也没用完"——一个关于行为的结论，而它唯一的依据
+    是这局根本没用模型。
+    """
+    _, path = played
+    assert cli.main(["audit", str(path)]) == 0
+    m7 = _last_json_block(capsys.readouterr().out)["m7_cost"]
+    assert m7["fill_rate"] is None and m7["asked_total"] == 0 and m7["asked_calls"] == 0
+    assert m7["n_calls"] == 0, "a mock seat never billed a call either"
+
+
+def test_audit_without_the_flag_does_not_read_the_filesystem(played, capsys):
+    """The default `audit` object must be reproducible from the log alone. Silently picking up
+    whatever `data/calibration.json` happens to sit next to the CWD would make the same file
+    print two different answers on two days, and the drift number is exactly the kind of
+    external claim that has to name where it came from."""
+    _, path = played
+    cli.main(["audit", str(path)])
+    stats = _last_json_block(capsys.readouterr().out)
+    assert "calibration" not in stats
+    assert "未标定" in stats["m7_cost"]["drift_note"]
+
+
+def _sidecar(tmp_path, **over):
+    body = {"ran_utc": "2026-09-20T18:45:36Z", "model": "gemma-4-26b-a4b-nvfp4",
+            "constants": {"D_decode_tok_s": 41.2, "per_call_fixed_overhead_s": 0.83,
+                          "P_prefill_tok_s_best_observed": 3664.2}}
+    body.update(over)
+    path = tmp_path / "calibration.json"
+    path.write_text(json.dumps(body, ensure_ascii=False), encoding="utf-8")
+    return path
+
+
+def test_audit_names_the_external_input_it_used_and_why_it_declined(played, tmp_path, capsys):
+    """A half-done calibration run is the common case, not the edge case: the box was shared,
+    the run died, the sidecar stayed on disk. `audit` must print the reason it could not use
+    that file, in the same words `metrics` uses, rather than a bare `drift: null`."""
+    _, path = played
+    cal = _sidecar(tmp_path, constants={"D_decode_tok_s": None,
+                                        "per_call_fixed_overhead_s": 0.83,
+                                        "P_prefill_tok_s_best_observed": 3664.2})
+    assert cli.main(["audit", str(path), "--calibration", str(cal)]) == 0
+    stats = _last_json_block(capsys.readouterr().out)
+    assert stats["calibration"]["usable"] is False
+    assert "D_decode_tok_s" in stats["calibration"]["note"]
+    assert stats["m7_cost"]["drift_note"] == stats["calibration"]["note"], \
+        "两处各写一份『为什么没有 drift』，迟早一处说缺 D、另一处说文件不存在"
+
+
+def test_audit_refuses_constants_fit_for_a_different_model(played, tmp_path, capsys):
+    """The log records which model it was played against in its own seq-0 meta, so a mismatch
+    is checkable without asking the user to remember which sidecar is current."""
+    _, path = played
+    cal = _sidecar(tmp_path, model="some-other-weights")
+    assert cli.main(["audit", str(path), "--calibration", str(cal)]) == 0
+    stats = _last_json_block(capsys.readouterr().out)
+    assert stats["calibration"]["usable"] is False
+    assert "some-other-weights" in stats["calibration"]["note"]
+    assert stats["m7_cost"]["drift"] is None
+
+
+def test_a_calibrated_sidecar_reaches_the_drift_self_check(played, tmp_path, capsys):
+    """The whole point of the wiring: on a mock log there are no calls, so drift is
+    `not_evaluable` and not a green light; the constants arrived, and the missing denominator
+    is what is reported."""
+    _, path = played
+    cal = _sidecar(tmp_path)
+    assert cli.main(["audit", str(path), "--calibration", str(cal)]) == 0
+    stats = _last_json_block(capsys.readouterr().out)
+    assert stats["calibration"]["usable"] is True
+    assert stats["m7_cost"]["n_calls"] == 0
+    assert stats["m7_cost"]["drift"]["verdict"] == "not_evaluable"
+
+
+def _replay(played, extra):
+    out, path = played
+    cap = _capture(["replay", str(path), *extra])
+    return cap
+
+
+def _capture(argv):
+    import io
+    from contextlib import redirect_stdout
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        assert cli.main(argv) == 0, f"{' '.join(argv)} exited non-zero"
+    return buf.getvalue()
+
+
+def _last_json_block(text: str) -> dict:
+    """`audit` prints exactly one indented JSON object; the prose around it is for humans."""
+    try:
+        return json.loads(text[text.index("{"):text.rindex("}") + 1])
+    except ValueError as e:
+        raise AssertionError(f"audit printed no JSON object ({e}):\n{text}") from None
+
+
+# ------------------------------------------------------------------ export / watch (M6)
+def _private_rendered(path):
+    """Private events as any renderer would print them — the probe for "this artifact is a
+    spectator's artifact". Rendered rather than payload text, because a `seer_result` has no
+    payload text and only exists as a line."""
+    from wolfengine.compress import render_line
+
+    events, _ = cli.EventLog.read_records(path)
+    return [render_line(e) for e in events if e.visibility != "all" and len(render_line(e)) > 14]
+
+
+def test_export_writes_one_file_a_spectator_can_open(played, tmp_path, no_network):
+    """`export` is the deliverable you send: one HTML, no server, no endpoint, and nothing
+    private in it. Asserted by enumerating the private lines rather than by trusting `--god`
+    being off."""
+    _, path = played
+    out = tmp_path / "review.html"
+    assert cli.main(["export", str(path), "-o", str(out)]) == 0
+    assert no_network == []
+    doc = out.read_text(encoding="utf-8")
+    assert "第1天" in doc and "<script" not in doc and "100.87.65.60" not in doc
+    for line in _private_rendered(path):
+        assert html_mod.escape(line) not in doc, line
+
+
+def test_export_god_is_the_same_file_with_the_private_channel(played, tmp_path):
+    _, path = played
+    out = tmp_path / "god.html"
+    assert cli.main(["export", str(path), "--god", "-o", str(out)]) == 0
+    doc = out.read_text(encoding="utf-8")
+    lines = _private_rendered(path)
+    assert lines and all(html_mod.escape(l) in doc for l in lines), "god view hides the channel"
+    assert "心里想" in doc
+
+
+def test_export_lands_beside_the_log_when_no_output_is_named(played):
+    """The default matters for the demo: `wolf export <file>` should be the whole command."""
+    _, path = played
+    assert cli.main(["export", str(path)]) == 0
+    made = path.with_suffix(".html")
+    assert made.exists() and "第1天" in made.read_text(encoding="utf-8")
+
+
+def test_watch_once_prints_a_frame_without_a_key_or_a_call(played, capsys, no_network):
+    """`--once` is the mode CI and the docs use, and the only proof that `watch` draws with the
+    same function the tests assert on."""
+    _, path = played
+    assert cli.main(["watch", str(path), "--once"]) == 0
+    assert no_network == []
+    out = capsys.readouterr().out
+    assert "第1天" in out and "本局不可复现" in out
+    assert "[e17]" not in out and "法官（私发）" not in out
+
+
+def test_watch_starts_on_one_seat_when_asked(played, capsys):
+    _, path = played
+    assert cli.main(["watch", str(path), "--once", "--seat", "7"]) == 0
+    out = capsys.readouterr().out
+    assert "7号视角" in out
+    assert "9号视角" not in out, "one seat's head at a time"
+
+
+# ------------------------------------------------------------------------------ batch / compare
+def _batch_cmd(tmp_path, *extra):
+    return ["batch", "--out", str(tmp_path), "--configs", "A,B", "--games", "1",
+            "--seed0", "3", "--mock", *extra]
+
+
+def test_batch_then_compare_leaves_the_pair_and_a_readable_report(tmp_path, capsys):
+    assert cli.main(_batch_cmd(tmp_path, "--set", "B.temperature=0.6")) == 0
+    man = json.loads((tmp_path / "run_manifest.json").read_text(encoding="utf-8"))
+    assert man["arms"]["B"]["overrides"] == ["temperature"]
+    for arm in ("A", "B"):
+        assert len(list((tmp_path / arm).glob("*.jsonl"))) == 1, arm
+    assert cli.main(["compare", str(tmp_path), "--axis", "temperature"]) == 1
+    md = (tmp_path / "comparison.md").read_text(encoding="utf-8")
+    assert "合成桌" in md and "wolf compare" in md, md
+    assert "SYNTHETIC_TABLE" in capsys.readouterr().out
+    # 复现命令是要被粘回终端的：`batch <dir>` 那种位置参数写法直接跑不通，而少了 `--mock`
+    # 的一句"复现"会把两局合成桌变成 20 局付费请求。
+    repro = [l for l in md.splitlines() if l.startswith("复现")][0]
+    assert f"wolf batch --out {tmp_path}" in repro, repro
+    assert "--mock" in repro and "--set B.temperature=0.6" in repro, repro
+
+
+def test_a_typo_in_set_stops_the_batch_before_anything_is_written(tmp_path, capsys):
+    assert cli.main(_batch_cmd(tmp_path, "--set", "B.temp=0.6")) == 2
+    assert not (tmp_path / "run_manifest.json").exists()
+    err = capsys.readouterr().err
+    assert "temperature" in err, "打错的名字旁边要给正确写法"
+    assert "配置错误：B:" in err, "两臂在场时错误要说清是谁的拼写"
+
+
+def test_an_arm_may_not_ask_for_a_board_the_engine_does_not_have(tmp_path, capsys):
+    """`--set A.seat_count=5` 过了类型校验，然后在 `roles.board_for` 里炸出 43 行 traceback、
+    rc 1，而批次目录已经建出来了（06:26:38Z 实测）。"只有 9 席的板子存在"这句话住在 `roles`
+    里，所以这里问它、不抄第二个 9；而 rc 1 在契约里是"引擎拒绝出结论"，一次拼错的参数不该
+    占用它。正向对照同一条用例里给：9 这一臂必须打得完，否则"永远拒绝"也绿。
+    """
+    out = tmp_path / "b"
+    rc = cli.main(_batch_cmd(out, "--set", "A.seat_count=5"))
+    cap = capsys.readouterr()
+    assert rc == 2, f"rc={rc}：命令写错了不是引擎拒绝\nerr 尾部：{cap.err[-200:]!r}"
+    assert "Traceback" not in cap.err, "到终端是一行报告，不是 43 行栈"
+    assert cap.err.startswith("配置错误：") and "seat_count" in cap.err, cap.err
+    assert "5" in cap.err, f"要把收到的那个数说回去：{cap.err!r}"
+    assert not out.exists(), "地板站在建目录之前（#58 同一条理由）"
+    ok = tmp_path / "ok"
+    assert cli.main(_batch_cmd(ok, "--set", "A.seat_count=9")) == 0
+
+
+def _nothing_cmd(kind: str, out: Path, games: str) -> list[str]:
+    """两个都收 `--games` 的动词，取到同一个 0。"""
+    if kind == "run":
+        return ["run", "--mock", "--seed", "11", "--games", games, "--quiet", "--out", str(out)]
+    return ["batch", "--mock", "--configs", "A,B", "--seed0", "3", "--games", games,
+            "--out", str(out)]
+
+
+@pytest.mark.parametrize("kind", ["run", "batch"])
+@pytest.mark.parametrize("games", ["0", "-3"])
+def test_a_batch_of_nothing_is_refused_before_anything_exists(kind, games, tmp_path, capsys,
+                                                             no_network):
+    """`--games` 的地板只有一个谓词、两个读者，而且必须站在落盘之前。
+
+    修前实测（05:51:09Z）：`batch --games 0` 先把 `run_manifest.json` 写出去（`pair_keys`
+    是空的），然后在摘要行读 `pair_keys[0]` 时 IndexError —— traceback 顶到终端，退出码 1，
+    而 1 在这个仓库里是"引擎拒绝出结论"。`run --games 0` 更安静：rc 0、什么都不产。
+    """
+    out = tmp_path / "o"
+    rc = cli.main(_nothing_cmd(kind, out, games))
+    err = capsys.readouterr().err
+    assert rc == 2, f"rc={rc} err={err!r}：0 局是命令写错了，不是引擎拒绝"
+    assert err.startswith("配置错误：") and "--games" in err, err
+    assert games in err, f"要把收到的那个数说回去：{err!r}"
+    assert not out.exists(), (f"{kind} 在地板之前就把 {out} 建出来了——留下一个能被 "
+                              "`compare` 读半天的空壳")
+    assert capsys.readouterr().out == ""
+    assert no_network == []
+
+
+def test_a_set_for_an_arm_that_was_not_named_is_refused(tmp_path, capsys):
+    assert cli.main(_batch_cmd(tmp_path, "--set", "C.temperature=0.6")) == 2
+    err = capsys.readouterr().err
+    assert "C" in err and "--configs" in err, err
+
+
+def test_compare_on_a_directory_without_a_manifest_is_a_usage_error(tmp_path, capsys):
+    assert cli.main(["compare", str(tmp_path / "nope")]) == 2
+    assert "run_manifest" in capsys.readouterr().err
+
+
+def test_a_real_batch_without_a_key_stops_before_the_endpoint(tmp_path, capsys, monkeypatch):
+    monkeypatch.delenv(Config().api_key_env, raising=False)
+    assert cli.main(["batch", "--out", str(tmp_path), "--configs", "A,B",
+                     "--set", "B.temperature=0.6", "--games", "1"]) == 2
+    assert Config().api_key_env in capsys.readouterr().err
+    assert not (tmp_path / "run_manifest.json").exists()
+
+
+def test_a_number_from_the_command_line_keeps_its_field_type(tmp_path):
+    """`--set B.max_tokens_speech=200` 如果被读成 float，config_hash 就悄悄变了：两臂差在一根
+    谁也没声明的类型轴上，而 compare 只会看见"值差不多、哈希不同"。"""
+    assert cli.main(_batch_cmd(tmp_path, "--set", "B.temperature=0.6",
+                               "--set", "B.max_tokens_speech=200")) == 0
+    man = json.loads((tmp_path / "run_manifest.json").read_text(encoding="utf-8"))
+    v = man["arms"]["B"]["config"]["max_tokens_speech"]
+    assert v == 200 and isinstance(v, int), v
+    assert man["arms"]["B"]["overrides"] == ["temperature", "max_tokens_speech"]
+
+
+def test_a_tuple_field_can_be_the_axis(tmp_path, capsys):
+    """`temperature_ladder` 正是 plan §7 的处理变量之一，而复现命令把它印成 `[0.9, 1.1]`：
+    `--set` 读不回同一个值的话，"打印得出来"和"粘得回去"就是两回事。"""
+    assert cli.main(_batch_cmd(tmp_path,
+                               "--set", "B.temperature_ladder=[0.9,1.1]")) == 0
+    man = json.loads((tmp_path / "run_manifest.json").read_text(encoding="utf-8"))
+    assert man["arms"]["B"]["config"]["temperature_ladder"] == [0.9, 1.1]
+    assert cli.main(["compare", str(tmp_path), "--axis", "temperature_ladder"]) == 1
+    md = (tmp_path / "comparison.md").read_text(encoding="utf-8")
+    assert "--set B.temperature_ladder=[0.9, 1.1]" in md, md
+
+
+def test_a_malformed_list_value_is_a_usage_error_not_a_traceback(tmp_path, capsys):
+    assert cli.main(_batch_cmd(tmp_path, "--set", "B.temperature_ladder=[0.9,")) == 2
+    assert "读不出来" in capsys.readouterr().err
+
+
+# --------------------------------------------- the region caps travel in the same log
+def test_a_log_without_the_sub_block_sizes_reports_them_as_unmeasured(played, tmp_path, capsys):
+    """老日志的 `region_tokens` 里没有 B0/C1–C4 五格：那五格必须报 None，不能报 0。
+
+    和 `test_a_log_without_the_caps_in_meta_prints_null_not_zero` 是同一族错，只是方向不同：
+    那边缺尺子，这边尺子在、被量的东西没落盘，读起来仍然是"每一格都舒舒服服待在上限以内"。
+    出厂预算下这五格的观测是 71/57/328/111/115
+    （11:12:16Z 三局 mock 实测），全都低于上限，所以"0"和"None"在这一局里数字不同、
+    含义差别更大——把没测到读成测到了 0 超额，是一个永远不会自己变红的谎。
+    """
+    _, path = played
+
+    def strip(rec):
+        rt = (rec.get("request") or {}).get("region_tokens")
+        if rt:
+            for key in ("B0", "C1", "C2", "C3", "C4"):
+                rt.pop(key, None)
+        return rec
+
+    old = _rewritten(path, tmp_path, "no-subblocks.jsonl", strip)
+    assert cli.main(["audit", str(old)]) == 0
+    check = _last_json_block(capsys.readouterr().out)["region_budget_check"]
+    for key in ("B0", "C1", "C2", "C3", "C4"):
+        assert check["worst_over"][key] is None, f"{key} 被读成了『测到了，没超』：{check}"
+    assert check["worst_over"]["B2"] == 0, "别的那几格缺读数不该把 B2 已有的观测一起抹掉"
+
+
+# --------------------------------------------- the region caps travel in the same log
+def _rewritten(path, tmp_path, name, edit):
+    lines = []
+    for ln in path.read_text(encoding="utf-8").splitlines():
+        lines.append(json.dumps(edit(json.loads(ln)), ensure_ascii=False))
+    out = tmp_path / name
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return out
+
+
+def test_audit_checks_region_sizes_against_the_caps_in_the_same_log(played, capsys):
+    """`region_tokens` 是九段没有尺子的长度（`#63` 之前只有四段）。上限今天也落进 meta 了，所以一份文件自己能判。
+
+    `worst_over` 从 `region_tokens` 减出来，`b2_witness_agrees` 再拿它去核对写盘那一刻记的
+    `b2_over_cap`——同一份文件里的两份口径必须互相检验，对不上就是有一格被改过或来自别的代码
+    版本，而不是"两份都信"。
+    """
+    _, path = played
+    assert cli.main(["audit", str(path)]) == 0
+    check = _last_json_block(capsys.readouterr().out)["region_budget_check"]
+    rb = Config().regions
+    assert check["caps"] == {"a_hard": rb.a_hard, "b1": rb.b1, "b2": rb.b2, "c_total": rb.c_total,
+                             "b0": rb.b0, "c_persona": rb.c_persona, "c_belief": rb.c_belief,
+                             "c_private": rb.c_private, "c_task": rb.c_task}, check
+    assert set(check["worst_over"]) == {"A", "B1", "B2", "C", "B0", "C1", "C2", "C3", "C4"}, check
+    assert check["worst_over"]["C"] == 0, "出厂预算下 C 的最大观测是 585，上限 1450"
+    assert check["b2_witness_agrees"] is True, check
+
+
+def test_a_forged_b2_witness_disagrees_with_the_sizes_it_should_come_from(played, tmp_path,
+                                                                          capsys):
+    """把**某一条** prompt 的 `b2_over_cap` 改大，交叉校验必须翻脸。
+
+    只动一条是这一条用例的全部难点：一批全改的话，"所有格都对得上才算一致"和"有一条对得上
+    就算一致"打印出同一个 `false`，后者那种写法就混过去了——而"这一份日志被人改过一格"恰恰
+    就是几条坏、多数好的形状。反向对照在同一份文件里做：只动 `b2_over_cap`、不动
+    `region_tokens.B2`，则除了这一格以外没有一个读数会变——`b2_worst_over_tokens`
+    是读那一格自己算的，它跟着变正是"两份账本其中一份被人写过"的形状，而这一格单看永远看不出问题。
+    """
+    _, path = played
+    seen = []
+
+    def forge(rec):
+        req = rec.get("request")
+        if req and "b2_over_cap" in req and not seen:
+            seen.append(1)
+            req["b2_over_cap"] = 9001
+        return rec
+
+    forged = _rewritten(path, tmp_path, "forged-witness.jsonl", forge)
+    assert cli.main(["audit", str(forged)]) == 0
+    stats = _last_json_block(capsys.readouterr().out)
+    assert stats["region_budget_check"]["b2_witness_agrees"] is False, stats
+    assert stats["region_budget_check"]["worst_over"]["B2"] == 0, \
+        "从 region_tokens 减出来的那格不该跟着伪造走"
+    assert stats["compactions"]["b2_worst_over_tokens"] == 9001
+
+
+def test_a_forked_act_moves_the_final_rate_and_leaves_the_first_try_one_alone(played, tmp_path,
+                                                                              capsys):
+    """`assigned_act` 在 audit 里有了读者，两格各自读一样东西，改动只该落在其中一格上。
+
+    mock 桌由构造必然听指派（`actors.py` 就照 `legal.assigned_act` 出牌），所以真读数要等端点；
+    这里能钉住的是**接线**与**分辨力**：把某一条 speech 的 `payload.act` 改成别的一个字，
+    `obeyed_final` 必须掉下来，而 `obeyed_first_try` 不许跟着掉——它读的是打回原因，那条记录里
+    从没出现过 `act_not_as_assigned`。两格一起动就说明其中一格读错了东西，而那正是"两个数读起来
+    一样"最容易被放过去的形状。`by_assigned` 数的是**指派**的分布，与座位最后做了什么无关。
+    """
+    _, path = played
+    assert cli.main(["audit", str(path)]) == 0
+    base = _last_json_block(capsys.readouterr().out)["assignment"]
+    assert base["turns"] > 0 and base["obeyed_first_try"] == 1.0 == base["obeyed_final"], base
+
+    seen = []
+
+    def fork(rec):
+        pay = rec.get("payload") or {}
+        if (rec.get("kind") == "speech" and (rec.get("request") or {}).get("assigned_act")
+                and pay.get("act") and not seen):
+            seen.append(1)
+            pay["act"] = "listen" if pay["act"] != "listen" else "accuse"
+        return rec
+
+    forged = _rewritten(path, tmp_path, "forked-act.jsonl", fork)
+    assert cli.main(["audit", str(forged)]) == 0
+    out = _last_json_block(capsys.readouterr().out)["assignment"]
+    assert seen, "这份 mock 局里一条带指派的 speech 都没有，上面那句断言就成了自证"
+    assert out["turns"] == base["turns"] and out["by_assigned"] == base["by_assigned"], out
+    assert out["obeyed_first_try"] == 1.0, out
+    assert out["obeyed_final"] < 1.0, out
+
+
+def test_audit_says_when_the_endpoint_never_answered_about_the_cache(played, tmp_path, capsys):
+    """一次调用没落进"端点没说 cached"这一档，读出来必须是 `null`，不是 0.0。
+
+    `--mock` 桌写出的 `response` 是空的（`{}`，量不出成本），所以这里补的是"一局真跑过、端点每次都
+    报了 prompt_tokens 与延迟，唯独没报 `usage` 那一块"——13:19:26Z 直接读一份 mock 日志确认过形状。
+    这一档要单独钉：把 null 印成 0.0，一份日志就会看起来像"跑过了、前缀一次都没复用"，而 plan §5 的
+    经济性正是拿这个比值算折扣的——一个假的 0 比缺数更贵。
+    """
+    _, path = played
+
+    def answered_without_cache(rec):
+        if (rec.get("kind") == "speech" and isinstance(rec.get("response"), dict)
+                and (rec.get("payload") or {}).get("meta")):
+            rec["response"] = {"latency_s": 4.0, "prompt_tokens": 900, "completion_tokens": 30}
+        return rec
+
+    forged = _rewritten(path, tmp_path, "no-usage.jsonl", answered_without_cache)
+    assert cli.main(["audit", str(forged)]) == 0
+    out = _last_json_block(capsys.readouterr().out)["prefix_cache"]
+    assert out["calls"] > 0 and out["reported"] == 0, out
+    assert out["silent"] == out["calls"], out
+    assert out["reuse_ratio"] is None and out["cached_tokens"] is None, out
+
+
+def test_a_usage_block_written_into_the_log_moves_the_reuse_ratio(played, tmp_path, capsys):
+    """接线之外还要有分辨力：给一半的调用补上 `usage`，比值就该从 `null` 变成一个数。
+
+    端点此刻关着（13:10:28Z 探过：2 秒内没有 TCP 响应），真读数要等 M0 复跑。这条钉的是"日志里一旦
+    出现这个字段，机器出口读得到"，并且只补 seq 为奇数的那一半——`reported` 与 `silent` 必须分开数，全算
+    进分母的话，一个从一半调用里读出来的命中率会看起来像从整批读出来的。
+    """
+    _, path = played
+    forged_n = 0
+
+    def forge(rec):
+        nonlocal forged_n
+        if (rec.get("kind") == "speech" and isinstance(rec.get("response"), dict)
+                and rec.get("seq") and (rec.get("payload") or {}).get("meta")):
+            response = {"latency_s": 4.0, "prompt_tokens": 900, "completion_tokens": 30}
+            if int(rec["seq"]) % 2:
+                # 计数器跟着"写没写这块"走，不跟着"这条记录改没改"走：两条分支都改记录，
+                # 取反的话 `reported` 会去对上一个补数一半、静默一半的假数字。
+                response["usage"] = {"prompt_tokens": 900, "cached_tokens": 25}
+                forged_n += 1
+            rec["response"] = response
+        return rec
+
+    forged = _rewritten(path, tmp_path, "usage-block.jsonl", forge)
+    assert cli.main(["audit", str(forged)]) == 0
+    out = _last_json_block(capsys.readouterr().out)["prefix_cache"]
+    assert out["reported"] == forged_n > 0, out
+    assert 0 < out["reported"] < out["calls"], "一半补数、一半没补，两格却分不出来"
+    assert out["cached_tokens"] == 25 * forged_n and out["prompt_tokens"] == 900 * forged_n, out
+    assert out["reuse_ratio"] == round(25 / 900, 4) and out["unpairable"] == 0, out
+
+
+def test_a_log_without_the_caps_in_meta_prints_null_not_zero(played, tmp_path, capsys):
+    """`meta.regions` 缺席 = 这份日志落地时还没有这个字段，不是"上限是 0"。
+
+    少一格就把整块判据读成 0，等于让老批次自己声明"每一段都舒舒服服待在上限以内"——那句话
+    没人写过。`b2_worst_over_tokens` 是另一回事：它读的是每 prompt 的 `b2_over_cap`，字段还在，
+    所以那一格必须照常打印数字，只有需要尺子的两格变 `null`。刀的读数同属"用不着尺子"那一族：
+    它数的是砍掉的行数，没有上限可减，所以缺 `meta.regions` 时它必须照旧是 0。
+    """
+    _, path = played
+
+    def strip(rec):
+        if "regions" in (rec.get("meta") or {}):
+            del rec["meta"]["regions"]
+        return rec
+
+    old = _rewritten(path, tmp_path, "no-caps.jsonl", strip)
+    assert cli.main(["audit", str(old)]) == 0
+    stats = _last_json_block(capsys.readouterr().out)
+    check = stats["region_budget_check"]
+    assert check["caps"] is None and check["worst_over"] is None, check
+    assert check["b2_witness_agrees"] is None, check
+    assert stats["compactions"]["b2_worst_over_tokens"] == 0, "这一格用不着尺子"
+    assert check["card_prompts_thinned"] == 0, "缺尺子不该顺手把刀的读数一起读成 null"
+    assert stats["compactions"]["card_worst_claims_dropped"] == 0, \
+        "两出口共用同一格：这里 null、audit 里 0，就是同一件事的两个答案"
+
+
+def test_an_inflated_b2_size_with_a_stale_witness_disagrees(played, tmp_path, capsys):
+    """另一侧伪造：只抬高 `region_tokens.B2`、不动写盘那刻记的 `b2_over_cap`。
+
+    "这一格超了 1100 tok"听起来是个关于字节的事实,而同一格的文件里还写着 0。两份读数对不上
+    必须翻脸,所以比较不能写成单向宽容的 `>=`：1100 至少是比 0 大,那句"窗口被改写过、计数器
+    忘了跟着改"恰好从 `>=` 底下溜过去。这一格的正数读数也顺手钉住每区用的是自己那把尺。
+    """
+    _, path = played
+
+    def inflate(rec):
+        rt = (rec.get("request") or {}).get("region_tokens")
+        if rt:
+            rt["B2"] = 2600
+        return rec
+
+    inflated = _rewritten(path, tmp_path, "inflated-b2.jsonl", inflate)
+    assert cli.main(["audit", str(inflated)]) == 0
+    check = _last_json_block(capsys.readouterr().out)["region_budget_check"]
+    assert check["worst_over"]["B2"] == 1100, check
+    assert check["worst_over"]["C"] == 0, "另一格不该跟着一起被抬高"
+    assert check["b2_witness_agrees"] is False, check
+
+
+def test_audit_names_the_prompts_that_went_over_a_cap_the_operator_set(tmp_path, capsys):
+    """上限掐到地板以下（C 的地板是 335 tok），超预算的那一格才第一次有读数可读。
+
+    这一条同时钉住两件事：尺子取自这一臂自己的 `meta.regions`（`--set` 覆盖过的那份），不是
+    出厂 `Config()`；`worst_over` 取的是各 prompt 的**最大**观测——写盘那一刻的瘦身已经把 C 压
+    到它所能达到的最低，所以只有 max 才看得见"压不下去"这件事，峰以外的每一格都是 0。
+    """
+    assert cli.main(["batch", "--out", str(tmp_path), "--configs", "A", "--games", "1",
+                     "--seed0", "7", "--mock", "--set", "A.regions.c_total=250"]) == 0
+    log = sorted((tmp_path / "A").glob("*.jsonl"))[0]
+    peaks = [r["request"]["region_tokens"]["C"]
+             for r in (json.loads(ln) for ln in log.read_text(encoding="utf-8").splitlines())
+             if (r.get("request") or {}).get("region_tokens")]
+    assert cli.main(["audit", str(log)]) == 0
+    check = _last_json_block(capsys.readouterr().out)["region_budget_check"]
+    assert check["caps"]["c_total"] == 250, "读的是这一臂的上限，不是出厂值"
+    assert check["worst_over"]["C"] == max(peaks) - 250 > 0, (check, max(peaks))
+    assert check["worst_over"]["B2"] == 0 and check["b2_witness_agrees"] is True, \
+        "改 C 的上限不该动到 B2 的两份账"
+
+
+def test_the_two_readers_of_the_region_budget_share_one_implementation(played, capsys):
+    """`audit` 印的那块和批次报告印的那行必须来自同一个函数，不是两份算术。
+
+    这份文件里"同一个率两处实现"已经栽过两次（`act`/`action` 两个字段名、fallback 两个分母）。
+    本用例不管数字对不对（上面四条管），只管两个读取点是不是同一份代码：任何一处换成第二份
+    实现——哪怕是"看起来一样"的第二份——它就得红。
+    """
+    _, path = played
+    g = metrics.read_game(path)
+    assert cli.main(["audit", str(path)]) == 0
+    printed = _last_json_block(capsys.readouterr().out)["region_budget_check"]
+    assert printed == metrics.region_budget_check(g), "audit 印的不是 metrics 那个函数的输出"
+    arm = batch.region_budget_by_arm([g])
+    assert arm["worst_over"] == printed["worst_over"], arm
+    assert arm["games_over"] == {k: int(v > 0) for k, v in printed["worst_over"].items()}, arm
+    assert arm["witness_disagreements"] == (0 if printed["b2_witness_agrees"] else 1), arm

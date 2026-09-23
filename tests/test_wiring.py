@@ -1,0 +1,1496 @@
+"""Cross-module wiring: the tests that would have caught the split-brain.
+
+Written after a smoke run found defects no single-module test could see — three modules
+had invented three names for the same event (`vote` / `vote_cast` / `vote_result`), two
+modules each owned a chronicle renderer and only one was called, the belief card could
+render "存活：号。" with nothing in it, and a soft-gate helper was named wrongly enough to
+raise NameError on the hottest path in the game.
+
+Every test here pushes data through *two or more* modules. That is the point:
+test_rules and test_schema stayed green the whole time those seams were broken.
+"""
+
+from __future__ import annotations
+
+import ast
+import dataclasses
+import random
+import re
+from pathlib import Path
+
+import pytest
+
+from wolfengine import (assemble, belief, compress, events, info, legality, persona,
+                        render_html, render_live, roles, rules, schema, state)
+from wolfengine.config import Config, RegionBudget
+from wolfengine.events import KINDS, Event, EventLog, Kind, seats
+
+
+# --------------------------------------------------------------------------- helpers
+def ev(seq: int, kind: str, *, day: int = 1, phase: str = "day_speech",
+       visibility="all", actor: int | None = None, **payload: object) -> Event:
+    """Payload is spelled as kwargs deliberately: a `payload=` argument would land inside
+    **payload and nest the dict one level down, which is how two tests here first lied."""
+    return Event(seq=seq, kind=kind, day=day, phase=phase, visibility=visibility,
+                 payload=dict(payload), actor=actor)
+
+
+def nine_seat_log(tmp_path) -> tuple[EventLog, state.GameState, dict[int, str]]:
+    """A real deal through the real rules, then a plausible day-1 history."""
+    rng = random.Random(7)
+    board = roles.board_for(9)
+    deal = rules.deal(board, rng)
+    gs = state.GameState(
+        board=board, game_id="w", deal_seed=7,
+        seats={s: state.SeatState(seat=s, role=deal[s]) for s in deal},
+        witch_seat=next(s for s, r in deal.items() if r == "witch"),
+        seer_seat=next(s for s, r in deal.items() if r == "seer"),
+        hunter_seat=next(s for s, r in deal.items() if r == "hunter"),
+        phase=state.Phase.DAY_SPEECH,
+        speech_order=rules.speech_order(rng, sorted(deal)),
+    )
+    log = EventLog(tmp_path / "w.jsonl")
+    wolves = [s for s, r in deal.items() if r == "wolf"]
+    log.append(Kind.GAME_START, day=1, phase="night_wolf", seats=sorted(deal))
+    for s, r in sorted(deal.items()):
+        log.append(Kind.DEAL, day=1, phase="night_wolf", visibility=seats(s), actor=s,
+                   role=r, teammates=[x for x in wolves if x != s] if r == "wolf" else [])
+    log.append(Kind.SPEECH, day=1, phase="day_speech", actor=1,
+               text="3号发言太顺了，我怀疑他。", act="accuse", target=3)
+    log.append(Kind.WOLF_CHAT, day=1, phase="night_wolf", visibility=seats(*wolves), actor=wolves[0],
+               text="今晚刀6号。")
+    log.append(Kind.SEER_RESULT, day=1, phase="night_seer", visibility=seats(gs.seer_seat),
+               actor=gs.seer_seat, target=5, verdict="wolf")
+    log.append(Kind.VOTE, day=1, phase="day_vote", actor=1, target=3)
+    log.append(Kind.VOTE_RESULT, day=1, phase="day_vote", tally={"3": 1})
+    return log, gs, deal
+
+
+ALL_KIND_EVENTS = [
+    ev(1, Kind.GAME_START, seats=[1, 2, 3]),
+    ev(2, Kind.DEAL, visibility=seats(1), actor=1, role="wolf", teammates=[2]),
+    ev(3, Kind.PHASE, text="天黑了。"),
+    ev(4, Kind.SPEECH, actor=1, text="我是预言家。", act="accuse", target=2),
+    ev(5, Kind.LAST_WORDS, actor=1, text="你们会后悔的。"),
+    ev(6, Kind.NIGHT_ACTION, visibility=seats(1), actor=1, act="kill", action="kill", target=3),
+    ev(7, Kind.WOLF_CHAT, visibility=seats(1), actor=1, text="刀3号。"),
+    ev(8, Kind.SEER_RESULT, visibility=seats(2), actor=2, target=3, verdict="wolf"),
+    ev(9, Kind.VOTE, actor=1, target=3),
+    ev(10, Kind.VOTE, actor=2, target=None),
+    ev(11, Kind.VOTE_RESULT, tally={"3": 1, "1": 1}),
+    ev(12, Kind.DEATH, seat=3, cause="wolf_kill"),
+    ev(13, Kind.COMPACTION, summary="第1天概要", window=8),
+    ev(14, Kind.GAME_OVER, winner="wolf", terminal="wolf_win"),
+    ev(15, Kind.NOTICE, visibility=seats(4), text="今晚7号倒在了狼刀下。", about=7),
+]
+
+
+# --------------------------------------------------------------- 1. one renderer, total
+@pytest.mark.parametrize("e", ALL_KIND_EVENTS, ids=lambda e: e.kind)
+def test_every_declared_kind_has_a_renderer(e):
+    """A declared kind that falls through is invisible in tests and loud in the game."""
+    line = compress.render_line(e)
+    assert "未渲染事件" not in line, f"{e.kind} is declared but not rendered"
+    assert "{" not in line, f"{e.kind} leaked a raw payload: {line}"
+
+
+def test_undeclared_kind_hits_the_tripwire():
+    line = compress.render_line(ev(1, "something_new", x=1))
+    assert "未渲染事件 something_new" in line
+    assert "'x': 1" not in line, "the fallback must not dump a payload into a prompt"
+
+
+def test_the_declared_vocabulary_is_what_the_modules_agree_on():
+    """Pinned to a count on purpose: adding a kind without a renderer breaks here.
+
+    14 since Kind.NOTICE (the moderator telling one seat something, which is how the
+    witch learns where the knife fell); the number is the test, not the list, so an
+    accidental rename that keeps the count honest still has to be written down.
+    """
+    assert len(KINDS) == 14, sorted(KINDS)
+    assert {e.kind for e in ALL_KIND_EVENTS} == set(KINDS)
+
+
+def test_every_declared_kind_has_an_emitter():
+    """渲染侧的守卫在上面；这条补齐另一半：词表里每个名字都得真有个地方把它落盘。
+
+    `compaction` 就是漏网的那一个——`Kind` 里有、`render_line` 有分支、`audit` 有计数器，
+    而 src/ 里没有任何一处写它，于是 `kinds["compaction"]` 永远读成 0，一份"这局从没折叠"的
+    假话。名字按发射点收集：`log.append(Kind.X)`、`t.say(Kind.X)`、`kind=Kind.X`。
+
+    用 `in EMIT_NAMES` 而不是"出现在任意调用的实参里"：`kinds.get(Kind.COMPACTION, 0)` 也是
+    实参，读侧的引用会把自己伪装成写侧。
+    """
+    EMIT_NAMES = {"append", "say", "ask"}
+    declared = {n for n in dir(Kind) if not n.startswith("_") and n.isupper()}
+
+    def kind_name(node):
+        return (node.attr if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                and node.value.id == "Kind" and node.attr in declared else None)
+
+    emitted = set()
+    for f in sorted(Path("src/wolfengine").rglob("*.py")):
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+            if not isinstance(node, ast.Call):
+                continue
+            fname = node.func.attr if isinstance(node.func, ast.Attribute) else getattr(node.func, "id", "")
+            emitted |= {kind_name(a) for a in node.args if fname in EMIT_NAMES and kind_name(a)}
+            emitted |= {kind_name(kw.value) for kw in node.keywords
+                        if kw.arg and kw.arg.startswith("kind") and kind_name(kw.value)}
+    assert declared <= emitted, f"声明了却没人写：{sorted(declared - emitted)}"
+
+
+def _kind_comparisons(path: Path) -> tuple[list[tuple], list[tuple]]:
+    """(object-form, raw-form) literal comparisons against an event kind, as (file, line, literal).
+
+    Two tiers because the two spellings mean different things. `e.kind` is a loaded `Event`, so
+    comparing it to a string invents a second name for a declared fact — exactly the split-brain
+    this file exists to prevent, and the reason src/ has been banned from it for a while.
+    `rec["kind"]` is a dict from `json.loads`: that test reads the file *as a file* on purpose so
+    it doesn't share an implementation with `metrics`, and a literal there is the wire contract.
+    A literal is still only legal if it names a declared kind, so a rename fails loudly instead of
+    turning the filter into a no-op.
+
+    Parsed from the AST rather than by regex because the regex would flag its own source line —
+    the pattern `kind\\s*[!=]=` lives in this file's text.
+    """
+    obj, raw = [], []
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if not isinstance(node, ast.Compare) or len(node.ops) != 1:
+            continue
+        if not isinstance(node.ops[0], (ast.Eq, ast.NotEq)):
+            continue
+        left, right = node.left, node.comparators[0]
+        for a, b in ((left, right), (right, left)):
+            if not (isinstance(b, ast.Constant) and isinstance(b.value, str)):
+                continue
+            spot = (path.name, node.lineno, b.value)
+            if isinstance(a, ast.Attribute) and a.attr == "kind":
+                obj.append(spot)
+            elif (isinstance(a, ast.Subscript) and isinstance(a.slice, ast.Constant)
+                    and a.slice.value == "kind"):
+                raw.append(spot)
+    return obj, raw
+
+
+def _undeclared_kinds(spots: list[tuple]) -> list[tuple]:
+    """原始形式里那些没在 `Kind` 里声明过的字面量。
+
+    单独成函数是为了让对照用例**调用**这条规则而不是复算它：第一版把判定写在守卫体内，控制用例
+    于是自己写了一遍 `[s[2] for s in raw if s[2] not in KINDS]`——结果"把判定改瞎"那具变异活了下来
+    (两遍实现里瞎掉的那遍没人看)。
+    """
+    return [s for s in spots if s[2] not in KINDS]
+
+
+def test_no_module_compares_an_event_kind_to_a_bare_string():
+    """The split-brain this file exists to prevent was a string literal compared in each
+    of three modules. `Kind` exists so the only legal spelling is the declared one.
+
+    Scope is the whole repo, not just src/: a wrong literal in src/ fails as a broken game, while
+    the same literal in a test fails as a *passing* test — the filter silently matches everything
+    or nothing. `tests/` had five of these (`compaction`, `game_over`) until the ban was widened.
+    """
+    banned, wire = [], []
+    for f in sorted(Path("src/wolfengine").rglob("*.py")) + sorted(Path("tests").glob("*.py")):
+        o, r = _kind_comparisons(f)
+        banned += o
+        wire += r
+    undeclared = _undeclared_kinds(wire)
+    assert not banned, f"用 Kind.X，别写字面量：{banned}"
+    assert not undeclared, f"读原始 JSONL 可以写字面量，但必须是声明过的 kind：{undeclared}"
+    # 两档都得真的扫到东西，否则"第二档一条违规都没有"可能只是第二档没跑。
+    assert wire, "没扫到任何 `rec[kind] == …` 形式：范围或解析坏了，第二档闸门是空转的"
+
+
+def test_the_kind_guard_sees_both_tiers_on_a_synthetic_file(tmp_path):
+    """正面对照：字面量在对象形式和原始形式里各红一次，否则改瞎哪一档都看不出来。
+
+    真实语料是干净的，所以这一条不读仓库文件——它往 tmp_path 写一小段代码，钉的是"检测能力在"。
+    """
+    probe = tmp_path / "probe_kind.py"
+    probe.write_text(
+        "def a(e):\n"
+        '    return e.kind == "compaction"\n'
+        "def b(rec):\n"
+        '    return rec["kind"] == "vote_cast"\n'
+        "def c(rec):\n"
+        '    return rec["kind"] == "speech"\n', encoding="utf-8")
+    obj, raw = _kind_comparisons(probe)
+    assert [s[2] for s in obj] == ["compaction"], obj
+    assert sorted(s[2] for s in raw) == ["speech", "vote_cast"], raw
+    assert [s[2] for s in _undeclared_kinds(raw)] == ["vote_cast"], (
+        "`vote_cast` 是那次 split-brain 里发明的假名字，必须被判未声明；"
+        "`speech` 是声明过的，不该跟着一起红")
+
+
+def test_there_is_exactly_one_chronicle_renderer():
+    owners = [f.name for f in sorted(Path("src/wolfengine").rglob("*.py"))
+              if "def render_line" in f.read_text(encoding="utf-8")]
+    assert owners == ["compress.py"], owners
+
+
+VIEWING_RULES: dict[str, tuple[str, list[str]]] = {
+    # rule -> (the one module allowed to `def` it, the modules that must import it from there)
+    "shown_events": ("render_html", ["render_live"]),
+    "event_flags": ("render_html", ["render_live"]),
+    "markers": ("render_html", ["render_live"]),
+    "mind_pairs": ("render_html", ["render_live"]),
+    "roles_by_seat": ("render_html", ["render_live"]),
+    "role_zh": ("render_html", ["render_live"]),
+    "game_over_event": ("render_html", ["render_live"]),
+    "voting_waves": ("events", ["render_html", "metrics"]),
+}
+
+
+def _imported_from(module: str, owner: str) -> set[str]:
+    """Names `module.py` imports out of `owner.py`.
+
+    The substring check this replaces passed on a docstring mention, so a view could stop
+    using the shared rule and keep the test green by leaving the word in a comment.
+    """
+    text = Path(f"src/wolfengine/{module}.py").read_text(encoding="utf-8")
+    return {a.name for node in ast.walk(ast.parse(text))
+            if isinstance(node, ast.ImportFrom) and node.module == owner and node.level == 1
+            for a in node.names}
+
+
+@pytest.mark.parametrize("rule", sorted(VIEWING_RULES))
+def test_the_two_views_share_one_definition_of_each_viewing_rule(rule):
+    """M6's split-brain risk: a live frame and a 复盘 HTML that each decide what a spectator may
+    see are two audience-sized truths about one file, and only one of them gets looked at when
+    somebody reports "the shared file leaked". Same shape as the render_line pin above."""
+    owner, users = VIEWING_RULES[rule]
+    owners = [f.name for f in sorted(Path("src/wolfengine").rglob("*.py"))
+              if f"def {rule}(" in f.read_text(encoding="utf-8")]
+    assert owners == [f"{owner}.py"], owners
+    for f in users:
+        assert rule in _imported_from(f, owner), (
+            f"{f}.py 必须从 {owner}.py 导入 {rule}，而不是在旁边另写一份")
+
+
+def test_the_torn_tail_bound_has_one_owner_and_every_reader_calls_it():
+    """How many unparsable lines a reader may wave past is a rule about the **file**, and four
+    modules read that file: the live tail, the transcript and `audit` (cli), the 复盘 HTML, and
+    every metric built on `read_game`. Each owning its own `while the last line fails: pop()` is
+    how one truncated batch ends up with four opinions about whether the game finished.
+
+    The notice sentence has the same shape one layer up: two printers, one counter. It is pinned
+    as an import rather than a substring because a docstring mention used to satisfy the old
+    version of this check (see `_imported_from`).
+    """
+    for def_ in ("def split_torn_tail(", "def torn_notice("):
+        owners = [f.name for f in sorted(Path("src/wolfengine").rglob("*.py"))
+                  if def_ in f.read_text(encoding="utf-8")]
+        assert owners == ["events.py"], f"{def_} 的第二份实现在 {owners}"
+    for reader in ("cli.py", "metrics.py", "render_html.py", "render_live.py"):
+        assert "read_split(" in Path("src/wolfengine", reader).read_text(encoding="utf-8"), (
+            f"{reader} 自己在解析日志行，没有走 events 的那一份")
+    for printer in ("cli", "render_html"):
+        assert "torn_notice" in _imported_from(printer, "events"), (
+            f"{printer}.py 在自己重写那句截断通知")
+
+
+def _defs_named(src: str, name: str) -> list[ast.FunctionDef]:
+    """Every `def <name>` in this source, module-level or a method."""
+    return [n for n in ast.walk(ast.parse(src))
+            if isinstance(n, ast.FunctionDef) and n.name == name]
+
+
+def _code(fn: ast.FunctionDef) -> str:
+    """A function body with docstrings stripped — so "this property is one call" can be checked
+    by comparing text, and rewriting the docstring cannot turn the check into a no-op."""
+    return "\n".join(ast.unparse(s) for s in fn.body
+                     if not (isinstance(s, ast.Expr)
+                             and isinstance(s.value, ast.Constant)
+                             and isinstance(s.value.value, str)))
+
+
+def test_the_truncation_extent_has_one_arithmetic_and_three_readers():
+    """#56 让批次成为"末行被砍了多少"的第三个读者（`torn_notice` 那句话、`audit` 那一格、报告里那
+    一节）。在接进来之前，这两个数被数了**两遍**：句子自己数一次，`cli.py` 的 dict 再数一次。两份
+    "看起来一样"的算术正是这一路一直在拆的东西（#27/#28 的区域预算、#48 的 manifest 判据）。
+
+    三条腿各管一种错法，最后一条是这一族特有的：行为用例钉不住"抄一份恰好也算对的算术"，所以要
+    按**谁能碰到被砍的原文**来查。`sum(len(...) for ...)` 这种形状本身在四个文件里都有（各数各的
+    东西，第一次写这条腿时就误伤过），所以判据换成数**次数**：`torn_tail` 这个字段全仓库只许被读到
+    两处，各一处——`metrics.py` 里那只转交的手、`cli.py` 里那句 `is not` 的空判断。批次碰不到原文，
+    就只能走 `Game.torn_extent`。
+    """
+    arithmetic = [n for n in ast.parse(Path("src/wolfengine/events.py").read_text(encoding="utf-8")).body
+                  if isinstance(n, ast.FunctionDef) and n.name == "torn_extent"]
+    assert len(arithmetic) == 1, "数行数/字节数那只手在 events.py 里被写了不止一份"
+
+    prop = _defs_named(Path("src/wolfengine/metrics.py").read_text(encoding="utf-8"), "torn_extent")
+    assert len(prop) == 1 and any(ast.unparse(d) == "property" for d in prop[0].decorator_list)
+    assert _code(prop[0]) == "return torn_extent(self.torn_tail)", (
+        f"Game.torn_extent 不只是一次转交：{_code(prop[0])}")
+
+    reads = {p.name: sum(1 for x in ast.walk(ast.parse(p.read_text(encoding="utf-8")))
+                         if isinstance(x, ast.Attribute) and x.attr == "torn_tail")
+             for p in sorted(Path("src/wolfengine").rglob("*.py"))}
+    touched = {k: v for k, v in reads.items() if v}
+    assert touched == {"cli.py": 1, "metrics.py": 1}, (
+        f"碰到被砍原文的地方变了：{touched}——多一处就多一套数法"
+        "（#56 之前 `cli.py` 正是第二处：那句 `is not` 之外还自己数了一遍行数和字节数）")
+    assert _defs_named(Path("src/wolfengine/batch.py").read_text(encoding="utf-8"), "torn_extent") == []
+    assert "torn_extent" in _imported_from("metrics", "events")
+    assert "torn_extent" not in _imported_from("batch", "events"), (
+        "batch.py 绕开 Game 自己去数，批次读数和转录读数就有两套算法了")
+
+
+def test_the_batch_reads_the_numbering_arithmetic_instead_of_recounting_it():
+    """#55 给批次侧补了一个编号破损读数。那条行为用例只在一个 fixture 上比过"相等"，而一份恰好
+    也算对了缺号与重号的第二实现照样能绿——所以判据得是结构性的，且不能只是一句子串搜索：
+    `Game.seq_damage` 自己就叫这个名字，`"def seq_damage(" in text` 会把它当成第二套算术（第一版
+    这条用例就是这么红的）。
+
+    三腿各管一种错法：
+    * 全仓库只有 `events.py` 里有**算术**（`Game` 上那个 property 不算，它的身体必须是一次调用，
+      逐字对得上），别处不许再 `def` 一个；
+    * `metrics.py` 从 `events` **导入**这个名字（子串不算——一个 docstring 提到它就能骗过，
+      见 `_imported_from` 的来历）；
+    * `batch.py` 不导入它：批次要经 `Game` 拿数，否则 #54 刚拆掉的"四个出口各有一套算法"就在
+      机器侧原地重建。
+    """
+    arithmetic = [n for n in ast.parse(Path("src/wolfengine/events.py").read_text(encoding="utf-8")).body
+                  if isinstance(n, ast.FunctionDef) and n.name == "seq_damage"]
+    assert len(arithmetic) == 1, "计数那只手在 events.py 里被写了不止一份"
+    prop = _defs_named(Path("src/wolfengine/metrics.py").read_text(encoding="utf-8"), "seq_damage")
+    assert len(prop) == 1 and any(ast.unparse(d) == "property" for d in prop[0].decorator_list)
+    assert _code(prop[0]) == "return seq_damage(self.events)", (
+        f"Game.seq_damage 不只是一次转交：{_code(prop[0])}")
+    elsewhere = [p.name for p in sorted(Path("src/wolfengine").rglob("*.py"))
+                 if p.name not in ("events.py", "metrics.py")
+                 and _defs_named(p.read_text(encoding="utf-8"), "seq_damage")]
+    assert elsewhere == [], f"编号计数被抄到了第二处：{elsewhere}"
+    assert "seq_damage" in _imported_from("metrics", "events")
+    assert "seq_damage" not in _imported_from("batch", "events"), (
+        "batch.py 绕开 Game 自己去数，批次读数和转录读数就有两套算法了")
+
+
+def _literal_alias(src: str, name: str) -> set[str]:
+    """模块级 `name = Literal[...]` 的取值集合。
+
+    从源码里读，是为了不在测试里抄第二份阵营表——抄一份就等于把"键空间只有一处定义"这条判据
+    自己违反掉（#80 要钉的就是这个）。
+    """
+    for node in ast.parse(src).body:
+        if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                and isinstance(node.targets[0], ast.Name) and node.targets[0].id == name
+                and isinstance(node.value, ast.Subscript)
+                and ast.unparse(node.value.value) == "Literal"):
+            sl = node.value.slice
+            elts = sl.elts if isinstance(sl, ast.Tuple) else [sl]
+            return {e.value for e in elts if isinstance(e, ast.Constant)}
+    raise AssertionError(f"{name} 不是模块级的 Literal 别名，去 roles.py 里看它变成什么了")
+
+
+def test_the_win_check_names_its_key_space_as_teams_and_has_no_role_twin():
+    """#80：`winner_for` 读的键是**阵营**，参数却叫 `alive_roles`、docstring 说"which roles
+    remain alive"，旁边还站着一个按职业建键的 `alive_role_counts`。
+
+    三条腿各管一种错法，都不靠子串搜索：
+    * 键空间：函数体里从那个计数参数上取的每个字符串键，必须是 `roles.Team` 的取值之一。
+      这一腿今天就是绿的，它管的是**将来**——有人往屠边判据里加一句 `alive.get("seer", 0)`。
+    * 名字与注解：那个参数得叫 team、注解得写 `Counter[Team]`，docstring 得提到阵营。今天红。
+    * 孪生：`rules.py` 里不许再有"用 `role_of` 建 Counter"这个**形状**（不是"那个名字不许多一处"，
+      换个名重抄一遍照样是把整局当场判狼赢的入口留着）。今天红。
+
+    为什么名字值得一条守卫：`Counter` 按职业建键时压根没有 "god" 这个键，`get("god", 0)` 永远是
+    0，屠边在第一次 `check_win` 就判狼赢——`tests/test_rules.py` 里那格把后果钉成了读数。
+    """
+    src = Path("src/wolfengine/rules.py").read_text(encoding="utf-8")
+    teams = _literal_alias(Path("src/wolfengine/roles.py").read_text(encoding="utf-8"), "Team")
+    assert teams == {"wolf", "villager", "god"}, f"阵营键空间变了：{sorted(teams)}"
+
+    fn = _defs_named(src, "winner_for")[0]
+    counter = fn.args.args[1]
+    keys = set()
+    for node in ast.walk(fn):
+        taken = None
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "get" and node.func.value is not None
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == counter.arg and node.args):
+            taken = node.args[0]
+        elif (isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name)
+              and node.value.id == counter.arg):
+            taken = node.slice
+        if isinstance(taken, ast.Constant) and isinstance(taken.value, str):
+            keys.add(taken.value)
+    assert keys and keys <= teams, f"胜负判据读了键空间外的键：{sorted(keys - teams)}"
+
+    assert "team" in counter.arg and "role" not in counter.arg, (
+        f"参数名替调用方撒了谎：它叫 {counter.arg}，键空间却是阵营")
+    assert ast.unparse(counter.annotation) == "Counter[Team]", (
+        f"注解没写出键空间：{ast.unparse(counter.annotation)}——类型检查器就此帮不上忙")
+    doc = ast.get_docstring(fn) or ""
+    assert "阵营" in doc or "team" in doc.lower(), (
+        "docstring 还在说'哪些职业活着'，而下一个人会照它接线")
+
+    twins = [f.name for f in _defs_named(src, "alive_role_counts")] + [
+        n.name for n in ast.walk(ast.parse(src)) if isinstance(n, ast.FunctionDef)
+        and any(isinstance(c, ast.Call) and ast.unparse(c.func) == "Counter"
+                and "role_of" in ast.unparse(c) for c in ast.walk(n))]
+    assert twins == [], f"rules.py 里还有按职业建键的计数函数：{sorted(set(twins))}"
+
+    call = [n for n in ast.walk(_defs_named(src, "check_win")[0])
+            if isinstance(n, ast.Call) and ast.unparse(n.func) == "winner_for"]
+    assert len(call) == 1 and len(call[0].args) == 2, "check_win 不再是一次两参数的调用，下面那条白写"
+    fed = ast.unparse(call[0].args[1])
+    assert fed == "alive_team_counts(state)", (
+        f"check_win 喂给胜负判据的是 {fed}，键空间对不对没人钉")
+
+
+def _py_refs(def_roots: tuple[str, ...], ref_roots: tuple[str, ...]):
+    """(每个标识符在 `ref_roots` 里被**引用**的次数, `def_roots` 里出现过的 def 名字集合)。
+
+    引用只数 AST 的真引用：`Name`/`Attribute`/装饰器，外加**等于该名字的字符串常量**——后者是为了
+    不误伤 `getattr(mod, "x")` 与 `__all__` 这类按名字派发（它们是真读者）。docstring 里的提及
+    **不算**：#32 那一族的教训就是"注释留着词、代码早就不用了"照样能骗过子串搜索。
+    """
+    refs: dict[str, int] = {}
+    defined: set[str] = set()
+
+    def bump(key: str) -> None:
+        refs[key] = refs.get(key, 0) + 1
+
+    def scan(root: str, own: bool) -> None:
+        for f in sorted(Path(root).rglob("*.py")):
+            if "__pycache__" in f.parts:
+                continue
+            for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and own:
+                    defined.add(node.name)
+                elif isinstance(node, ast.Attribute):
+                    bump(node.attr)
+                elif isinstance(node, ast.Name):
+                    bump(node.id)
+                elif (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                      and node.value.isidentifier()):
+                    bump(node.value)
+
+    for root in def_roots:
+        scan(root, own=True)
+    for root in ref_roots:
+        scan(root, own=False)
+    return refs, defined
+
+
+def test_no_named_helper_in_the_engine_is_left_without_a_reader():
+    """`#81`：`src/wolfengine` 下曾有八个"除定义行外没人点它名"的函数，其中两个的 docstring 还在
+    认领一个不存在的读者——`state.kill_target_last_night` 写着"Read by the witch prompt only"，
+    而女巫看到的是 `phases.py` 里那条 `Kind.NOTICE`；`belief.mean_agreement` 的"Feeds M6"更是把
+    M6 指到了别人身上（`metrics.m6_belief_action` 自己在原地算另一个判据）。
+
+    判据取"零读者"这个形状本身，不取那份清单：清单要第二个读者才不作弊，而"引用次数 == 0"不需要。
+    范围两端都钉：被定义的一侧只数引擎（`src/`），读者那一侧数全树（`src/`+`tests/`+`scripts/`）——
+    第一版只数了 `src/`，于是十八个名字里一半其实住在测试里，那是我的尺错了不是它们的读者没了。
+    限界也要写出来——这条**只数名字**，一个签名与调用都对、却从没被接进产物链的函数它看不见（那是
+    #74/#75 那一族走的事），它管的是"树上挂着八把没人拿的扳手"这一种腐烂。定义面**只数 `def`**：
+    模块级 `class` 整个不在扫面里，而 `x.Foo` 这种属性读数还会替一个从不构造的同名类付账——那是 #85。
+    """
+    refs, defined = _py_refs(("src/wolfengine",), ("src", "tests", "scripts"))
+    dead = sorted(n for n in defined
+                  if refs.get(n, 0) == 0 and not n.startswith("__") and n != "main")
+    assert dead == [], f"这些具名函数零读者（要么接上，要么删掉，别留着认领假读者）：{dead}"
+
+
+def _own_module_names() -> set[str]:
+    """`x.Foo` 的根名里，哪些算"我们自己的模块"。
+
+    从磁盘上取，不抄名单：新增一个模块不需要改这条判据，而第三方库永远进不来（仓库里没有叫
+    `httpx.py` 的文件）。
+    """
+    names: set[str] = set()
+    for f in Path("src/wolfengine").rglob("*.py"):
+        names.add(f.stem)              # 模块自己的文件名
+        names.add(f.parts[1])          # 包名：wolfengine
+        names.update(f.parts[2:-1])    # 子包目录名：prompts
+    return names
+
+
+def _classes_no_reader_reaches():
+    """引擎里"没有任何读者够得着"的模块级类，连同它们一起不可达的成员名。`#85` 的判据本体。
+
+    与 `_py_refs` 的分别只在**什么算读者**，而这个分别是这条判据存在的全部理由：`_py_refs` 把
+    `x.Foo` 记成 `Foo` 的一次引用，于是第三方的同名成员替引擎里那个从不构造的类付了账——
+    `httpx.MockTransport(handler)`（三处测试在用，那是 httpx 自己的类）把 `transport.MockTransport`
+    喂活了。这里只认两种读者：裸 `Name`，和根名是本包模块的 `Attribute`（`batch.run_batch()` 那种
+    走模块对象的真调用）。字符串常量仍算读者，与 `_py_refs` 同一套理由（`getattr` / `__all__`）。
+    类**体内**指向自己名字的读数要减掉：`def clone(self) -> Foo` 是一个自指注解，不是有人拿它。
+
+    这条**一个豁免都没开**——不跳 `__init__.py`，也不放过 dunder 名。那两个 `__init__.py` 今天一个
+    类都没有，跳过它们是一个不需要证人的洞（`#83` 那三处豁免各自有证人，是因为它们真的在挡东西）。
+    """
+    own = _own_module_names()
+    reads: dict[str, int] = {}
+
+    def bump(name: str) -> None:
+        reads[name] = reads.get(name, 0) + 1
+
+    for root in ("src", "tests", "scripts"):
+        for f in sorted(Path(root).rglob("*.py")):
+            if "__pycache__" in f.parts:
+                continue
+            for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Attribute):
+                    head = node.value
+                    while isinstance(head, ast.Attribute):
+                        head = head.value
+                    if isinstance(head, ast.Name) and head.id in own:
+                        bump(node.attr)
+                elif isinstance(node, ast.Name):
+                    bump(node.id)
+                elif (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                      and node.value.isidentifier()):
+                    bump(node.value)
+
+    dead = []
+    for f in sorted(Path("src/wolfengine").rglob("*.py")):
+        if "__pycache__" in f.parts:
+            continue
+        for node in ast.parse(f.read_text(encoding="utf-8")).body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            inside = sum(1 for n in ast.walk(node)
+                         if isinstance(n, ast.Name) and n.id == node.name)
+            if reads.get(node.name, 0) - inside > 0:
+                continue
+            members = sorted({s.name for s in node.body
+                              if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef))})
+            dead.append(f"{f}:{node.lineno} class {node.name}（成员 {members}）")
+    return sorted(dead)
+
+
+def test_no_class_in_the_engine_is_kept_alive_by_a_namesake():
+    """`#85`：上一条闸门只数 `def`，所以**类整个住在它的盲区里**，而类还有第二种死法。
+
+    第一次跑这条时它是红的，名单两项（扫描面是全引擎的模块级类），两具的死法不同：
+    - `transport.MockTransport` 的"读者"是 `httpx.MockTransport(handler)`（三处），那是 httpx 的
+      同名类——**按名字全局匹配的尺替它付了账**。它的 docstring 还认领一件不存在的事："the fixture
+      source for `test_golden_game.py`"，而那局金样本是手写的。删。
+    - `actors.HumanActor` 连同名属性都没有，纯粹是 `#81` 不数类。它是 plan §15 留的上桌契约，
+      这件事只活在 docstring 和 `docs/views.md` 里——**一句只活在散文里的主张就是个缺陷**，所以
+      修法是给它真读者（`tests/test_actor_contract.py` 的 ④ 把它构造出来，钉住它自己声明的四个值
+      和那句拒绝），不是给闸门加一条"看着像桩就放过"的豁免。
+
+    限界也写在这里：这条仍然按名字匹配，一个方法名与活的兄弟同名时它不区分（`chat` 就是），它靠的是
+    "类不可达则成员一起不可达"这一层；至于"签名与调用都对、但从没接进产物链"，那是 #74/#75 那一族。
+    """
+    dead = _classes_no_reader_reaches()
+    assert dead == [], (
+        "这些引擎类没有任何读者够得着（第三方同名属性不算读者），要么接上要么删："
+        f"{dead}")
+
+
+def _is_a_declaration_only(fn) -> bool:
+    """去掉 docstring 之后，函数体只剩 `...`/`pass`/`raise`：它是**声明**，不是实现。
+
+    `raise` 也算声明，因为"这里刻意没做，去别处做"（`HumanActor.act`）和"签名在这、实现待定"
+    （Protocol 桩）是同一种东西：body 里本来就不该有读者。
+    """
+    body = [s for s in fn.body
+            if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant)
+                    and isinstance(s.value.value, str))]
+    return bool(body) and all(
+        isinstance(s, (ast.Pass, ast.Raise))
+        or (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant)
+            and s.value.value is Ellipsis)
+        for s in body)
+
+
+def _parameters_of(fn) -> list[str]:
+    """这个签名**要求**调用方递进来的名字。接收者不算（`self` 是语言塞的，不是选的设计），
+    `*args`/`**kwargs` 今天全引擎零处，不为其写规则。
+    """
+    a = fn.args
+    return [p.arg for p in [*a.posonlyargs, *a.args, *a.kwonlyargs]
+            if p.arg not in ("self", "cls")]
+
+
+def _parsed_trees(roots: tuple[str, ...]) -> dict[str, "ast.Module"]:
+    """把 `roots` 下每个 `.py` 解析一次，键是相对路径字符串。
+
+    只解析一遍是必需的，不是省时间：豁免的来源和被判据扫的那个函数常常不在同一个 root 里
+    （`tests/` 里 `class Chorus(MockActor)` 的父类住在 `src/wolfengine`），两边必须看同一批 AST。
+    """
+    out: dict[str, ast.Module] = {}
+    for root in roots:
+        for f in sorted(Path(root).rglob("*.py")):
+            if "__pycache__" not in f.parts:
+                out[str(f)] = ast.parse(f.read_text(encoding="utf-8"))
+    return out
+
+
+def _functions_of(tree):
+    """模块里的每个函数，连同它**所属的类名**（没有就 None）与**嵌套深度**（模块级是 0）。"""
+    out: list[tuple] = []
+
+    def walk(node, cls: str | None, depth: int) -> None:
+        for ch in ast.iter_child_nodes(node):
+            if isinstance(ch, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                out.append((ch, cls, depth))
+                walk(ch, cls, depth + 1)
+            elif isinstance(ch, ast.ClassDef):
+                walk(ch, ch.name, depth)
+
+    walk(tree, None, 0)
+    return out
+
+
+def _signatures_imposed_from_outside(trees: dict):
+    """两类"这个签名不是写函数的人自己选的"，豁免只认这两个来源，都是从盘上取的。
+
+    1. **契约桩**：某个只签名的函数（Protocol 方法、`raise NotImplementedError` 的占位）声明的
+       `(函数名, 参数名)` 对。鸭子类型没有 base 列表，`MockActor` 从来没写过 `(MockActor, "phase")`
+       这种关系，所以这一类只能按名字配对——它的限界就是它的形状（见 #85 的同名 laundering）。
+    2. **继承**：`(父类名, 方法名, 参数名)`。子类改的是行为不是签名，删一个不收的参数会当场把
+       父类的调用点打死。
+    """
+    stub_pairs: set[tuple[str, str]] = set()
+    parents: dict[str, list[str]] = {}
+    inherited: set[tuple[str, str, str]] = set()
+    for tree in trees.values():
+        for cls in [n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)]:
+            for base in cls.bases:
+                name = base.id if isinstance(base, ast.Name) else getattr(base, "attr", "")
+                if name:
+                    parents.setdefault(cls.name, []).append(name)
+            for meth in [n for n in cls.body
+                         if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
+                for p in _parameters_of(meth):
+                    inherited.add((cls.name, meth.name, p))
+                if _is_a_declaration_only(meth):
+                    stub_pairs |= {(meth.name, p) for p in _parameters_of(meth)}
+        for fn, _cls, _depth in _functions_of(tree):
+            if _cls is None and _is_a_declaration_only(fn):
+                stub_pairs |= {(fn.name, p) for p in _parameters_of(fn)}
+    return stub_pairs, parents, inherited
+
+
+def _declared_by_an_ancestor(cls: str, meth: str, param: str, parents: dict, inherited: set) -> bool:
+    """`cls` 的任一祖先（含第三方基类名，按名字匹配）在同名方法里收了这个参数。"""
+    stack = list(parents.get(cls, ()))
+    seen: set[str] = set()
+    while stack:
+        cur = stack.pop()
+        if cur in seen:
+            continue
+        seen.add(cur)
+        if (cur, meth, param) in inherited:
+            return True
+        stack += parents.get(cur, [])
+    return False
+
+
+def _params_declared_but_never_read(roots: tuple[str, ...] = ("src/wolfengine",),
+                                    *, framework_called: bool = False) -> list[str]:
+    """`#86` 的判据本体：签名要求你递、body 从不看的东西。
+
+    "读过"只认 AST 里的 `Name`/Load——包括嵌套函数与 f-string 里的（尺按形状粗，这是**故意**的：
+    闭包确实拿到了那个值，硬要区分调用栈深度换来的只是把真读者误判成谎言）。docstring 里提到
+    参数名**不算**读过，与 `#81` 同一套理由：注释留着词、代码早不用了，子串搜索骗得过去。
+
+    `framework_called` 是**给测试侧用的**第三种豁免：函数名以 `test_` 开头（pytest 按名字从夹具
+    注册表里取参数）或它嵌在另一个函数里（它是递给被测代码的回调，参数表由对面那一步决定）。
+    引擎侧永远不传这个开关——引擎的函数是引擎自己调的。
+    """
+    trees = _parsed_trees(("src", "tests", "scripts"))
+    stub_pairs, parents, inherited = _signatures_imposed_from_outside(trees)
+    hits: list[str] = []
+    for path, tree in sorted(trees.items()):
+        if not any(path == r or path.startswith(r + "/") for r in roots):
+            continue
+        for fn, cls, depth in _functions_of(tree):
+            reads = {n.id for n in ast.walk(fn)
+                     if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
+            for p in _parameters_of(fn):
+                if p in reads or (fn.name, p) in stub_pairs:
+                    continue
+                if cls and _declared_by_an_ancestor(cls, fn.name, p, parents, inherited):
+                    continue
+                if framework_called and (fn.name.startswith("test_") or depth > 0):
+                    continue
+                hits.append(f"{path}:{fn.lineno} {cls + '.' if cls else ''}{fn.name}({p})")
+    return sorted(hits)
+
+
+def test_no_engine_function_declares_a_parameter_nobody_reads():
+    """`#86`：`#81` 数函数的名字、`#83`/`#84` 数导入的名字、`#85` 数类的名字——**签名本身**没人管。
+
+    于是"声明了却从不读的入参"活到了现在，第一次跑这条是红的，五处，五处都在替调用方编一个
+    不存在的约定：
+    - `compress.plan_fold(budget=...)`：六处调用点老老实实递进 `cfg.tokens`，而决定折叠多少的是
+      `b2_cap` 和 `est`。它的 docstring 通篇在讲"预算杠杆"，读代码的人会以为改 `TokenBudget`
+      能改变折叠深度——不能，那条路径上没有任何东西读它。
+    - `agent._write(legal=...)`：写日志的函数收下了合法动作集，又没往日志里写过一个字。
+    - `cli._llm_actors(cfg, seed, transport)`：`make_actors` 用 seed 抽人格，这个孪生签名不用，
+      于是"活 Actor 也按 seed 变化"看着成立，实则换 seed 换不出任何差别。
+    - `rules.resolve_tie(state, first, second)`： house rule 是"复投再平就没人出局"，只看 `second`
+      就够；`first` 是留着的。
+    - `persona._top_accuser(b, state, seat)`：最吵的指控者是信念状态的性质，与 `GameState` 无关。
+
+    五处一律**删参数**而不是"想办法读一下"：读一次就把它写进日志/产物，那是在给一个没被要求的
+    字段找读者（`#85` 那条"接上 vs 删掉"的取舍在这里的答案是删——没有一个下游指标需要它）。
+
+    豁免见 `_signatures_imposed_from_outside`，两条，都在说同一件事：**这个签名不是写函数的人选的**。
+    契约桩（`Actor`/`LLMTransport` 那些只有签名的方法）声明的 `(函数名, 参数名)` 对放过了 Protocol
+    桩自己的五个参数，也放过了它们的鸭子类型实现（`MockActor.timeout_for(phase)`、
+    `HumanActor.act(ctx)`——它们没写 base，所以只能按名字配对）；父类声明过的参数放过了真继承
+    （引擎今天用不上这一条：`parents` 里只有异常类、`str,Enum` 和 pydantic 模型，没有一个父类
+    与引擎方法同名）。连 `_` 前缀都**没有**豁免：全引擎今天零个下划线参数，开了只是把扫面变小
+    （`#85` 的教训）。
+
+    限界两条，写在这里而不是藏在实现里：豁免按**名字**配对，所以一个与契约同名的普通方法可以
+    借它藏一个真死的参数（`timeout_for` 就是这种名字）；而"参数被读了但读到的值没用"（传进去
+    又原样返回）这条尺看不见。**扫面只有引擎**是范围决定，不是遗漏，旁边那条用例钉住它。
+    """
+    dead = _params_declared_but_never_read()
+    assert dead == [], (
+        "这些入参被签名要求、却从没被函数体读过（要么接上，要么删掉，"
+        "别留着让调用方以为它有用）："
+        f"{dead}")
+
+
+def test_the_test_side_is_out_of_that_scope_by_a_derivation_not_a_list():
+    """`#86` 的第二格：`#84` 把未用导入的扫面从引擎加宽到了 `tests/`+`scripts/`，这条**没有**，
+    所以那个范围决定必须自己交证人。
+
+    加宽之后现场是：未开框架豁免时满仓库的夹具参数都成了"谎言"（数量见 `raw`），开了以后只剩零处——
+    而"只剩零处"不是因为我把名单念了一遍，是因为三条豁免把每一处都归到了某个**形状**：
+    - `test_` 开头：pytest 按名字从夹具注册表取参数，`test_x(key)` 收 `key` 是要那个 env 变量被设上，
+      不是要读它。这一半在 `raw` 里占大头（断言在下面，别让它悄悄变成零）。
+    - 嵌在另一个函数里：那是递给被测代码的回调（httpx 的 `handler(request)`、批跑探针的
+      `canary(prompt)`），参数表由对面那一步决定。
+    - 父类收了这个参数：`tests` 里的 `Chorus._line(act, target)` 覆盖 `actors.MockActor._line`，
+      改行为不改签名。这一具是"继承"那条豁免的**唯一**证人，而它在 `raw` 里已经看不见（`raw`
+      也带着这条豁免），所以这条用例直接查那个谓词，不查名单。
+
+    `scripts/` 在这一条扫面里零处，不需要任何照顾——它与 `tests/` 同一条尺，靠的是断言而不是范围。
+    """
+    raw = _params_declared_but_never_read(("tests", "scripts"))
+    assert raw, "tests/ 里如果一处都没了，框架豁免就该删掉、把范围真的加宽"
+    assert any(" test_" in h for h in raw), "pytest 那一半没人证了：豁免成了空转的洞"
+    assert any(not h.split(" ")[1].split("(")[0].startswith("test_") for h in raw), \
+        "回调/覆盖那一半没人证了，同上"
+    trees = _parsed_trees(("src", "tests", "scripts"))
+    _stub, parents, inherited = _signatures_imposed_from_outside(trees)
+    assert _declared_by_an_ancestor("Chorus", "_line", "act", parents, inherited), \
+        "继承豁免的唯一证人不见了（`Chorus._line` 的 `act` 是父类收的）：那条豁免变成没有形状的洞"
+    left = _params_declared_but_never_read(("tests", "scripts"), framework_called=True)
+    assert left == [], (
+        "测试侧这些地方既不是夹具、也不是回调、也没有父类收着这个参数——那就是真的签名谎言："
+        f"{left}")
+    assert _params_declared_but_never_read(("scripts",), framework_called=True) == []
+
+
+def _unread_imports(roots: tuple[str, ...]) -> list[str]:
+    """导入名在本文件里从没被点过的地方。`#83` 的判据本体，两条用例共用一把尺。
+
+    三处豁免的理由写在 `#83` 那条用例的 docstring 里，这里只说形状：`__future__` 跳过、
+    `__init__.py` 整文件跳过、只出现在字符串注解里的名字算读者；函数体内的延迟导入不豁免。
+    """
+    dead: list[str] = []
+    for root in roots:
+        for f in sorted(Path(root).rglob("*.py")):
+            if "__pycache__" in f.parts or f.name == "__init__.py":
+                continue
+            tree = ast.parse(f.read_text(encoding="utf-8"))
+            imported: dict[str, int] = {}
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    if node.module == "__future__":
+                        continue
+                    for a in node.names:
+                        if a.name != "*":
+                            imported[a.asname or a.name.split(".")[0]] = node.lineno
+                elif isinstance(node, ast.Import):
+                    for a in node.names:
+                        imported[a.asname or a.name.split(".")[0]] = node.lineno
+            used: set[str] = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Name):
+                    used.add(node.id)
+                elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                    head = node.value.split(".")[0]
+                    if head.isidentifier():
+                        used.add(head)
+            dead += [f"{f}:{ln} {name}"
+                     for name, ln in imported.items() if name not in used]
+    return sorted(dead)
+
+
+def test_no_import_in_the_engine_is_left_unread():
+    """`#83`：上一条闸门只数 `def`，而 `#81` 删字段删出来的腐烂正好落在它看不见的地方——导入。
+
+    06:25:43Z 现测四处：`batch.py` 的 `asyncio`、`events.py` 的 `asdict`、`info.py` 与 `persona.py`
+    的 `field`。它们没有一处会把局跑坏，代价是另一种：读代码的人拿导入行当"这个模块依赖什么"的
+    说明，于是一个不再依赖 `asyncio` 的模块继续声称自己依赖它。这跟"零读者函数"是同一种腐烂，只是
+    挂在 import 上，所以判据也照同一套写法来：AST 数真引用，不拿子串搜索冒充。
+
+    **这一条只管引擎侧**，而这不是偷懒：函数那条判据要"读者侧比定义侧宽"，因为一个 helper 可以被
+    测试正当使用；导入没有这种跨文件读者——**本文件不点它的名，它对这行代码就是死的**，别的文件
+    再导入一次是另一件事。所以两把尺的范围不同，测试与脚本侧由旁边那条 `#84` 用例管。
+
+    三处豁免都有证人（见 `/tmp/mut83.py` 的 I2/I5/I7），限界也写在这里：它只认"整串就是一个
+    标识符"的字符串注解，带运算符的那种（`"A | None"`）它不解析——今天全仓库没有这种写法。
+    """
+    dead = _unread_imports(("src/wolfengine",))
+    assert not dead, f"这些导入在本文件里从没被点过名（要么接上，要么删掉）：{dead}"
+
+
+def test_no_import_left_unread_in_the_test_side_either():
+    """`#84`：同一把尺量 `tests/` 与 `scripts/`，因为 `#83` 删掉四处之后没有任何东西阻止再烂一次。
+
+    06:48:17Z 现测十五处，全在 `tests/` 里（`scripts/` 是零），形状分两类：一类是**整行的模块
+    清单被掏空**（`from wolfengine import belief, info, roles, rules, state` 里只剩 `belief` 还有人
+    点），一类是**单行导入整个没人读**。测试文件的导入行同样是这份文件对读者说的话——"这个行为
+    要靠这些模块演出来"，说错了和被删掉的那四处是同一种谎。
+
+    第十五处不是腐烂，是**这把尺的盲点**：`tests/test_batch_live.py` 从 `test_live_path` 再导出的
+    `key` 是一个 pytest 夹具，读者按名字在模块命名空间里找它，AST 里永不会有一次点名。修法是把夹具
+    搬进 `tests/conftest.py`（框架给跨模块夹具留的地址），**不是**给闸门开豁免——豁免是要有证人的洞，
+    搬走是把洞填上。所以将来谁再把夹具按名字再导出，这条会红，而修法还是同一句：搬进 conftest。
+    `# noqa` 在这把尺上一个字都不算（`/tmp/mut84.py` 的 T3 钉这一点），它挡不住任何东西。
+    """
+    dead = _unread_imports(("tests", "scripts"))
+    assert not dead, f"测试与脚本里这些导入从没被点过名：{dead}"
+
+
+def test_the_persona_card_ships_every_number_the_sampler_draws():
+    """`#81` 的第二格：`PersonaParams` 抽四个数，`render_persona_card` 只印三个。
+
+    漏掉的是 `verbosity`：`sample_persona` 为它花了一次 `rng.uniform`，值落进 dataclass 之后再
+    没有被任何一处读过（06:04Z 现查 `grep -rn "verbosity" src tests scripts docs`，命中的只有定义
+    行与抽样行）。它既不改变发出去的字节，也不改变任何权重，而类 docstring 写着"Four numbers and
+    a style tag"——那句话对 dataclass 成立、对产品不成立。
+
+    判据不写死"四"这个数，而是从 dataclass 的字段表上取全部 `float`：以后再加一个数而忘了印，
+    红的会是那一个的名字。取值走 `dataclasses.replace` 逐个注入，不在测试里抄第二份字段名单——
+    抄来的名单会在加字段时 `TypeError`，那是一条没有信息量的红。
+    """
+    numbers = [f.name for f in dataclasses.fields(persona.PersonaParams) if f.type == "float"]
+    assert len(numbers) >= 2, f"没从 dataclass 上取到数字段，字段注解的形状变了：{numbers}"
+    p = persona.PersonaParams()
+    for i, name in enumerate(numbers):
+        p = dataclasses.replace(p, **{name: round(0.11 + 0.13 * i, 2)})
+    card = persona.render_persona_card(p)
+    missing = [name for name in numbers if f"{getattr(p, name):.2f}" not in card]
+    assert not missing, f"这些数抽出来了却没进那张卡，座位上读不到自己的人格：{missing}"
+
+
+def test_the_live_header_shows_the_manifest_the_shared_reader_found(tmp_path, capsys):
+    """Which line of a file is the manifest has one answer: the one with `seq == 0`, and a reader
+    may skip blank lines to find it — `events.py` says that out loud, because hand-written
+    fixtures have them. The live view took *line 1* instead and swallowed the parse error, so a log
+    that begins with a blank line lost its `game_id` from the header while every offline reader
+    still reported it: two opinions about one file, and the silent one was the screen somebody
+    presents from.
+
+    The structural leg is what keeps the first leg honest. A second parser that happens to agree
+    on this fixture would pass the frame assertion, so the rule has to be that no second parser
+    opens the file at all.
+    """
+    path = tmp_path / "w.jsonl"
+    log = EventLog(path, meta={"game_id": "g-header-7", "model": "stub"})
+    log.write_meta()
+    log.append(Kind.GAME_START, day=1, phase="night_wolf", seats=[1, 2, 3])
+    log.append(Kind.SPEECH, day=1, phase="day_speech", actor=1, text="3号发言太顺了。",
+               act="accuse", target=3)
+    path.write_text("\n" + path.read_text(encoding="utf-8"), encoding="utf-8")
+
+    loaded, meta = EventLog.read_records(path)
+    assert meta.get("game_id") == "g-header-7", "共用读取器自己也找不到，这条用例就没在测分裂"
+    assert len(loaded) == 2
+
+    assert render_live.watch(path, one_shot=True) == 0
+    out = capsys.readouterr().out
+    named = [ln for ln in out.splitlines() if "狼人杀直播" in ln or "已落盘的日志" in ln]
+    assert len(named) == 2, f"一帧里有两处报出这局的名字，实测 {len(named)} 处：{named}"
+    for ln in named:
+        assert "g-header-7" in ln, f"离线读取器认得这局的名字，这一处不认得：{ln}"
+
+    live_src = Path("src/wolfengine/render_live.py").read_text(encoding="utf-8")
+    assert "read_text(" not in live_src, (
+        "render_live 又自己去开日志文件了：哪一行是 manifest 的判据只该有一份")
+
+
+def test_abstention_does_not_render_as_a_fake_seat():
+    """`→{target or '弃票'}号` produced the string 弃票号, i.e. a seat that does not exist."""
+    assert compress.render_line(ev(9, Kind.VOTE, actor=4, target=2)) == "[e9] 投票：4号→2号"
+    assert compress.render_line(ev(9, Kind.VOTE, actor=4, target=None)) == "[e9] 投票：4号弃票"
+
+
+def test_night_action_renders_the_chosen_act_not_the_task_label():
+    """A mock game printed `女巫（夜间行动）：save_or_poison→None`.
+
+    `payload["action"]` is what the phase *asked for* — useful in the C4 task text, useless
+    as a record of what happened, and `→None` on top of that. The chronicle is the model's
+    only memory of the night, so it has to say 用解药.
+    """
+    assert compress.render_line(ev(7, Kind.NIGHT_ACTION, visibility=seats(5), actor=5,
+                                  act="save", action="save_or_poison", potion="save")) \
+        == "[e7] 5号（夜间行动）：用解药。"
+    assert "save_or_poison" not in compress.render_line(
+        ev(7, Kind.NIGHT_ACTION, visibility=seats(5), actor=5, act="poison",
+           action="save_or_poison", target=2))
+    assert compress.render_line(ev(8, Kind.NIGHT_ACTION, visibility=seats(5), actor=5,
+                                   act="pass", action="save_or_poison")) \
+        == "[e8] 5号（夜间行动）：没有行动。"
+
+
+def test_silence_is_rendered_as_silence_not_as_an_empty_line():
+    """`4号（遗言）：` with nothing after it reads as a renderer bug; the seat chose not to
+    speak, and that choice is itself information for the next day's reads."""
+    assert compress.render_line(ev(9, Kind.LAST_WORDS, actor=4, text="")) == "[e9] 4号（遗言）：（沉默）"
+    assert compress.render_line(ev(9, Kind.SPEECH, actor=4, text="   ")) == "[e9] 4号：（沉默）"
+    assert compress.render_line(ev(9, Kind.WOLF_CHAT, visibility=seats(1, 2), actor=1,
+                                  text="")) == "[e9] 狼队私聊 1号：（沉默）"
+
+
+def test_the_wave_splitter_has_one_owner_and_both_readers_call_it():
+    """Where a voting wave *ends* is a rule about the log, and two modules need it: the metric
+    that counts 弃票 per wave, and the 复盘 that prints one grid per wave. Two definitions drift,
+    and the drift is invisible until an audit says "3 waves" next to a page that printed 2 —
+    the same split-brain this file was written for, one layer down.
+    """
+    owners = [f.name for f in sorted(Path("src/wolfengine").rglob("*.py"))
+              if "def voting_waves(" in f.read_text(encoding="utf-8")]
+    assert owners == ["events.py"], owners
+    for reader in ("metrics.py", "render_html.py"):
+        assert "voting_waves(" in Path("src/wolfengine", reader).read_text(encoding="utf-8"), (
+            f"{reader} must call the shared splitter, not reimplement it nearby")
+
+
+def test_a_wave_closes_at_its_tally_and_an_untallied_tail_is_still_a_wave():
+    evs = [ev(1, Kind.VOTE, actor=1, target=2), ev(2, Kind.VOTE, actor=2, target=None),
+           ev(3, Kind.VOTE_RESULT, tally={"2": 1}),
+           ev(4, Kind.VOTE, actor=3, target=2),
+           ev(5, Kind.SPEECH, actor=4, text="……")]
+    waves = events.voting_waves(evs)
+    assert [(len(v), None if r is None else r.seq) for v, r in waves] == [(2, 3), (1, None)]
+    assert [e.actor for e in waves[0][0]] == [1, 2], "波内保持落票顺序"
+    assert events.voting_waves([ev(1, Kind.SPEECH, actor=1, text="x")]) == []
+    # A tally with no ballots before it is not a wave with zero voters in it: the denominator
+    # of every per-wave rate is the length of that list, so an empty one is a ZeroDivisionError
+    # on somebody else's read of this log.
+    assert events.voting_waves([ev(1, Kind.VOTE_RESULT, tally={})]) == []
+
+
+def test_vote_summary_is_derived_from_the_tally_not_stored_alongside_it():
+    line = compress.render_line(ev(11, Kind.VOTE_RESULT, tally={"3": 4, "1": 2}))
+    assert "3号4票" in line and "1号2票" in line, line
+    assert "无人被投票出局" in compress.render_line(ev(11, Kind.VOTE_RESULT, tally={}))
+
+
+def test_render_line_is_byte_stable_across_calls():
+    for e in ALL_KIND_EVENTS:
+        assert compress.render_line(e) == compress.render_line(e)
+
+
+def test_render_line_ignores_wall_clock():
+    """A t_wall in a rendered line would rewrite region B every turn and void the prefix
+    cache; the field exists on the event and must never reach the prompt."""
+    import time
+    late = Event(seq=4, kind=Kind.SPEECH, day=1, phase="day_speech", visibility="all",
+                 payload={"text": "我是预言家。", "act": "accuse", "target": 2},
+                 actor=1, t_wall=time.time())
+    assert compress.render_line(late) == compress.render_line(ALL_KIND_EVENTS[3])
+
+
+# -------------------------------------------------------------------- 2. estimator bias
+def test_fullwidth_punctuation_counts_as_a_token_not_a_quarter():
+    """The old classifier used a CJK *ideograph* range, so 。 and 、 were priced at 0.25.
+
+    Chinese prose is ~8% sentence-final punctuation, and the estimator's only job is to
+    not under-promise an endpoint that hard-rejects near 20k.
+    """
+    punct = "。。" * 50
+    assert compress.estimate_tokens(punct) >= 90, compress.estimate_tokens(punct)
+    assert compress.estimate_tokens("a" * 100) < 40
+
+
+def test_estimator_errs_high_against_the_measured_ratio():
+    """calibration.md measured zh at 0.8053 tokens/char; the estimator must overshoot."""
+    sample = "昨晚3号说他自己查杀了5号，今天票型却是2号，我觉得他很可疑。"
+    assert compress.estimate_tokens(sample) >= 0.8053 * len(sample)
+
+
+# --------------------------------------------------------------------- 3. the belief card
+def test_belief_card_never_renders_an_empty_alive_list():
+    """`存活：号。` was a real output: alive came only from a game_start event and nothing
+    said what to do when there wasn't one. Omit the line rather than assert an empty table."""
+    st = belief.BeliefState(observer=1, day=2)
+    assert "存活：号" not in belief.render_card(st)
+    st.alive = (1, 2, 3)
+    assert "存活：1、2、3号" in belief.render_card(st)
+
+
+def test_alive_is_seeded_from_the_opening_seat_list(tmp_path):
+    log, gs, deal = nine_seat_log(tmp_path)
+    assert belief.build_belief(1, log.all()).alive == tuple(sorted(deal))
+
+
+def test_claims_render_with_something_after_the_seat(tmp_path):
+    """A speech carrying no `act` used to print "- [e4] 1号 " and then nothing."""
+    log, gs, deal = nine_seat_log(tmp_path)
+    st = belief.build_belief(2, log.all())
+    lines = [l for l in belief.render_card(st).splitlines() if l.startswith("- [")]
+    assert lines
+    for l in lines:
+        assert l.split("号 ", 1)[1].strip(), l
+
+
+def test_seer_result_reaches_only_the_seat(tmp_path):
+    log, gs, deal = nine_seat_log(tmp_path)
+    seer = belief.build_belief(gs.seer_seat, log.all())
+    outsider = belief.build_belief(next(s for s, r in deal.items() if r == "villager"), log.all())
+    assert any(c.label == "seer_verdict" for c in seer.claims)
+    assert not any(c.label == "seer_verdict" for c in outsider.claims)
+
+
+def test_belief_card_states_no_ranking(tmp_path):
+    """R12: a card that told the model whom to suspect would make M6 measure a copy."""
+    log, gs, deal = nine_seat_log(tmp_path)
+    st = belief.build_belief(gs.seer_seat, log.all())
+    card = belief.render_card(st)
+    for phrase in ("最可疑", "建议", "应该投", "结论"):
+        assert phrase not in card, card
+
+
+# ------------------------------------------------------------------------- 4. assembly
+def _prompt(tmp_path, seat, *, assigned=None):
+    log, gs, deal = nine_seat_log(tmp_path)
+    legal = rules.legal_actions(gs, seat)
+    if assigned:
+        legal = state.LegalSet(acts=legal.acts, targets=legal.targets,
+                               allow_pass=legal.allow_pass, assigned_act=assigned)
+    p = info.percept_for(seat, log.all())
+    pr = assemble.assemble(cfg=Config(), percept=p, seat_role=deal[seat],
+                           persona=persona.sample_persona(random.Random(seat)),
+                           belief=belief.build_belief(seat, log.all()),
+                           legal=legal, phase=gs.phase)
+    return pr, log, gs, deal
+
+
+def test_c4_does_not_claim_an_assignment_that_was_never_made(tmp_path):
+    pr, *_ = _prompt(tmp_path, 1)
+    assert "指派你本轮的 act" not in pr.messages[2]["content"]
+    pr2, *_ = _prompt(tmp_path, 1, assigned="accuse")
+    assert "act = accuse" in pr2.messages[2]["content"]
+
+
+def test_region_b_carries_every_public_event_id(tmp_path):
+    """A working renderer is not a working region: B is built by plan_fold + chrono_bytes,
+    and a window of 0 or an over-eager filter empties it without raising anything.
+
+    The loop runs over `chronicle`, not `.public`: a COMPACTION marker is public and is
+    deliberately *not* in B (it summarises this block, and its fresh seq would rewrite the
+    cached prefix). That exception is pinned from the other side by
+    `test_a_marker_is_public_but_never_becomes_chronicle`.
+    """
+    pr, log, gs, deal = _prompt(tmp_path, 1)
+    b = pr.messages[1]["content"]
+    for e in compress.chronicle(info.percept_for(1, log.all()).events):
+        assert f"[{info.eid(e.seq)}]" in b, f"{e.kind} seq={e.seq} missing from region B"
+    assert "{" not in b
+
+
+def test_private_events_never_appear_in_region_b(tmp_path):
+    for seat in range(1, 10):
+        pr, *_ = _prompt(tmp_path, seat)
+        b = pr.messages[1]["content"]
+        assert "今晚刀6号" not in b, f"wolf chat leaked into B for seat {seat}"
+        assert "你查验的" not in b, f"seer result leaked into B for seat {seat}"
+
+
+def test_every_seat_shares_identical_region_a_and_b(tmp_path):
+    """The prefix-cache argument in plan §5 is only true if these bytes match by seat."""
+    heads = {"".join(m["content"] for m in _prompt(tmp_path, seat)[0].messages[:1])
+             for seat in range(1, 10)}
+    assert len(heads) == 1, "A+B differ between seats — there is no shared cached prefix"
+
+
+FICTION = re.compile(r"虚构|不是本局|不属于本局")
+
+
+def test_the_example_labels_its_own_ids_before_a_seat_can_copy_them(tmp_path):
+    """M4's `example_copy_turns` counts seats that cited the worked example's numbers, and the
+    cheap answer is a clause in the example itself. A disclaimer *after* the ids is one the
+    model has already pasted past — region A is read top-down and the example is its last
+    block — so this guard is positional: the warning must precede the first `[eNNN]`.
+
+    Cross-module on purpose: the ids come from the text, the clause from the same file, and
+    `assemble` is what proves both reach the model.
+    """
+    from wolfengine.prompts.templates import EXAMPLE_EVENT_IDS
+
+    assert EXAMPLE_EVENT_IDS, "no ids to guard means the derived set went stale, not the prompt"
+    b = _prompt(tmp_path, 1)[0].messages[0]["content"]
+    start = b.index("【示例】")
+    first_id = b.index("[e", start)  # CONTRACT spells `[eNNN]` too, and it sits earlier
+    assert FICTION.search(b[start:first_id]), \
+        "region A shows citable-looking ids without saying they are not from this game"
+
+
+def test_prompt_stays_inside_the_ceiling_at_a_plausible_length(tmp_path):
+    pr, *_ = _prompt(tmp_path, 1)
+    assert not pr.over_ceiling
+    assert pr.total_tokens < Config().tokens.absolute_ceiling
+
+
+# ---------------------------------------------------- 4b. plan §5 的每一格都要有读数
+SECTION_OF_HEADER = {"局况": "B0", "你的性格参数": "C1", "你目前掌握的事实": "C2",
+                     "你的私有信息": "C3", "本轮任务": "C4"}
+
+
+def _shipped_block(text: str, key: str) -> str | None:
+    """从**发出去的那串字节**里抠出一格：从它的标题行起，到下一个 `== ` 标题行为止。
+
+    这一格没出现时返回 None，而不是空串——`estimate_tokens("")` 是 1 不是 0（每段非空文本
+    都 +1），拿空串当"没有这一块"会把 0 读成 1。
+
+    和 `assemble.block_tokens` 是两条独立的路——这边按标题行找边界，那边按装配时用的
+    `"\\n\\n"` 分块——所以两边走岔就会红：改了标题措辞、或者读数取自改动之前的草稿，
+    拿同一个函数对同一份文本再算一遍是看不出来的（`#66` 修的就是"读数与名字不是一回事"）。
+    """
+    lines = text.splitlines()
+    start = next((i for i, ln in enumerate(lines) if ln.startswith(f"== {key}")), None)
+    if start is None:
+        return None
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("== ")),
+               len(lines))
+    body = lines[start:end]
+    while body and not body[-1].strip():
+        body.pop()
+    return "\n".join(body)
+
+
+def test_every_sub_budget_plan_5_names_is_measured_from_the_shipped_bytes(tmp_path):
+    """B0 和 C1–C4 在 plan §5 的预算表里各占一格，`RegionBudget` 里各有一个数，而装配器
+    只报 A/B/C/B1/B2 五段——那五格既没人读（`#62` 因此在门口拒掉 `--set A.regions.b0`），
+    也没人量，于是"C1 装不装得进 250"至今只是一句散文。
+
+    这一条钉的是"数的是发出去的那段字节"：逐座位循环不是顺手，`C3` 只有狼和预言家有私有
+    事件才有内容，而 `A`/`B`/`C` 三个总数已经在账上，任何一格算错了别的块都会露出来。
+    """
+    tok = Config().tokens
+
+    def est(text: str, key: str) -> int:
+        blk = _shipped_block(text, key)
+        return compress.estimate_tokens(blk, tok) if blk is not None else 0
+
+    seen_private = set()
+    for seat in range(1, 10):
+        pr, *_ = _prompt(tmp_path, seat)
+        toks = pr.region_tokens
+        assert {"B0", "C1", "C2", "C3", "C4"} <= set(toks), f"{seat}号缺格：{sorted(toks)}"
+        assert toks["B0"] == est(pr.messages[1]["content"], "局况"), f"{seat}号 B0"
+        for key, name in SECTION_OF_HEADER.items():
+            if name == "B0":
+                continue
+            assert toks[name] == est(pr.messages[2]["content"], key), f"{seat}号 {name}"
+        if toks["C3"]:
+            seen_private.add(seat)
+    assert seen_private, "fixture 空了：没有一个座位有私有事件，C3 那格就恒为 0"
+    assert len(seen_private) < 9, "人人都有私有事件，那 C3=0 那一半就没被测过"
+
+
+def test_an_unbudgeted_block_is_not_counted_into_the_neighbour_it_follows(tmp_path):
+    """`== 上一轮被拒 ==` 在 plan §5 的表里没有格子，而它紧跟在 C4 后面。
+
+    分块规则是"以 `== ` 开头就换东家，没认领的块谁也不进"。忘了这一条，被拒重问那一段会
+    并进本轮任务的账上：`C4` 凭空涨一截，而涨的那一节内容恰恰是"上一轮模型说了什么"——
+    重问那一臂的处理效应就这么进了反塌缩的预算表里。
+    """
+    log, gs, deal = nine_seat_log(tmp_path)
+    seat = 1
+    pr = assemble.assemble(cfg=Config(), percept=info.percept_for(seat, log.all()),
+                           seat_role=deal[seat], persona=persona.sample_persona(random.Random(seat)),
+                           belief=belief.build_belief(seat, log.all()),
+                           legal=rules.legal_actions(gs, seat), phase=gs.phase,
+                           retry_note="上一轮的 act=listen 不在合法动作里，换一个。")
+    c = pr.messages[2]["content"]
+    assert "== 上一轮被拒 ==" in c, "fixture 空了：被拒说明没进 prompt"
+    toks = pr.region_tokens
+    assert toks["C4"] == compress.estimate_tokens(_shipped_block(c, "本轮任务"), Config().tokens), toks
+    tail = c[c.index("== 本轮任务 =="):]
+    assert toks["C4"] < compress.estimate_tokens(tail, Config().tokens), (
+        f"C4={toks['C4']} 而任务块到文末是 {compress.estimate_tokens(tail, Config().tokens)}："
+        "被拒的那一段被算进了任务的预算")
+
+
+def test_the_sub_budget_readings_are_zero_rather_than_absent_when_a_block_is_empty(tmp_path):
+    """没私有事件的座位，`C3` 必须是 0 而不是"这一格不在"。
+
+    缺键和读数为 0 是两件事：`region_budget_check` 对缺失的写法是 `None`（"没测到"），
+    对 0 的写法是 0（"测到了，没有超"）。把没有私有信息说成没有读数，等于让一个坏消息
+    躲在缺数据后面——`tests/test_m3_gate.py` 为同一件事钉过一条。
+    """
+    quiet = [s for s in range(1, 10) if _prompt(tmp_path, s)[0].region_tokens["C3"] == 0]
+    assert quiet, "找不到一个没有私有事件的座位，这一条就没在钉任何东西"
+    toks = _prompt(tmp_path, quiet[0])[0].region_tokens
+    assert toks["C3"] == 0, toks
+
+
+def test_the_c2_reading_is_the_card_that_shipped_not_the_card_that_was_drafted(tmp_path):
+    """C 区那一刀改写主张卡，读数必须跟着变。
+
+    如果 `C2` 是在拼装时顺手记下草稿的长度，上面两条用例都不会红（它们对的是同一份草稿
+    和同一份文本），而账上就再也看不出"这一桌的 belief card 被削过"——被削掉的内容是
+    处理效应，不是记账细节。这里拿未削的整卡长度去比，两个数必须不同。
+    """
+    _c, pr, card = _seer_card_over_cap(tmp_path, 400)
+    tok = Config().tokens
+    shipped = compress.estimate_tokens(
+        _shipped_block(pr.messages[2]["content"], "你目前掌握的事实"), tok)
+    assert pr.region_tokens["C2"] == shipped, pr.region_tokens
+    drafted = compress.estimate_tokens(card, tok)
+    assert shipped < drafted, f"刀没进账：C2={shipped} 而草稿={drafted}"
+    assert pr.region_tokens["C"] <= 400, pr.region_tokens
+
+
+# ------------------------------------------------------------------------------ 5. gates
+def test_citation_gate_needs_the_full_log_to_tell_a_lie_from_a_leak(tmp_path):
+    log, gs, deal = nine_seat_log(tmp_path)
+    known = frozenset(info.eid(e.seq) for e in log.all())
+    act = schema.Action(act="accuse", target=1, speech="3号有问题", evidence=["e999"])
+
+    blind = legality.check_action(act, legal=rules.legal_actions(gs, 1),
+                                  percept=info.percept_for(1, log.all()),
+                                  phase=state.Phase.DAY_SPEECH, role="villager")
+    assert blind.citation_stats["invented"] == [], "cannot tell without the log, so must not guess"
+    assert blind.citation_stats["not_visible"] == ["e999"]
+
+    sighted = legality.check_action(act, legal=rules.legal_actions(gs, 1),
+                                    percept=info.percept_for(1, log.all()),
+                                    phase=state.Phase.DAY_SPEECH, role="villager", known_ids=known)
+    assert sighted.citation_stats["invented"] == ["e999"]
+    assert sighted.citation_stats["not_visible"] == []
+
+
+def test_a_real_event_the_seat_cannot_see_is_not_visible_not_invented(tmp_path):
+    log, gs, deal = nine_seat_log(tmp_path)
+    known = frozenset(info.eid(e.seq) for e in log.all())
+    outsider = next(s for s, r in deal.items() if r == "villager")
+    v = legality.check_action(
+        schema.Action(act="accuse", target=1, speech="你们别搞错了", evidence=["e13"]),
+        legal=rules.legal_actions(gs, outsider), percept=info.percept_for(outsider, log.all()),
+        phase=state.Phase.DAY_SPEECH, role="villager", known_ids=known)
+    assert v.citation_stats["not_visible"] == ["e13"], "the wolf chat exists; this seat may not read it"
+    assert v.citation_stats["invented"] == []
+
+
+def test_invented_id_is_a_hard_violation_even_in_speech(tmp_path):
+    """The citation is addressed to the engine, so refusing a fake id costs the game nothing."""
+    log, gs, deal = nine_seat_log(tmp_path)
+    known = frozenset(info.eid(e.seq) for e in log.all())
+    v = legality.check_action(
+        schema.Action(act="probe", target=None, speech="我有证据", evidence=["e404"]),
+        legal=rules.legal_actions(gs, 1), percept=info.percept_for(1, log.all()),
+        phase=state.Phase.DAY_SPEECH, role="villager", known_ids=known)
+    assert any("invented_event_ids" in x for x in v.violations), v.violations
+    assert not v.ok
+
+
+def test_the_impossible_percept_flag_fires_on_the_measured_failure(tmp_path):
+    """The endpoint really said 昨晚我听到了狼叫 as a villager. This turns that anecdote
+    into a regression, and keeps speech a soft gate so the signal survives being flagged."""
+    log, gs, deal = nine_seat_log(tmp_path)
+    v = legality.check_action(
+        schema.Action(act="accuse", target=1, speech="昨晚我听到了狼叫，1号是狼", evidence=["e4"]),
+        legal=rules.legal_actions(gs, 1), percept=info.percept_for(1, log.all()),
+        phase=state.Phase.DAY_SPEECH, role="villager")
+    assert any(f.startswith("impossible_percept") for f in v.flags), v.flags
+    assert v.ok, "speech is a soft gate by design"
+
+
+def test_a_wolf_is_not_flagged_for_night_perception(tmp_path):
+    """It heard the kill because it made the kill. Flagging this would teach M4 to lie."""
+    log, gs, deal = nine_seat_log(tmp_path)
+    wolf = next(s for s, r in deal.items() if r == "wolf")
+    v = legality.check_action(
+        schema.Action(act="probe", target=None, speech="昨晚我们动的手，别问是谁", evidence=["e4"]),
+        legal=rules.legal_actions(gs, wolf), percept=info.percept_for(wolf, log.all()),
+        phase=state.Phase.DAY_SPEECH, role="wolf")
+    assert not any(f.startswith("impossible_percept") for f in v.flags), v.flags
+
+
+def test_the_over_long_flag_the_gate_writes_is_the_one_the_renderer_reads(tmp_path):
+    """One fact, two spellings in two modules: `legality` appends `speech_too_long:{len}` and
+    `render_html` maps a flag with exactly that prefix to 〔发言超长〕. Rename either side and
+    nothing downstream notices — the audience gets a transcript in which every speech looks
+    brief, which is the good news nobody measured.
+
+    The threshold is read from the module that owns it instead of written as a literal here: a
+    test hard-coding 141 keeps passing when someone moves it to 400.
+    """
+    log, gs, deal = nine_seat_log(tmp_path)
+    legal, percept = rules.legal_actions(gs, 1), info.percept_for(1, log.all())
+
+    def gate(speech: str) -> list[str]:
+        v = legality.check_action(schema.Action(act="accuse", target=1, speech=speech,
+                                                evidence=["e4"]),
+                                  legal=legal, percept=percept,
+                                  phase=state.Phase.DAY_SPEECH, role="villager")
+        assert v.ok, "超长是软闸门：拒掉它等于把 M4 要量的行为连同证据一起删了"
+        return [f for f in v.flags if f.startswith("speech_too_long")]
+
+    exactly = "长" * legality.SPEECH_SOFT_LIMIT
+    assert gate(exactly) == [], f"正好到线的发言被说成超长（限 {legality.SPEECH_SOFT_LIMIT}）"
+    over = gate(exactly + "。")
+    assert over, "刚过线一格就该留标记，否则这个闸门从不响"
+    assert over[0] == f"speech_too_long:{len(exactly) + 1}", over
+
+    marked = ev(90, Kind.SPEECH, actor=1, text=exactly + "。", meta={"flags": over})
+    assert "〔发言超长〕" in render_html.markers(marked), (
+        "闸门写下的拼写和渲染器读的拼写不是同一份：标记在日志里，屏幕上永远看不见")
+    assert "〔发言超长〕" not in render_html.markers(
+        ev(91, Kind.SPEECH, actor=1, text=exactly, meta={"flags": gate(exactly)}))
+
+
+# ------------------------------------------------------------------------ 6. end to end
+def _seer_card_over_cap(tmp_path, cap: int, n_extra: int = 12, belief_cap: int = 450):
+    # A day-3 card with `n_extra` fresh accusations plus this seat's own check result. The tail
+    # is the point: `render_card` puts the roster first and the newest claims last, so a trim
+    # that keeps the head of the card cuts exactly what the rest of the module works to keep
+    # (`claims[-14:]`, `priv[-8:]`) — and the check result is nowhere else: that night
+    # sentence is visible to one seat only, so it never enters region B at all.
+    log, gs, deal = nine_seat_log(tmp_path)
+    seat = gs.seer_seat
+    st = belief.build_belief(seat, log.all())
+    extra = [belief.Claim(seq=100 + i, day=3, actor=seat + 1 + (i % 6), label="accuse",
+                          target=1 + (i % 7), note=f"第{i}条理由，写得长一点好一眼看出哪几条被砍了")
+             for i in range(n_extra)]
+    own = belief.Claim(seq=900, day=3, actor=seat, label="seer_verdict", target=5, note="wolf")
+    fat = belief.BeliefState(observer=seat, claims=list(st.claims) + extra + [own],
+                             suspicion=st.suspicion, credibility=st.credibility, day=3,
+                             alive=st.alive, dead=st.dead)
+    card = belief.render_card(fat)
+    if n_extra >= 12:
+        assert len(card.splitlines()) > 8, "the fixture must overflow the old head-cut"
+    pr = assemble.assemble(
+        cfg=Config(regions=RegionBudget(c_total=cap, c_belief=belief_cap)),
+        percept=info.percept_for(seat, log.all()),
+        seat_role=deal[seat], persona=persona.sample_persona(random.Random(seat)),
+        belief=fat, legal=rules.legal_actions(gs, seat), phase=state.Phase.DAY_SPEECH)
+    return pr.messages[2]["content"], pr, card
+
+
+def test_c_thinning_keeps_the_newest_claims_and_the_seer_record(tmp_path):
+    c, pr, card = _seer_card_over_cap(tmp_path, 400)
+    assert pr.region_tokens["C"] <= 400, (
+        f"C 瘦完仍超预算 {pr.region_tokens['C']}：还能砍的时候就要继续砍，"
+        "这条用例的预算高于那一桌的地板")
+    assert "你自己的查验记录" in c, (
+        "被砍掉的正是模型无处可查的那一样：夜里那句查验结果只发给这一个座位，"
+        "公开编年史里从来没有第二份")
+    assert "第11条理由" in c, "留下的必须是最近的指控，不是名册后面那几条最旧的"
+    assert "第0条理由" not in c, (
+        f"最旧的那条主张还占着预算：C={pr.region_tokens['C']}\n{c}")
+    assert pr.card_claims_dropped == card.count("- [") - c.count("- ["), (
+        f"刀的读数（{pr.card_claims_dropped}）与文本上少的行数不一致：那是一句没有对家的声明")
+
+
+def test_c_thinning_stops_at_the_floor_without_eating_the_seer_record(tmp_path):
+    c, pr, card = _seer_card_over_cap(tmp_path, 200)
+    assert "你自己的查验记录" in c, "砍到地板以下时先该停手，而不是把查验记录也交出去"
+    assert not any(ln.startswith("- [") for ln in c.splitlines()), (
+        "预算连一条主张都装不下，就一条都不该留：留着的就是没生效的那一刀")
+    assert "公开主张" not in c, (
+        "主张行被砍空之后还留着表头，等于给模型一个指向空列表的标题")
+    assert pr.card_claims_dropped == card.count("- ["), (
+        "地板那一支也是动了刀，读数不能只记中间那条 `return`")
+
+
+def test_c_under_cap_hands_over_the_whole_card(tmp_path):
+    """没超预算就不许动刀。
+
+    这一侧不是"顺手也测一下"：把守卫的尺子拿错成 `c_persona`（250）时，上面两条超预算的用例
+    分辨不出来——它们只要求"砍到装得下"，用错尺子恰好也砍了。只有"本来就没超"这一格能证明
+    守卫读的是 `c_total`。
+    """
+    c, pr, card = _seer_card_over_cap(tmp_path, 1450, n_extra=3)
+    assert pr.region_tokens["C"] <= 1450, pr.region_tokens
+    assert "第0条理由" in c and "第2条理由" in c, (
+        f"C={pr.region_tokens['C']} 在上限以内却被动了刀：\n{c}")
+    assert c.count("- [") == card.count("- ["), "整卡原样交接，一条主张都不该少"
+    assert "公开主张" in c
+
+
+def test_the_c2_ruler_bites_on_its_own_while_the_total_stays_shut(tmp_path):
+    """`regions.c_belief` 必须是**单独**能下刀的一把尺子，不能只是 `c_total` 的陪衬。
+
+    这一桌把 `c_total` 留在出厂的 1450，只把 C2 的上限压到 400：整段 C 在动刀前实测 672 tok
+    （11:22:16Z），离 1450 差着一倍还多，所以"砍了"这个事实只有 `c_belief` 能解释。砍的幅度
+    也要有数：每砍一条主张省 29 tok，草稿 459 → keep=13 是 430、keep=12 是 402、keep=11 是
+    373（11:22:57Z 实测），所以最少的那一刀恰好落在 11 条——多砍一条就是另一种错（把预算当
+    指标去凑整），少砍一条则根本没生效。`- 3` 是"草稿 14 条窗口减去被砍的 3 条"，不是魔数。
+    """
+    c, pr, card = _seer_card_over_cap(tmp_path, 1450, n_extra=20, belief_cap=400)
+    assert pr.region_tokens["C2"] <= 400, pr.region_tokens["C2"]
+    assert c.count("- [") == card.count("- [") - 3, (
+        f"最少的一刀该剩 11 条主张：草稿 {card.count('- [')} 条、发出 {c.count('- [')} 条")
+    assert pr.card_claims_dropped == 3, (
+        "砍掉三条却不在日志里留数，读者只能从长度反推——而 `region_tokens` 记的是砍完以后的"
+        "长度，草稿原本多长它一个字都不说")
+    assert "第19条理由" in c and "第9条理由" in c, "留下的必须是最新的几条"
+    assert "第8条理由" not in c, "被砍的必须是名册最旧的三条"
+    assert "你自己的查验记录" in c, "C2 的地板与 C 的地板是同一条：查验记录不计数、也不被交出去"
+
+
+def test_a_c_belief_loose_enough_to_hold_the_card_hands_it_over_whole(tmp_path):
+    """反方向：`c_belief` 宽到装得下整张卡时，一个字都不许动。
+
+    只有上面那一条的话，"任何让 C2 变小的改动都算通过"这个假判据混得过去——把守卫写成
+    `if card_over_cap or True:` 也照样绿。这一格用同一份超预算草稿（20 条新主张、C 总量同样
+    没超），只把尺子放宽到 9999，于是唯一能解释"14 条全在"的就是守卫真的在读 `c_belief`。
+    """
+    c, pr, card = _seer_card_over_cap(tmp_path, 1450, n_extra=20, belief_cap=9999)
+    assert pr.region_tokens["C2"] == 459, pr.region_tokens
+    assert pr.card_claims_dropped == 0, "没动刀却要写 0：这一格和 3 一样是给人读的数"
+    assert c.count("- [") == card.count("- [") == 14, (
+        f"尺子放宽了还动刀：发出 {c.count('- [')} 条 / 草稿 {card.count('- [')} 条")
+
+
+
+def test_the_knife_count_survives_into_the_request_record(tmp_path):
+    """装配器知道砍了几条不算数——只有 `Event.request` 里那一格才算，日志是唯一留存的产物。
+
+    `agent` 把 `payload_for_log` 的返回整个写进日志，所以那张白名单就是唯一的出口：少加一行，
+    `Prompt` 上的字段照样活得好好的、上面每一条断言照样绿，而落盘的文件里没有它——读到旧批次的
+    人只能猜。这里用 `c_total=400` 那一桌，因为要记的必须是一个非零的数：拿出厂预算来测，
+    "恒 0"和"根本没写"在断言里长得一样。
+    """
+    _, pr, _ = _seer_card_over_cap(tmp_path, 400)
+    assert pr.card_claims_dropped > 0, "fixture 失效：这一格要有非零的刀可记"
+    rec = assemble.payload_for_log(pr)
+    assert rec["card_claims_dropped"] == pr.card_claims_dropped, sorted(rec)
+
+
+def test_a_full_turn_round_trip_needs_no_endpoint(tmp_path):
+    """deal → log → percept → belief → legal → assemble → parse → gate, all pure.
+
+    This is the M1 claim in one test: the engine can run a turn without the model, which
+    is what makes --mock and --dry-run honest rather than approximate.
+    """
+    log, gs, deal = nine_seat_log(tmp_path)
+    seat = 1
+    p = info.percept_for(seat, log.all())
+    legal = rules.legal_actions(gs, seat)
+    pr = assemble.assemble(cfg=Config(), percept=p, seat_role=deal[seat],
+                           persona=persona.sample_persona(random.Random(seat)),
+                           belief=belief.build_belief(seat, log.all()),
+                           legal=legal, phase=gs.phase)
+    raw = ('{"act":"accuse","target":3,"speech":"3号你昨晚那句话根本站不住。",'
+           '"belief":{"suspects":[{"seat":3,"why":"逻辑太顺"}]},"evidence":["e11"]}')
+    parsed = schema.parse_action(raw)
+    assert parsed.action is not None, parsed.errors
+    assert parsed.rung == 0
+    v = legality.check_action(parsed.action, legal=legal, percept=p,
+                              phase=state.Phase.DAY_SPEECH, role=deal[seat],
+                              known_ids=frozenset(info.eid(e.seq) for e in log.all()))
+    assert v.ok, (v.violations, parsed.errors)
+    assert v.citation_stats["valid"] == ["e11"]
