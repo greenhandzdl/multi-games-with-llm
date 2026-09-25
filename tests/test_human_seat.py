@@ -149,6 +149,66 @@ def test_a_typed_line_names_the_act_then_the_seat_then_the_words():
     assert b is not None and b.act == "accuse" and b.target == 3 and b.speech == "你先说"
 
 
+def test_a_seat_number_may_be_typed_with_a_space_before_the_unit():
+    """「5 号」和「5号」是同一个座位引用，中间那个空格不属于这句话。
+
+    2026-09-25T13:18Z 实测：这一行读出来 `target=5` 却把「号」留在了 `speech` 里
+    （`'号 他昨晚那一刀没有道理'`），而那串字要落进日志、进复盘页——人看见的是自己话开头多了一个
+    字。前一条用例已经钉住 `5` 和 `三号` 两种写法，这一条钉第三种。
+    """
+    a = human.parse_human_line("票 5 号 他昨晚那一刀没有道理")
+    assert a is not None and a.act == "vote" and a.target == 5
+    assert a.speech == "他昨晚那一刀没有道理", a.speech
+    assert human.parse_human_line("怀疑 三 号 你先说").speech == "你先说"
+    # 表里另外两个单位写法先前一个字都没被测过（`_CN_SUFFIXES` 换顺序谁都发现不了），补在这里：
+    # 它们和「号」同一条路，同一种空格也照样犯。
+    assert human.parse_human_line("票 5 号位 你先说").speech == "你先说"
+    assert human.parse_human_line("票 5 位 你先说").speech == "你先说"
+    # 只有单位、没有话：那一个字同样不许冒充发言。
+    assert human.parse_human_line("票 5 号").speech == ""
+
+
+def test_a_number_that_only_looks_like_a_seat_reference_still_owns_its_word():
+    """上一条的修法如果写成"数字后面只要跳得过一个空格就吞掉单位"，会把「号码」两个字拆给座位号。
+
+    这一条在修法落地**之前**就是绿的（现在的代码根本不吞隔着空格的后缀），它钉的是那把刀：
+    「号」后面还接得上字，就不是单位而是下一句的开头。
+    """
+    a = human.parse_human_line("票 5 号码是我的，先记着")
+    assert a is not None and a.act == "vote" and a.target == 5
+    assert a.speech == "号码是我的，先记着", a.speech
+
+
+def test_punctuation_between_the_seat_number_and_the_sentence_is_not_part_of_the_sentence():
+    """「票 5，他昨晚那一刀」现在读出 `speech='，他昨晚那一刀'`（2026-09-25T13:19Z 实测）。
+
+    和「号」那一格是同一个缺口的两面：座位号到正文之间那段**边界**没人负责切。写在一行是因为
+    两条断言各自红过一次——去掉句读的修法会让上一条的「号码」红，吞后缀的修法会让这一条的逗号
+    原地不动，两把刀各打中一半。
+    """
+    b = human.parse_human_line("票 5，号外的事回头说")
+    assert b is not None and b.target == 5 and b.speech == "号外的事回头说", b.speech
+    c = human.parse_human_line("指控 3。他昨晚的沉默说明问题")
+    assert c is not None and c.target == 3 and c.speech == "他昨晚的沉默说明问题", c.speech
+
+
+def test_a_bracket_that_opens_the_sentence_is_not_boundary_punctuation():
+    """`_SEPARATORS` 那张表同时干两件事：判"这里是不是边界"和"从哪儿开始切"。引号只配当后一件的反例。
+
+    2026-09-25T13:39Z 实测三态。「指控 3 「他是狼」」在 HEAD 上读出 `'「他是狼'`（丢的是**后**引号——
+    调用点 `rest.strip` 从行尾啃字的老毛病，与本条无关，记在 `#129`）；上一条用例的修法把它顶成
+    `'他是狼'`，两个引号一起没了。那不是把边界切干净，是多啃了那个人打的一个字，所以这一条按
+    不带后引号的写法断言（`「他是狼`），免得把 `#129` 的账算到这条头上。
+    """
+    a = human.parse_human_line("指控 3 「他是狼")
+    assert a is not None and a.target == 3
+    assert a.speech == "「他是狼", a.speech
+    b = human.parse_human_line("票 5 （他昨晚没动手")
+    assert b is not None and b.speech == "（他昨晚没动手", b.speech
+    # 逗号句号照旧切走：停下来的是"成对的开括号"，不是句读本身。
+    assert human.parse_human_line("票 5，先听").speech == "先听"
+
+
 def test_the_words_the_player_can_type_are_the_ones_the_ladder_already_knows():
     """可打的词**整张**来自 `ACT_SYNONYMS`：既不少一个（玩家打不出模型认得的词），也不多一个
     （那张表就成了两处）。少一条断言都拦不住"给真人单独加个词"这种顺手改。

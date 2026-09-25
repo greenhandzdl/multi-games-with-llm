@@ -38,6 +38,10 @@ if TYPE_CHECKING:  # `actors.py` imports this module; the annotation must not cl
 _ACT_TOKENS = sorted(ACT_SYNONYMS, key=len, reverse=True)
 _SEAT_CHARS = frozenset("0123456789一二两三四五六七八九十")
 _SEPARATORS = " \t，,、。．.：:；;！!？?（）()「」『』“”\"'—-…"
+# Two questions, two tables. `_SEPARATORS` asks "may a character sit at a boundary at all"; this one
+# asks "where do the player's own words start". An opening bracket answers the first and must not
+# answer the second — 「票 5 「他是狼」」 opens its sentence with 「, and eating it would edit a word.
+_BOUNDARY_CHARS = "".join(c for c in _SEPARATORS if c not in "（(「『“")
 _CN_SUFFIXES = ("号位", "号", "位")
 
 OFFER_HEADER = "这一轮可以答："
@@ -75,7 +79,7 @@ def parse_human_line(line: str) -> Action | None:
 def _lead_seat(text: str) -> tuple[int | None, str]:
     """Consume a leading seat reference, or nothing at all.
 
-    `coerce_seat` still owns *which* spellings name a seat (3 / 3号 / 三号 / P3); what it does
+    `coerce_seat` still owns *which* spellings name a seat (3 / 3号 / 3 号 / 三号 / P3); what it does
     not do is stop at a boundary, so it is handed a chunk cut here rather than the whole line.
     The boundary matters: 「听8号说两句」 points at nobody, and reading a target out of it would
     be the same invention the sentence above refuses.
@@ -89,13 +93,19 @@ def _lead_seat(text: str) -> tuple[int | None, str]:
     if seat is None:
         return None, text
     tail = text[i:]
+    # A unit glued to the number and one reached across a space are the same test: 「票5号他说」 fails
+    # the boundary check below either way, so the only spelling that needs its own branch is 「5 号」.
+    # There, 「号」 may just be where the sentence starts — 「票 5 号码是我的」 — so it counts as the
+    # unit only when the sentence ends at it.
+    cut = tail.lstrip(" \t")
     for suffix in _CN_SUFFIXES:
-        if tail.startswith(suffix):
-            tail = tail[len(suffix):]
+        if cut.startswith(suffix) and (len(cut) == len(suffix)
+                                       or cut[len(suffix)] in _SEPARATORS):
+            tail = cut[len(suffix):]
             break
     if tail and tail[0] not in _SEPARATORS:
         return None, text
-    return seat, tail
+    return seat, tail.lstrip(_BOUNDARY_CHARS)
 
 
 def decision_card(ctx: "TurnContext") -> str:
