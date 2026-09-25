@@ -1,0 +1,388 @@
+{
+ "_about": "Real vote settlements copied out of the eight logs under data/ (gitignored, so the test reads this file instead). Each row's typed fields come from sources that are NOT the stored sentence: `abstained` from the log's own `abstainers` roster where it has one (20 rows) or from the blank ballots between the previous settlement and this one (10 rows); `pending_pk` from whether a second ballot wave settles later on the same day.",
+ "_generated": "2026-09-25T00:11Z from data/**/*.jsonl (8 logs, 30 settlements, 21 distinct sentences)",
+ "_limits": "The `全员弃票，无人出局。` branch has no witness here: all 30 real settlements have a non-empty tally. One row is marked `prefixed_prose` - its sentence was written before the PK-pending distinction existed and is contradicted by the revote that follows it in the same log; it is excluded from the byte-equality pin on purpose.",
+ "rows": [
+  {
+   "src": "20260920T184536Z_g00000007.jsonl#seq37",
+   "tally": {
+    "5": 1,
+    "1": 5
+   },
+   "exiled": 1,
+   "abstained": 3,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：1号5票、5号1票。弃票3人。1号被投票出局。"
+  },
+  {
+   "src": "20260920T184536Z_g00000007.jsonl#seq63",
+   "tally": {
+    "7": 4
+   },
+   "exiled": 7,
+   "abstained": 3,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：7号4票。弃票3人。7号被投票出局。"
+  },
+  {
+   "src": "20260920T184536Z_g00000007.jsonl#seq81",
+   "tally": {
+    "4": 2
+   },
+   "exiled": 4,
+   "abstained": 3,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：4号2票。弃票3人。4号被投票出局。"
+  },
+  {
+   "src": "20260920T184536Z_g00000007.jsonl#seq94",
+   "tally": {
+    "3": 1,
+    "9": 1
+   },
+   "exiled": null,
+   "abstained": 1,
+   "abstained_from": "abstainers",
+   "pending_pk": true,
+   "prefixed_prose": true,
+   "stored": "票型：3号1票、9号1票。弃票1人。平票，无人出局。"
+  },
+  {
+   "src": "20260920T184536Z_g00000007.jsonl#seq101",
+   "tally": {
+    "3": 2
+   },
+   "exiled": 3,
+   "abstained": 1,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：3号2票。弃票1人。3号被投票出局。"
+  },
+  {
+   "src": "20260920T184650Z_g00000021.jsonl#seq37",
+   "tally": {
+    "2": 5,
+    "5": 1
+   },
+   "exiled": 2,
+   "abstained": 3,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：2号5票、5号1票。弃票3人。2号被投票出局。"
+  },
+  {
+   "src": "20260920T184650Z_g00000021.jsonl#seq62",
+   "tally": {
+    "6": 1,
+    "4": 2
+   },
+   "exiled": 4,
+   "abstained": 3,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：4号2票、6号1票。弃票3人。4号被投票出局。"
+  },
+  {
+   "src": "20260920T184650Z_g00000021.jsonl#seq79",
+   "tally": {
+    "6": 3,
+    "1": 1
+   },
+   "exiled": 6,
+   "abstained": 0,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：1号1票、6号3票。弃票0人。6号被投票出局。"
+  },
+  {
+   "src": "20260920T184650Z_g00000022.jsonl#seq37",
+   "tally": {
+    "3": 1,
+    "2": 6
+   },
+   "exiled": 2,
+   "abstained": 2,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：2号6票、3号1票。弃票2人。2号被投票出局。"
+  },
+  {
+   "src": "20260920T184650Z_g00000022.jsonl#seq63",
+   "tally": {
+    "9": 2
+   },
+   "exiled": 9,
+   "abstained": 5,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：9号2票。弃票5人。9号被投票出局。"
+  },
+  {
+   "src": "20260920T184650Z_g00000022.jsonl#seq84",
+   "tally": {
+    "4": 2
+   },
+   "exiled": 4,
+   "abstained": 2,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：4号2票。弃票2人。4号被投票出局。"
+  },
+  {
+   "src": "20260924T235653Z_g00000007.jsonl#seq37",
+   "tally": {
+    "5": 1,
+    "1": 5
+   },
+   "exiled": 1,
+   "abstained": 3,
+   "abstained_from": "ballots",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：1号5票、5号1票。弃票3人。1号被投票出局。"
+  },
+  {
+   "src": "20260924T235653Z_g00000007.jsonl#seq63",
+   "tally": {
+    "7": 4
+   },
+   "exiled": 7,
+   "abstained": 3,
+   "abstained_from": "ballots",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：7号4票。弃票3人。7号被投票出局。"
+  },
+  {
+   "src": "20260924T235653Z_g00000007.jsonl#seq81",
+   "tally": {
+    "4": 2
+   },
+   "exiled": 4,
+   "abstained": 3,
+   "abstained_from": "ballots",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：4号2票。弃票3人。4号被投票出局。"
+  },
+  {
+   "src": "20260924T235653Z_g00000007.jsonl#seq94",
+   "tally": {
+    "3": 1,
+    "9": 1
+   },
+   "exiled": null,
+   "abstained": 1,
+   "abstained_from": "ballots",
+   "pending_pk": true,
+   "prefixed_prose": false,
+   "stored": "票型：3号1票、9号1票。弃票1人。票数并列，先不定人。"
+  },
+  {
+   "src": "20260924T235653Z_g00000007.jsonl#seq101",
+   "tally": {
+    "3": 2
+   },
+   "exiled": 3,
+   "abstained": 1,
+   "abstained_from": "ballots",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：3号2票。弃票1人。3号被投票出局。"
+  },
+  {
+   "src": "20260924T235717Z_g00000007.jsonl#seq37",
+   "tally": {
+    "5": 1,
+    "1": 5
+   },
+   "exiled": 1,
+   "abstained": 3,
+   "abstained_from": "ballots",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：1号5票、5号1票。弃票3人。1号被投票出局。"
+  },
+  {
+   "src": "20260924T235717Z_g00000007.jsonl#seq63",
+   "tally": {
+    "7": 4
+   },
+   "exiled": 7,
+   "abstained": 3,
+   "abstained_from": "ballots",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：7号4票。弃票3人。7号被投票出局。"
+  },
+  {
+   "src": "20260924T235717Z_g00000007.jsonl#seq81",
+   "tally": {
+    "4": 2
+   },
+   "exiled": 4,
+   "abstained": 3,
+   "abstained_from": "ballots",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：4号2票。弃票3人。4号被投票出局。"
+  },
+  {
+   "src": "20260924T235717Z_g00000007.jsonl#seq94",
+   "tally": {
+    "3": 1,
+    "9": 1
+   },
+   "exiled": null,
+   "abstained": 1,
+   "abstained_from": "ballots",
+   "pending_pk": true,
+   "prefixed_prose": false,
+   "stored": "票型：3号1票、9号1票。弃票1人。票数并列，先不定人。"
+  },
+  {
+   "src": "20260924T235717Z_g00000007.jsonl#seq101",
+   "tally": {
+    "3": 2
+   },
+   "exiled": 3,
+   "abstained": 1,
+   "abstained_from": "ballots",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：3号2票。弃票1人。3号被投票出局。"
+  },
+  {
+   "src": "20260924T153245Z_g00000300.jsonl#seq37",
+   "tally": {
+    "6": 8
+   },
+   "exiled": 6,
+   "abstained": 1,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：6号8票。弃票1人。6号被投票出局。"
+  },
+  {
+   "src": "20260924T153245Z_g00000300.jsonl#seq64",
+   "tally": {
+    "5": 5,
+    "3": 1,
+    "2": 1
+   },
+   "exiled": 5,
+   "abstained": 0,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：2号1票、3号1票、5号5票。弃票0人。5号被投票出局。"
+  },
+  {
+   "src": "20260924T153245Z_g00000300.jsonl#seq85",
+   "tally": {
+    "8": 4,
+    "2": 1
+   },
+   "exiled": 8,
+   "abstained": 0,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：2号1票、8号4票。弃票0人。8号被投票出局。"
+  },
+  {
+   "src": "20260924T153509Z_g00000301.jsonl#seq37",
+   "tally": {
+    "8": 1,
+    "1": 1
+   },
+   "exiled": null,
+   "abstained": 7,
+   "abstained_from": "abstainers",
+   "pending_pk": true,
+   "prefixed_prose": false,
+   "stored": "票型：1号1票、8号1票。弃票7人。票数并列，先不定人。"
+  },
+  {
+   "src": "20260924T153509Z_g00000301.jsonl#seq50",
+   "tally": {
+    "8": 1,
+    "1": 8
+   },
+   "exiled": 1,
+   "abstained": 0,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：1号8票、8号1票。弃票0人。1号被投票出局。"
+  },
+  {
+   "src": "20260924T153509Z_g00000301.jsonl#seq77",
+   "tally": {
+    "5": 1,
+    "6": 4,
+    "3": 2
+   },
+   "exiled": 6,
+   "abstained": 0,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：3号2票、5号1票、6号4票。弃票0人。6号被投票出局。"
+  },
+  {
+   "src": "20260924T153715Z_g00000302.jsonl#seq37",
+   "tally": {
+    "8": 8,
+    "1": 1
+   },
+   "exiled": 8,
+   "abstained": 0,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：1号1票、8号8票。弃票0人。8号被投票出局。"
+  },
+  {
+   "src": "20260924T153715Z_g00000302.jsonl#seq64",
+   "tally": {
+    "4": 6,
+    "1": 1
+   },
+   "exiled": 4,
+   "abstained": 0,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：1号1票、4号6票。弃票0人。4号被投票出局。"
+  },
+  {
+   "src": "20260924T153715Z_g00000302.jsonl#seq85",
+   "tally": {
+    "3": 1,
+    "2": 3,
+    "5": 1
+   },
+   "exiled": 2,
+   "abstained": 0,
+   "abstained_from": "abstainers",
+   "pending_pk": false,
+   "prefixed_prose": false,
+   "stored": "票型：2号3票、3号1票、5号1票。弃票0人。2号被投票出局。"
+  }
+ ]
+}

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import ast
 import dataclasses
+import json
 import random
 import re
 from pathlib import Path
@@ -926,12 +927,13 @@ def test_abstention_does_not_render_as_a_fake_seat():
 def test_night_action_renders_the_chosen_act_not_the_task_label():
     """A mock game printed `女巫（夜间行动）：save_or_poison→None`.
 
-    `payload["action"]` is what the phase *asked for* — useful in the C4 task text, useless
-    as a record of what happened, and `→None` on top of that. The chronicle is the model's
-    only memory of the night, so it has to say 用解药.
+    `payload["action"]` is what the phase *asked for*, and nothing in the product reads it (it is
+    the one name on #115's exemption table) — as a record of what happened it is useless, and
+    `→None` on top of that. The chronicle is the model's only memory of the night, so it has to
+    say 用解药.
     """
     assert compress.render_line(ev(7, Kind.NIGHT_ACTION, visibility=seats(5), actor=5,
-                                  act="save", action="save_or_poison", potion="save")) \
+                                  act="save", action="save_or_poison")) \
         == "[e7] 5号（夜间行动）：用解药。"
     assert "save_or_poison" not in compress.render_line(
         ev(7, Kind.NIGHT_ACTION, visibility=seats(5), actor=5, act="poison",
@@ -979,10 +981,91 @@ def test_a_wave_closes_at_its_tally_and_an_untallied_tail_is_still_a_wave():
     assert events.voting_waves([ev(1, Kind.VOTE_RESULT, tally={})]) == []
 
 
-def test_vote_summary_is_derived_from_the_tally_not_stored_alongside_it():
-    line = compress.render_line(ev(11, Kind.VOTE_RESULT, tally={"3": 4, "1": 2}))
-    assert "3号4票" in line and "1号2票" in line, line
-    assert "无人被投票出局" in compress.render_line(ev(11, Kind.VOTE_RESULT, tally={}))
+def test_the_settlement_sentence_has_one_author_and_four_shapes():
+    """票型、弃票人数、结论子句三截话全部由 typed 字段算出来：四种形状各一句，逐字钉住。
+
+    手术刀：把 `_vote_summary` 退回"只拼票型"的那一份——它今天就是这个形状，而负载里存着的
+    那整句（`phases._tally_text` 写的）比它多两截，于是真日志上 30 次结算有 30 次两份说法不
+    一致（00:03:32Z 现读）。这一条四句全红，红在文案本身，不红在我新造的短语上。
+
+    第三形状是这条存在的原因：「并列，且后面还有一波复投」今天没有任何字段承载，只活在那句
+    人话里——一句话能带着一个字段带不了的事实，就是双写的现场。
+    """
+    exile = compress.render_line(ev(11, Kind.VOTE_RESULT, tally={"3": 4, "1": 2},
+                                    exiled=3, abstained=1))
+    assert exile == f"[{info.eid(11)}] 法官：票型：1号2票、3号4票。弃票1人。3号被投票出局。", exile
+    tie = compress.render_line(ev(12, Kind.VOTE_RESULT, tally={"3": 1, "9": 1},
+                                  exiled=None, abstained=1))
+    assert tie.endswith("票型：3号1票、9号1票。弃票1人。平票，无人出局。"), tie
+    pk = compress.render_line(ev(13, Kind.VOTE_RESULT, tally={"3": 1, "9": 1},
+                                 exiled=None, abstained=1, pending_pk=True))
+    assert pk.endswith("票型：3号1票、9号1票。弃票1人。票数并列，先不定人。"), pk
+    all_pass = compress.render_line(ev(14, Kind.VOTE_RESULT, tally={}, exiled=None, abstained=9))
+    assert all_pass.endswith("法官：全员弃票，无人出局。"), all_pass
+
+
+def test_an_unknown_abstention_count_is_not_rendered_as_zero():
+    """没有 `abstained` 就不许印「弃票0人」：0 是一个断言，不是空缺。
+
+    与 `#92` 那条「null 不是 0」同一条判据，落在结算文案这一格。旧日志带着整句走另一个分支，
+    所以这条只管"typed 字段缺"的那一支——缺了就少说一截，不许补一个反方向的数。
+    """
+    line = compress.render_line(ev(15, Kind.VOTE_RESULT, tally={"3": 4}, exiled=3))
+    assert "弃票" not in line, line
+    assert "3号4票" in line and "3号被投票出局" in line, line
+
+
+def test_every_real_settlement_renders_the_very_sentence_it_was_written_with():
+    """从 data/ 八份日志抄出来的 30 次真结算逐条重放：拆掉双写之后，模型读到的那一行一字不变。
+
+    夹具的 typed 字段一律**不从那句文案里解析**（`abstained` 来自日志自己的 `abstainers` 名单
+    或这一波里的空白票，`pending_pk` 来自同一天后面是否还有第二个结算），所以这条证的不是我
+    的解析能往返，而是新的唯一作者复现了旧的整句。21 个不同的句子、11 个不同的结论子句都在里面。
+
+    限界两条：① `全员弃票，无人出局。` 那一支在真日志里没有证人（30 次结算的票型都非空），它只有
+    上面那条合成用例；② 有一行标了 `prefixed_prose` 并从等价里排除——那份文案写于"并列先不定人"
+    这个区分出现之前，而同一份日志紧接着就开了复投波，也就是说那句话当时就与自己的下文矛盾。
+    """
+    doc = json.loads((Path(__file__).parent / "fixtures" / "vote_settlements.json")
+                     .read_text(encoding="utf-8"))
+    rows = doc["rows"]
+    assert len(rows) == 30, len(rows)
+    prefixed = [r["src"] for r in rows if r["prefixed_prose"]]
+    assert prefixed == ["20260920T184536Z_g00000007.jsonl#seq94"], prefixed
+    bad = []
+    for i, r in enumerate(rows):
+        if r["prefixed_prose"]:
+            continue
+        line = compress.render_line(ev(20 + i, Kind.VOTE_RESULT, tally=r["tally"], exiled=r["exiled"],
+                                       abstained=r["abstained"], pending_pk=r["pending_pk"]))
+        if not line.endswith("法官：" + r["stored"]):
+            bad.append((r["src"], r["stored"], line))
+    assert not bad, f"{len(bad)} 条真结算的句子换了字：{bad[:3]}"
+
+
+
+def test_one_death_says_the_same_sentence_to_every_reader_of_it():
+    """同一条 DEATH 在三个读者嘴里必须是同一句话，未知死因是这一条的压力测试。
+
+    `compress.py` 上面几行早就给过判据（`VERDICT_ZH` 那句注释）：游戏事实以枚举进日志，译文留在
+    渲染侧——预言家查验照做了，死因没有：`phases.py` 在写 `cause` 的同时把 `CAUSE_ZH[cause]` 也
+    存进负载，于是"怎么死的"这句话有两个写者。今天两份说的是同一件事（data/ 6 份、37 条 DEATH，
+    `cause_zh == CAUSE_ZH[cause]` 37/37，23:33:03Z 现读），但四个读者各有各的回退：时间线现算
+    （未知→"死亡"）、B0 状态卡现算（未知→空字符串）、复盘 HTML 和提示词读**存着的那一份**
+    （缺失→分别为空字符串和英文枚举原文）。表里加第五种死法、或读一条没写过 `cause_zh` 的旧日志，
+    这三句就会分岔——而其中一句是要进模型提示词的。
+    """
+    dead = ev(12, Kind.DEATH, seat=5, cause="old_witch_curse", day=2)
+    line = compress.render_line(dead)
+    phrase = re.search(r"出局（(.*?)）。", line).group(1)
+    assert phrase, f"时间线没给出这句死法，下面的比较是空的：{line}"
+    axis = render_html._axis([dead])
+    card = assemble._status_card(info.Percept(seat=1, at_seq=12, events=(dead,)), (dead,))
+    fold = compress.day_fold_lines(2, [dead])
+    assert phrase in axis, f"复盘 HTML 说的不是这一句（{phrase}）：{axis}"
+    assert phrase in card, f"进提示词的状态卡说的不是这一句（{phrase}）：{card}"
+    assert phrase in fold, f"折叠出的当日摘要说的不是这一句（{phrase}）：{fold}"
+    assert "old_witch_curse" not in card, f"英文枚举泄进了中文提示词：{card}"
 
 
 def test_render_line_is_byte_stable_across_calls():

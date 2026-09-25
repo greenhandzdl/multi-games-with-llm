@@ -7,6 +7,7 @@
 > 复现方式：`wolf audit <file>` 打印 M2–M8 与一局的基本计数；M1 是跨局的，由 `wolf compare`
 > 打在 `comparison.md` 的 `## 胜负与存活` 一节（每个配置臂一行），或者直接
 > `python -c "from wolfengine import metrics; print(metrics.m1_win_rate(metrics.read_dir('data')))"`。
+> M3★ 的**判定**同样是跨局的：`wolf gate <dir>` 对一目录里已有的日志出五格判定（不重打牌，`#98`）。
 
 ## 一局能算的、和只能跨局算的
 
@@ -24,7 +25,7 @@
 
 `audit` 的顶层还有 `meta`（含 `config_hash`、`actor_kinds`、`reproducible`）、`synthetic`、
 `kinds`、`speech_acts`、`assignment`、`prompt_tokens_est`、`prefix_cache`、`compactions`、
-`region_budget_check`、`degraded_game`。这一串说的是"还有"，不是"只有"：顶层键的完整集合钉在
+`region_budget_check`、`fallback_copy_check`、`degraded_game`。这一串说的是"还有"，不是"只有"：顶层键的完整集合钉在
 `test_audit_prints_metrics_and_nothing_else` 那条断言上，加一格删一格都会先让它红。
 
 ## 分母规则（每个数字都必须能被追问）
@@ -35,6 +36,14 @@
 胜负是编剧写好的，对胜率没有信息量。一桌全是 mock 时 `good_win_rate` 是 `None` 并带一句说明，
 **不是 0%**——这是刻意的：`n_synthetic_excluded` 旁边的一个数字若把剔除的局算进去了，那只是个
 标签，不是守卫。
+
+第三种是**份**不是局：没有页眉、或只有页眉而没有一条事件的日志（`Game.hollow_notice`）。它不进
+`n_games`，也不进 `excluded` 与 `n_synthetic_excluded`——那三个读数都是关于打牌的，而这些字节里
+没打过牌；把 0 字节的文件读成"一桌替身"或"一局没分出胜负"都是替没人写过的事实编出处。它们在
+`hollow` 那一格里按份数、各自形状与**哪几份**（`paths`，basename）单列（`n_files` 仍然数它们），
+两个出口（`wolf gate` 与 `compare` 的臂级表）印的是同一行，点名与计数同源（`#101`）。那两只句子
+来自 `events.py` 里互斥的 `meta_notice` / `empty_notice`，与 `wolf gate` 用的是同一次算术
+（`#99`、`#100`）。
 
 **M1 的区间**：`wilson_ci(k, n)` 是 score 检验的反解，不是 `p ± 1.96·sd`——`k=1, n=40` 时后者给
 `[-0.0234, 0.0734]`，一个越出 [0,1] 的胜率区间正是这种小样本批次最容易被拿去下结论的地方（Wilson
@@ -155,7 +164,9 @@ append，冲洗只随"又多折了一天"发生，上界就是 `max_days`（plan
 **九个格子里折叠次数与头部改写次数逐格相等**（2/2、1/1、0/0……），`shrink` 全 0；默认 `b2=1500`
 三局都不折叠——这就是那六条前缀断言此前空转的原因，也是本文件现在多带一个 `squeezed` fixture 的原因。
 
-> 复现（折叠压力只能从 `batch` 的覆盖项进，`wolf run` 没有 `--set`——这句反向主张由
+> 复现（折叠压力两处都能进：`wolf run --dry-run --set regions.b2=200` 零 API 调用、直接印普查，
+> `wolf batch --set` 才是把这张表写进批次报告的那一条——`compare` 这一侧没有 `--set`，覆盖项在批次
+> 落盘时就定死了。正反两个方向由
 > `test_the_negative_flag_claims_in_the_docs_are_negatives` 钉住，参数存在与否扫不出来）：
 > `wolf batch --configs A --set A.regions.b2=200 --games 1 --seed0 7 --mock --out /tmp/f && wolf audit /tmp/f/A/*.jsonl | jq '.compactions'`
 > → 2026-09-21 实测 `{"max_rounds": 3, "prompts_folded": 40, "events": 3,
@@ -314,16 +325,70 @@ append，冲洗只随"又多折了一天"发生，上界就是 `max_days`（plan
 因此不写"词典零误报"。
 `self_contradiction_rate` 只算好人，且只与**该发言之后**的那一张票配对（`note` 字段里就带着这句）。
 
-**M5 风格塌缩**：按发言轮（`speech_rounds`）算，再取均值，`worst_round` 单独留全量数据。
+**M5 风格塌缩**：按发言轮（`speech_rounds`）算，三把措辞尺子各取均值（`collapse_round_mean`、
+`dup_exact6_mean`、`opening_distinct_mean`），`worst_round` 单独留全量数据。
+**主判据不按轮取均值**：`passivity_pooled` 是"被动次数 ÷ 全部次数"，因为一个 2 人轮和一个 9 人轮
+在均值里同权重——同一局里两者能对出两个数（`#102`：真日志 `g00000301` 三轮规模 9/2/7，audit 读
+0.2037、闸门读 0.1111；构造的 9+1 两轮则是 0.2778 对 0.5，而阈值是 `<0.4`，正好一边一个判法）。
+每轮的速率仍然逐轮留在 `rounds[]` 里，看最塌缩的那一轮要看 `worst_round`，不是看头条。
+这一格旁边印的就是闸门那三条阈值，所以它必须与 `m3_gate_verdict` 出自同一次算术：三条判据的
+每轮读数、按轮均值、按次合并分别只写在 `round_readings`、`round_mean`、`pooled_passivity` 一处。
 `collapse_round` 是同轮两两 char-4-gram 多重集 Jaccard 的均值（阈值 0.35），
 `opening_distinct_rate` 看前 8 字是否各不相同。`template_top1` 是那一句被反复念的**整句**文本，
-`template_top1_share` 是它占**本轮**发言的比例（plan §8 M5 那格的"占全体比例"）——
-`template_top_fragments` 给的是**最长**公共片段而不是 6 字滑窗（≥6 字、被同轮 ≥3 份发言共享，按共享
-份数降序、同份数按长度降序），没有模板的轮读到的是 `""` 和 `0.0` 而不是"没测到"。分母取本轮而不是
-这一局：五份里三份重复（0.6）和三份里三份重复（1.0）在份数上都是 3，而 M5 后面要按轮取均值。
+`template_top1_share` 是它占**本轮开口人数**的比例（plan §8 M5 那格的"占全体比例"；分母以前是本轮
+**条目数**，`#105` 换的）——`template_top_fragments` 给的是**最长**公共片段而不是 6 字滑窗（≥6 字、
+被同轮 ≥3 份发言共享，按共享份数降序、同份数按长度降序）。分母取本轮而不是这一局：五份里三份重复
+（0.6）和三份里三份重复（1.0）在份数上都是 3，而 M5 后面要按轮取均值；同样三句复读配上六张空手
+以前读 `3/9`，与不配空手时的 `1.0` 是**同一行里的两个分母**（那一行的 `dup_exact6_rate` 已经读
+`1.0` 了，21:12:57Z 现测）。
+一行既然有两个分母，`rounds[]` 就把两个都印出来（`#107`）：`n` 是本轮条目数，`passivity_rate` 除的
+正是它（沉默就是那一格要量的东西，一个 turn 也不能少算）；`n_spoken` 是真正开口的人数，也就是三把
+措辞尺子共用的那道地板（`comparable_speeches` 数出来的）。以前只印前者，于是一行写着 `n` 为 2、
+三条措辞尺子全 `None`，读者要自己想一次除法才知道"其中一张是空手"。这一格在今天的真数据上换不来
+任何读数：三局九个发言轮里两格只有一轮分家（干净树上 22:01:48Z 现读，`g00000301` 的 day-1 PK，条目 2、开口 1；
+改动前同一行只有条目 2 与三条 `None`，那个"开口 1"是这一格带来的），
+而 20 局替身桌的 62 个发言轮里两格处处相等（21:42:12Z 现读，空手人数分布只有一个档：0）。它换到的是
+"缺席在行里有没有解释"，判据只能长在构造的夹具上（`tests/test_m3_gate.py` 的
+`test_the_row_prints_both_of_its_denominators`）。
 同一份算术还喂给提示词的 C4 黑名单：前 4 条、每条截到 24 字，链路与判据见
 `tests/test_anti_repeat.py`（那里也记着 12 具变异的账），读数本身的判据在
 `tests/test_m3_gate.py`。
+**开口人数不到两个的轮，三把措辞尺子都给 `None`，不给 0.0 也不给 1.0**：`collapse_round` 以前把"九条空文本"量成
+`1.0`（空串两两的 4-gram 并集为空，`jaccard` 定义为 1.0），也就是一桌沉默在 `<0.35` 上是一张假 FAIL；
+`opening_distinct_rate` 以前在全空的一轮上按"非空发言数"做分母，直接 `ZeroDivisionError`，而输入是
+空列表（`[]`，"这一轮没发生"）时答 `1.0` = "开头全不同"，在 `>0.8` 上是一张免检通行证。
+`#95` 那次只挡了"整轮没人说话"，漏掉了"**整轮只有一张话筒**"：一个人开口时两条尺子仍各给一个通过方向的
+定义值（`0.0` 与 `1.0`），而那正是"没有一对可比"——plan §8 给 `collapse_round` 的定义就是"**两两** Jaccard 的
+均值"，`[]` 与"一人开口"以前还不同答案（`0.0` 与 `None`），两兄弟对同一件事两个口径。
+现在这两种都读作"这一轮没有措辞可量"：该轮从两条判据的池子里拿出来（于是批级的 `n` 只数有读数的轮），
+一臂全是这种轮就走 `ok=None` → `NOT_EVALUABLE`。真日志上这不是假想敌：
+`data/real-20260924/…g00000301` 的 day-1 PK 轮有两条发言、其中一条是空串，改动前闸门 `collapse_round` 读
+`0.0089`（n=3），改动后读 `0.0134`（n=2）——那一半是从一次"没有可比对象"的投票换来的（20:18:29Z 现读）。
+**沉默由 `passivity_rate` 说**，那是主判据，量的本来就是"没点名的听客比例"，一个 turn 也不该少算。
+`#103` 那一轮还剩第三条尺子站在旧地板上：`shared_substring_rate`（`dup_exact6_rate`，plan §8 M5
+点名的第三条，没有阈值、只出数）以前把分母取成"本轮条目数"而不是"本轮开口人数"，于是一轮里两个人
+逐字复读、七个人空手读成 `0.2222` 而不是 `1.0`，一个人开口读成 `0.0` 而不是"没有读数"（20:45:51Z
+改动前现测）。现在三把尺子的地板写在同一处（`comparable_speeches`）：它一次回答"开口的有哪几份"，
+`None` 的判据因此只有一条，不会再有一处漏掉。真日志上同一格的账：`g00000301` 的 `dup_exact6_mean`
+改动前 `0.5079`（n=3）、改动后 `0.7619`（n=2，20:43:00Z 现读），那三成的"更不重复"同样是那个只有一张
+话筒的 PK 轮投出来的。**批级那一格今天有两个读者**：构造夹具（`tests/test_m3_gate.py` 的 `#104`
+那一节）钉它跳过没有读数的轮，金样本（`tests/test_golden_game.py`）钉它的数值 `0.1111`——`#102`
+电池里"`dup_exact6_mean` 取错列"那具变异当时是兑现的 MISSED，现在拿错列就会红。
+判据在 `#95` 与 `#103` 那两段四条用例里（`test_a_round_of_nothing_said_gives_no_opening_reading`、
+`test_a_silent_round_leaves_the_gate_without_a_reading_but_keeps_the_measured_ones`、
+`test_a_round_with_one_microphone_gives_no_pairwise_reading`、
+`test_a_one_microphone_round_is_left_out_of_the_style_denominators`）。
+同一条地板第四次兑现的是**模板**这一把（`#105`）：它的地板不是 2 而是 3——`template_top_fragments`
+要求一段片段被同轮至少三份发言共享才算模板，所以两份发言的轮压根不可能有候选。那种轮以前交回
+`""` 加 `0.0`，于是同一行里既写着"开口的人全在复读"（`dup_exact6_rate` 读 1.0）又写着"本轮没有
+模板"（21:12:57Z 现测）。今天 `template_top1` 与 `template_top1_share` 一起缺席，两个都是 `None`；
+而三个人以上开口、确实没有共享片段的一轮仍然读 `""` 加 `0.0`——那是量出来的干净，不是缺席，
+`#66` 那句"`None` 会被均值吞掉"在这里照旧成立。两把尺子的 `min_len` 与 `min_count` 由
+`template_top_share` 传给 `template_top_fragments`，默认值同源由
+`test_the_template_share_and_the_c4_miner_share_one_floor` 钉住：C4 黑名单拿的是后者的输出，两边的
+地板一旦分开，读数就在解释一份和它不同源的提示词。真日志上这一格一格都没动：三局九个发言轮里，
+条目数不等于开口人数的只有一轮（`g00000301` 的 day-1 PK，两条记录、一人开口），而那一轮本来就没有
+候选（21:11:50Z 现读）——所以 `#105` 今天买到的是同一行里不再有两个分母，不是一个新的读数。
 **主判据是 `passivity_rate`**：`act ∈ {listen, align}` 且发言里不含任何座位编号的比例。
 理由已在端点上实测过两次：单靠调温度就能拿到 8/8 各不相同的开头，行为却还是死的——相似度指标
 会被措辞骗过，被动骗不过。`gate` 字段随输出一起落，只报这一层按轮算得出的那三条，
@@ -333,9 +398,16 @@ append，冲洗只随"又多折了一天"发生，上界就是 `max_days`（plan
 （`passivity_rate<0.4` 主判据、`collapse_round<0.35`、`opening_distinct_rate>0.8`、单轮
 p95<20s、0 次 context 400），在此之前这些数字只被**打印**过，比大小留给人做。现在批级判定
 是一个函数返回值，`compare` 按臂各算一份并落在胜率表下面——一臂没过闸门时，它下面的 bootstrap
-区间描述的是一个不值得对比的东西，这句话要在数字之前出现。
+区间描述的是一个不值得对比的东西，这句话要在数字之前出现。**单臂批次也印**：`run_batch` 收尾时调
+`batch.emit_gate()` 写 `<批次目录>/m3_gate.md`，渲染走的是与 `comparison.md` 那一份同一个 `_m3_md`，
+终端摘要那句 `…；M3 闸门判定见 m3_gate.md` 指的是这个文件（`#94`：在此之前 `--configs A` 那种批次跑完，
+闸门对谁都没说过话）。**没有 manifest 的一目录日志也判得动**：`wolf gate <dir>` 读盘上已有的日志、按
+`meta.config_hash` 认臂，调的还是同一个 `emit_gate`，判定落在被读的那个目录里（`#98`：三次 `wolf run`
+攒出来的真桌此前够不着任何判定，而验收第 3 条要的是"全部达标或有明确失败记录"）。反过来，一个文件
+**不配**有一份判定：单局的最近秩 p95 就是它最慢的那一次，per-game 的 PASS 离 FAIL 只差一个离群点，
+所以 `audit` 那一格停在 `m3_gate_pressure` 的原始计数层。
 
-三件事是这条函数新带来的，都值得追问：
+四件事是这条函数新带来的，都值得追问：
 
 - **分母合并而不是均值取平均**：`passivity_rate` 本身是按条数取的均值，批级就用全部条数；
   按局取平均会让一局 3 条发言的桌和一局 90 条的桌各占一半权重。轮次可以合并着平均，
@@ -346,6 +418,12 @@ p95<20s、0 次 context 400），在此之前这些数字只被**打印**过，�
   日志里连 `response` 字段都没有（实测）。端点不可能 0 秒回九张座位。
 - **测出来的失败排在缺读数前面**：一批既没有延迟又确实被动时，答案是 FAIL。
   §十二 验收第 3 条要的是"全部达标**或有明确失败记录**"，把坏消息藏进缺数据里两头都不满足。
+- **闸门旁边写着"有多少回答是被我们自己剪短的"**：判定字典多一块 `truncation`（`n_calls` /
+  `n_recorded` / `n_cut` / `rate` / `worst_phase` / `note`），报告每臂多一行 `- 截断：…`。它**不是**
+  第六条判据——`M3_GATE` 那五条是 §十 预注册的，这一格只是把读数放在它所扭曲的那两条措辞判据旁边
+  （真桌实测 120/173 被 `max_tokens` 截断、`day_vote` 最重，而被切的那些最长正好停在 `cap-1`：139/140
+  与 59/60）。谓词只有一只：`metrics.truncated_call`（`#92`），`m7_cost_profile` 的两格与这块读数都
+  从它取，`None`（端点没报 `finish_reason`）与"报了、没被切"永远分得开。
 
 阈值表 `M3_GATE` 是唯一来源（`m5_style` 的 `gate`、判定函数、报告里的"需 < 0.35"三处都读它）。
 
@@ -417,6 +495,9 @@ suspect。常数齐了而一局里没有可比调用时 verdict 是 `not_evaluab
 * **`abstention_rate`**：弃票 / **被问到的票数**（分母是落盘的 `vote` 事件条数，不是投出的条数）。
   它是 M3 主判据在**行动**侧的对应物：`passivity_rate` 只数发言（`listen`/`align` 且未点名），
   一张票都没投出去的桌子在它那里可以完全无声。
+  两个分母一起印出来，不留"只有比率"的那一格：`n_ballots_asked` 是落盘的票数、`n_ballots_cast` 是
+  其中点了名的票数，比率就是 (asked − cast) / asked。改之前这两个数只活在 `m8_strategy_proxies`
+  的函数体里，读到 0.28 的人无从知道它是 7/25 还是 7/250（`#105`、`#107` 同族：分母要能从自己那一行复原）。
 * **`ballot_mandate`**（逐轮一串，与 `vote_split_entropy` 同长同序）：`最高票 / 该轮被问到的人数`。
   它回答复盘时真正被问的那句"人是多大比例投出去的"。全员弃票的那轮是 `0.0`（plan §12 R10 的
   平局前兆必须是个数不是空缺），整局没有票时是 `null`。
@@ -425,6 +506,16 @@ suspect。常数齐了而一局里没有可比调用时 verdict 是 `not_evaluab
 定义、两边都调用"——这一句 2026-09-21 才真的钉上：那条守卫的参数化列表当初只有 4 个名字，
 `voting_waves` 不在里面，之前它是散文承诺），所以"同长"是结构性的而不是运气——一条没有选票在前的
 `vote_result` 进不了任何一串，否则它就是一串长一格。
+
+2026-09-24 现读 14 份日志（真端点三局 + 20260920 那三份 + 本轮 `wolf batch --configs A --games 8 --mock`
+生成的八局），两条分母各自有**独立复算路径**，不是自证：`n_ballots_asked` / `n_ballots_cast` 对
+"自己数 `vote` 事件、其中 `target` 非空"是 14/14 一致，而 `n_ballots_cast` 对"把所有 `vote_result`
+的 tally 值加起来"也是 14/14 一致。真端点三局的问票/投票是 21/20、25/18、21/21（弃票率 4.76 %、28 %、
+0 %），合成八局落在 18.75 %–53.85 %。同一轮还量到：这 14 份里 asked **恰好等于**"有结算的那几波的票数"，
+也就没有一份日志留有"投了票却没落 `vote_result` 的尾波"——那一格口径差异（比率的分母数它、逐轮两串不数它）
+在今天的真数据上仍无证人，它的牙长在构造的波上
+（`test_a_wave_that_never_settled_is_in_the_rate_and_out_of_the_per_wave_lists`），与 `#105`、`#108`
+同一形状：新判据在真日志上换不来新读数，它买的是"这一格从此可以由读的人自己复算"。
 
 mock 基线（2026-09-21 本机，`wolf run --mock --seed 11 --games 12`）：**弃票率按局均值 0.381，
 每局 0.238–0.643；mandate 均值 0.523，每局 0.354–0.632**；换成池化口径（91/248）是 36.7 %。
@@ -435,7 +526,7 @@ mock 基线（2026-09-21 本机，`wolf run --mock --seed 11 --games 12`）：**
 分母写成轮数 / 空 tally 给 1/n、只数没结算单的轮，加上切波器的删 `and cur`（那会让 mandate
 除以 0）、丢尾波、波内倒序，以及"熵退回自己扫 `vote_result`"。
 
-> 复现：`wolf audit <file> | jq '.m8_strategy | {abstention_rate, ballot_mandate, vote_split_entropy}'`。
+> 复现：`wolf audit <file> | jq '.m8_strategy | {abstention_rate, n_ballots_asked, n_ballots_cast, ballot_mandate, vote_split_entropy}'`。
 
 ## 两配置对比（M7：代码已落地，真数据还没有）
 
@@ -456,5 +547,5 @@ cluster bootstrap（B=2000，并报告实测 `deff`）、首尾 5 条探针的�
 --mock`，各 0.3 秒重生成一批，后者被 `compare` 拒绝出结论）。所以上面每一个率目前都在证明三件
 事：判定链不崩、日志读回来还是同一份事实、指标函数是纯函数。**它们没有一件事能证明模型玩得好
 不好**——那需要 M3 的真实切片。
-用 `wolf audit` 看到 `passivity_mean: 0.1175` 请记得：MockActor 是照剧本说话的，
-这个数说明的是剧本不被动，不是模型不被动。
+用 `wolf audit` 看到 `passivity_pooled: 0.1154` 请记得：MockActor 是照剧本说话的，
+这个数说明的是剧本不被动，不是模型不被动（19:57:44Z 一局 `--mock` 的现读）。

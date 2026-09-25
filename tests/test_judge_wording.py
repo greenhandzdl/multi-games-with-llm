@@ -13,14 +13,17 @@ seq 101 vote_result  {"summary": "票型：3号2票。弃票1人。3号被投票
 
 94 宣布"无人出局"是一句**结论**，95 立刻把它收回——而 `compress.render_line` 把 `summary` 原样
 拼进模型读到的编年史（`[e94] 法官：票型：…平票，无人出局。`），于是九个模型在 PK 发言前
-都读到了一句法官自己不作数的话。这件事不用看 /tmp：**已入库**的
+都读到了一句法官自己不作数的话。这件事不用看 /tmp：**本机留存**的（`data/` 整目录在
+`.gitignore` 里，不随仓库走，所以克隆下来的人打不开它；而这份日志记的是 #87 修**之前**的行为，
+拿它当"现在还会这样"的证据是读反了）
 `data/20260920T184536Z_g00000007.jsonl` 第 95、96 行（seq 94、95）就是同一对矛盾，而第 97 行
 （3号的 PK 发言，`phase=day_pk_speech`）的 `request` 字段里，`[e94]`/`[e95]` 两行一字不差地躺在
 它读到的编年史中——那天后面的三次投票和 3号的遗言（seq 98/99/100/103）带着同一对进 prompt。
 全仓库没有一条断言钉过这个字符串（10:40Z grep "无人出局" 只有 src 命中），所以它是语义错而不是计数错。
 
 修的方向是**一个谓词一个来源**：这个条件原本只写在 `phases.run_vote` 那一支 `and` 上，
-句子（`phases._tally_text`）压根没读它，所以两边各说各话。现在两边都问 `rules.will_pk`。
+句子（当时是 `phases._tally_text`，写在负载里）压根没读它，所以两边各说各话。现在两边都问
+`rules.will_pk`——而那句话本身在 #113 里搬了家：负载不再存整句，只剩渲染侧的一个作者。
 下面 ①② 两条钉的就是"句子跟着房规走"：
 
 * ①第一张票把桌子送进 PK 时，票型句不许对"谁出局"下任何结论——它只能报票型。
@@ -85,28 +88,28 @@ def _pk_turns(actors) -> list:
 async def test_the_ballot_that_opens_a_pk_makes_no_claim_about_who_is_out(tmp_path):
     """第一波平票：票型句只能报票型。
 
-    手术刀：把 `_tally_text` 的结论子句改回无条件的一句"平票，无人出局"，这一条立刻红——
-    红在下一行的"出局"上，而不是红在一个我新造的短语上，所以断言不锁文案只锁语义。
+    手术刀：把渲染的结论子句改回无条件的一句"平票，无人出局"，这一条立刻红——红在下一行的
+    "出局"上，而不是红在一个我新造的短语上，所以断言不锁文案只锁语义。
     """
     _cfg, state, log, table, _actors = _table(tmp_path, _tie_then_revote(second_ties=False))
     await phases.run_vote(table)
 
-    tallies = _tallies(log)
-    assert len(tallies) == 2, f"这一桌没走 PK 复投，下面两条是空转：{len(tallies)} 张票型"
-    first = tallies[0]["summary"]
-    assert "票型" in first and "3号" in first, f"票型本身也没了：{first}"
-    assert "出局" not in first, f"下一行就要宣布进 PK，这一行却对出局下了结论：{first}"
-    assert tallies[0]["exiled"] is None and tallies[1]["exiled"] == 3
+    settled = [e for e in log.all() if e.kind == Kind.VOTE_RESULT]
+    assert len(settled) == 2, f"这一桌没走 PK 复投，下面两条是空转：{len(settled)} 张票型"
+    # 这一桌"下一波还要投"今天有字段承载（`pending_pk`），句子由它算出来：钉语义的两条因此各自
+    # 站在两边——typed 在场，人话不许越权。
+    assert settled[0].payload["pending_pk"] is True and settled[0].payload["exiled"] is None
+    assert settled[1].payload["pending_pk"] is False and settled[1].payload["exiled"] == 3
+
+    first_line = compress.render_line(settled[0])
+    assert "票型" in first_line and "3号" in first_line, f"票型本身也没了：{first_line}"
+    assert "出局" not in first_line, f"下一行就要宣布进 PK，这一行却对出局下了结论：{first_line}"
 
     # 正反两面都要有：第二张票型是真结论，不许被同一句"不许下结论"抹掉。
-    assert "出局" in tallies[1]["summary"], tallies[1]["summary"]
+    assert "出局" in compress.render_line(settled[1]), compress.render_line(settled[1])
 
-    # 这句子的消费者不止模型：`render_html._line` 和直播帧都走同一个 `compress.render_line`，
-    # 所以拿渲染后的那一行再钉一遍——PK 前那一刻，法官没有对"谁出局"说话。
-    first_event = [e for e in log.all() if e.kind == Kind.VOTE_RESULT][0]
-    line = compress.render_line(first_event)
-    assert "出局" not in line, f"模型读到的那一行仍然在收回自己：{line}"
-    assert "票型" in line, line
+    # 上面钉的是渲染出来的那一行，不是负载里的字符串：`render_html._line`、直播帧和模型读到的
+    # 编年史都走同一个 `compress.render_line`，所以这一行不说"出局"，三处就都不说。
     assert state.pk_seats == (), "PK 名单没清空，复投的目标集会漏进下一天"
 
 
@@ -121,8 +124,10 @@ async def test_a_second_tie_is_the_once_in_pk_once_then_nobody_and_says_so(tmp_p
 
     tallies = _tallies(log)
     assert len(tallies) == 2
-    assert "平票，无人出局" in tallies[1]["summary"], tallies[1]["summary"]
-    assert tallies[1]["exiled"] is None
+    second = [e for e in log.all() if e.kind == Kind.VOTE_RESULT][-1]
+    # 第二波是终局：`pending_pk` 关了，于是"无人出局"这一次是真结论，必须照说。
+    assert tallies[1]["exiled"] is None and tallies[1]["pending_pk"] is False, tallies[1]
+    assert "平票，无人出局" in compress.render_line(second), compress.render_line(second)
     assert len(state.alive_seats) == len(ALL_SEATS), \
         f"房规说 once，还是有人在这桌上出局：{[s for s in ALL_SEATS if not state.is_alive(s)]}"
     asked = [len([t for t in a.turns if t.phase is Phase.DAY_VOTE]) for a in actors.values()]

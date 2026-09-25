@@ -294,9 +294,9 @@ def will_pk(state: GameState, res: VoteResult) -> bool:
     """Does this ballot send the tied seats to a PK speech?
 
     One predicate, one source: the branch in `phases.run_vote` and the sentence in
-    `phases._tally_text` must give the same answer, because the judge cannot declare the case
+    `compress._vote_summary` must give the same answer, because the judge cannot declare the case
     closed on one line and open a PK on the next. Spelled a second time anywhere, the wording
-    drifts from the code — the bug `tests/test_tally_wording.py` opens with is exactly that.
+    drifts from the code — `tests/test_judge_wording.py` ① is the case that pins it.
 
     Only the day's *first* ballot may ask: a second tie is terminal, which is the `once` in
     `pk_once_then_nobody`. The revote therefore passes no flag at all.

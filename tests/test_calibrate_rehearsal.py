@@ -444,3 +444,31 @@ def test_a_model_the_endpoint_does_not_advertise_is_flagged(run, tmp_path):
     out = tmp_path / "matches.md"
     cal.render_from_json(str(src), str(out))
     assert "不承认" not in out.read_text(encoding="utf-8")
+
+
+# ------------------------------------------------------------ 一次成功不是一次测量（#103）
+def test_a_single_success_in_the_diversity_scan_is_reported_as_no_reading():
+    """某个温度下整批采样只成 1 次时，两把措辞尺子没有可比对象，`None` 必须原样进表。
+
+    `#103` 把 `collapse_round`/`opening_distinct_rate` 的地板抬到"两个开口的"之后，这条扫描是它上游
+    唯一会花真钱的地方：端点抖动时这里可能只拿到一份发言，而 `round(None, 3)` 会在六段探针全部跑完
+    之后才炸，报告和 sidecar 一个字都留不下。20:26:50Z 那具变异（把守卫删回 `round(collapse, 3)`）
+    在 863 条里是 MISSED——这一条就是补上的那个读者。
+    """
+    cal = _load()
+
+    class OneThenNothing:
+        def __init__(self) -> None:
+            self.n = 0
+
+        async def complete(self, _c, _msgs, **_kw):
+            self.n += 1
+            if self.n == 1:
+                return {"ok": True, "text": "我听听大家的发言，再决定指控谁。"}
+            return {"ok": False, "status": 503, "err": "stub: 这个温度下只成了一次"}
+
+    rows = asyncio.run(cal.temp_diversity_scan(None, OneThenNothing(), True))
+    assert rows[0]["n_speech"] == 1, rows[0]
+    assert rows[0]["collapse_round"] is None, "一次成功的采样不是一次测量"
+    assert rows[0]["opening_distinct_rate"] is None
+    assert rows[0]["seat_mention_rate"] == 0.0, "点名率是逐条算的，一份发言也量得到"

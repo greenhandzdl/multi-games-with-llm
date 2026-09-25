@@ -30,13 +30,14 @@ from __future__ import annotations
 import asyncio
 import math
 import statistics
+from pathlib import Path
 
 import pytest
 
-from wolfengine import game, metrics, phases
+from wolfengine import compress, game, metrics, phases
 from wolfengine.actors import MockActor
 from wolfengine.config import Config
-from wolfengine.events import Event, EventLog, Kind
+from wolfengine.events import Event, EventLog, Kind, empty_notice, meta_notice
 from wolfengine.schema import Action, Belief, Suspect
 
 SEED = 7
@@ -357,8 +358,8 @@ def test_the_save_is_recorded_as_a_potion_not_as_a_resurrection(golden):
     to be asked for a ballot — the save has to reach the living set, not just the text."""
     _, _, events, _ = golden
     save = _ev(events, 15)
-    assert (save.payload["act"], save.payload["potion"], save.payload["target"]) \
-        == ("save", "save", None)
+    assert (save.payload["act"], save.payload["target"]) == ("save", None)
+    assert "potion" not in save.payload, "`#114` 起这一格只由 act 说一遍"
     assert save.payload["meta"]["citation_stats"] is not None
     assert [e.actor for e in events if e.kind == Kind.VOTE and e.day == 1] == list(range(1, 10))
 
@@ -461,7 +462,7 @@ def test_a_hunter_knifed_at_night_shoots_after_the_day_that_killed_him(golden):
     """House rule `hunter_shoots_on={wolf_kill,exiled}`, resolved by `run_hunter_shots` at
     the end of the day. The shot is the last act of the game and ends it."""
     _, _, events, _ = golden
-    assert _ev(events, 47).payload == {"seat": 9, "cause": "wolf_kill", "cause_zh": "被狼刀"}
+    assert _ev(events, 47).payload == {"seat": 9, "cause": "wolf_kill"}
     shot = _ev(events, 75)
     assert (shot.actor, shot.payload["act"], shot.payload["target"]) == (9, "shoot", 2)
     assert shot.visibility == frozenset({9})
@@ -471,6 +472,26 @@ def test_a_hunter_knifed_at_night_shoots_after_the_day_that_killed_him(golden):
     # reader of one file can conclude, so it has to make this go red.
     assert _ev(events, 77).payload == {"winner": "good", "terminal": "good_win",
                                        "degraded_game": False, "degraded_threshold": 12}
+
+
+def test_the_death_is_stored_as_an_enum_not_as_a_chinese_sentence(golden):
+    """死因在日志里只有一份：枚举 `cause`；人话由渲染侧现算。
+
+    `phases.py` 过去在同一条 `t.say` 里写完 `cause` 再顺手写 `cause_zh=CAUSE_ZH[cause]`，"怎么死的"
+    这句话于是有了两个写者。data/ 6 份日志的 37 条 DEATH 上两份今天说的是同一件事（23:33:03Z 现读：
+    `cause_zh == CAUSE_ZH[cause]` 37/37），但结构允许它们分岔，而四个读者已经各说各话——回退值分别是
+    "死亡"、空字符串、空字符串、英文枚举原文（见 `tests/test_wiring.py` 那一格）。删掉的是存着的那一份，
+    留下的是带类型的那一份：这正是 `compress.py` 里 `VERDICT_ZH` 那句注释给预言家查验定过的判据。
+    """
+    _, _, events, _ = golden
+    deaths = [e for e in events if e.kind == Kind.DEATH]
+    assert len(deaths) == 5, f"金样本这一桌该有 5 条死亡，实际 {len(deaths)} 条"
+    for e in deaths:
+        assert "cause_zh" not in e.payload, f"e{e.seq} 又把译文抄进了日志"
+    assert sorted(e.payload["cause"] for e in deaths) \
+        == ["exiled", "exiled", "hunter_shot", "poison", "wolf_kill"], \
+        "五条死亡得真的带着枚举值，上面那句才不是空的"
+    assert "被狼刀" in compress.render_line(_ev(events, 47)), "译文仍在，只是由渲染侧现算"
 
 
 # ---------------------------------------------------------------------------- the numbers
@@ -659,6 +680,57 @@ def test_m1_keeps_an_unfinished_game_out_of_the_denominator(golden):
     assert out["good_win_rate"] is None and "分母为空" in out["note"]
 
 
+#: 两种"文件在、局不在"的形状，与 `tests/test_m3_gate.py` 的 `#99` 那一节同形：这里钉的是**胜率**
+#: 这一层的第二个读者（`m1_win_rate` 的 `n_games` 和 `comparison.md` 的「局数」那一格）。
+_NO_TABLE = metrics.Game(path=Path("/tmp/no-table.jsonl"), meta={}, events=[])
+#: 页眉登记的是真端点：`is_synthetic` 这道门**放行**它，所以它会溜进 `usable` 并把 `excluded`
+#: 顶出一格 "unfinished": 1 —— 一个从来没打过牌的字节，被说成"打完了没分出胜负"。
+_OPENED_ONLY_LLM = metrics.Game(path=Path("/tmp/opened-only-llm.jsonl"),
+                                meta={"game_id": "opened-only-llm", "actor_kinds": ["llm"]},
+                                events=[])
+
+
+def test_m1_counts_a_file_with_no_game_in_the_files_not_in_the_games(golden):
+    """一份 0 字节的日志和一份只写了开局记录的日志，都不许挪动胜率里的任何一格数字。
+
+    18:40:38Z 拿真日志目录实测（两局真的 + 一份只有页眉的 `["llm"]` + 一份 0 字节）：闸门那侧
+    #99 之后读作 `n_games=2 / n_files=4`，胜率这一侧仍然报 `n_games: 4`、`excluded:
+    {"unfinished": 1}`。`n_decisive` 走的是 `DECISIVE` 筛过的分母，所以胜率本身没错，错的是「本批 N
+    局」这一格把两份没有事件的字节说成了局 —— 一句假话在两个出口各写了一遍，就是 `#89` 那一族。
+    """
+    _, res, _, _ = golden
+    real = metrics.Game(path=res.path, meta={"actor_kinds": ["llm"]},
+                        events=metrics.read_game(res.path).events)
+    base = metrics.m1_win_rate([real])
+    assert (base["n_games"], base["n_decisive"], base["good_win_rate"]) == (1, 1, 1.0), base
+    out = metrics.m1_win_rate([real, _NO_TABLE, _OPENED_ONLY_LLM])
+    assert out["n_games"] == 1, "没有事件的字节被数进了局的分母"
+    assert out["n_files"] == 3 and out["hollow"]["n"] == 2, out
+    assert out["excluded"] == base["excluded"], "空文件被算成『打完了没分出胜负』"
+    assert out["n_synthetic_excluded"] == base["n_synthetic_excluded"], "剔除数被没有局的文件顶偏"
+    for key in ("good_win_rate", "wilson95", "mean_days", "by_role_survival", "stratified"):
+        assert out[key] == base[key], f"{key} 不该因为多了两个空字节而变动"
+    # 少了哪几份必须说得出是谁：`hollow` 的措辞从 `events.py` 那一只手取，这里一个字都不重写。
+    assert meta_notice({}) in out["hollow"]["note"], out["hollow"]
+    assert empty_notice([], {"game_id": "opened-only-llm"}) in out["hollow"]["note"], out["hollow"]
+
+
+def test_m1_over_a_folder_of_such_files_says_there_is_no_game():
+    """全是空文件时，胜率要说"没有一局"，不能说"本批 2 局全为替身桌"，也不能沿用那句默认的"仅作描述"。
+
+    后两者都是关于**打牌的人**的假话：这些文件连座位表都没有（`is_synthetic` 是关门，反过来读成
+    "登记成了替身"就是无中生有一个座位）。默认那句 note 硬写着"胜率在此样本量下仅作描述"，读者会
+    以为有一批局被采样了 —— 与 `#99` 在闸门那侧拦下的是同一句话。
+    """
+    out = metrics.m1_win_rate([_NO_TABLE, _OPENED_ONLY_LLM])
+    assert out["n_games"] == 0 and out["n_decisive"] == 0, out
+    assert out["good_win_rate"] is None and out["wilson95"] == [0.0, 1.0], out
+    assert out["hollow"]["n"] == 2 and out["n_files"] == 2, out
+    assert "替身桌" not in out["note"], out["note"]
+    assert "样本量" not in out["note"], out["note"]
+    assert "没有一局" in out["note"], out["note"]
+
+
 def test_a_log_from_before_the_verdict_reads_as_unrecorded_not_as_healthy(golden):
     """`degraded_game` 缺失要读成 `None`（没记录），不能读成 `False`（没退化）。
 
@@ -775,11 +847,15 @@ def test_m5_treats_a_pk_round_as_its_own_round(golden):
     assert [(r["day"], r["phase"], r["n"]) for r in out["rounds"]] \
         == [(1, "day_speech", 9), (2, "day_speech", 6), (2, "day_pk_speech", 2)]
     assert out["worst_round"]["day"] == 2 and out["worst_round"]["phase"] == "day_speech"
-    assert out["passivity_mean"] == pytest.approx(1 / 9 / 3, abs=5e-5)  # 3号's listen, diluted
+    assert out["passivity_pooled"] == pytest.approx(1 / 17, abs=5e-5)  # 3号's listen, /17 turns
     assert out["collapse_round_mean"] == pytest.approx(0.0157, abs=5e-4)
     assert out["opening_distinct_mean"] == 1.0
     # The planted duplication: 6号 says 2号's clause verbatim inside the day-2 round.
     assert out["rounds"][1]["dup_exact6_rate"] == pytest.approx(1 / 3, abs=5e-4)
+    # 批级那一格今天就有读者（`#104`）：`#102` 电池里"取错列"那具变异当时无人读，换成
+    # `collapse_round_mean` 的列这条就红。这一局的三轮全都有 ≥2 人开口，所以它是**数值**读者、
+    # 不是地板读者——地板的读者在 `test_m3_gate.py` 的 `#104` 那一节。
+    assert out["dup_exact6_mean"] == pytest.approx(0.1111, abs=5e-4)
     assert out["gate"] == {"passivity_rate<": 0.4, "collapse_round<": 0.35,
                            "opening_distinct_rate>": 0.8}
 
@@ -929,7 +1005,7 @@ def _ballot(seq: int, voter: int, target: int | None, day: int = 1) -> Event:
 
 def _wave(seq: int, tally: dict[str, int], exiled: int | None, day: int = 1) -> Event:
     return Event(seq=seq, kind=Kind.VOTE_RESULT, day=day, phase="day_vote", visibility="all",
-                 payload={"tally": tally, "exiled": exiled, "summary": ""})
+                 payload={"tally": tally, "exiled": exiled})
 
 
 def test_entropy_cannot_tell_a_unanimous_table_from_an_abstention_flood():
@@ -963,6 +1039,51 @@ def test_entropy_cannot_tell_a_unanimous_table_from_an_abstention_flood():
     # …and an empty log is not "zero abstention": no denominator, no number (the same
     # convention `m3_gate_verdict` refuses to score as a pass).
     assert metrics.m8_strategy_proxies([])["abstention_rate"] is None
+
+
+def test_the_abstention_rate_prints_both_numbers_it_was_divided_from():
+    """`abstention_rate` 是 (问到的票数 − 投出的票数) / 问到的票数，而那两个数过去只活在
+    `m8_strategy_proxies` 的函数体里。读到 0.6667 的人只能选择相信分子和分母，而这一格的分母
+    恰恰是全文件最容易被改动口径的一处（`#105`：分母是票数不是轮数）。
+
+    同族的前一轮是 `#107`：一行有两个分母就把两个都印出来。这里印两个而不是一个，是因为
+    "弃了几张" = asked − cast 只能由读的人自己减出来，减错的方向反过来就是"弃票率算错了"。
+    """
+    flooded = [_ballot(i, i, 5) for i in range(1, 4)] \
+        + [_ballot(i, i, None) for i in range(4, 10)] + [_wave(10, {"5": 3}, 5)]
+    out = metrics.m8_strategy_proxies(flooded)
+    assert out["n_ballots_asked"] == 9 and out["n_ballots_cast"] == 3
+    assert out["abstention_rate"] == round(
+        (out["n_ballots_asked"] - out["n_ballots_cast"]) / out["n_ballots_asked"], 4)
+
+    all_in = [_ballot(i, i, 5) for i in range(1, 10)] + [_wave(10, {"5": 9}, 5)]
+    full = metrics.m8_strategy_proxies(all_in)
+    assert (full["n_ballots_asked"], full["n_ballots_cast"]) == (9, 9)
+    assert full["abstention_rate"] == 0.0
+
+    # 空日志里两个计数各自是真的 0（问了 0 张、投出 0 张是可以核对的事实），
+    # 而比率仍然是 None：没有分母就没有数，null ≠ 0（`#95`）。
+    empty = metrics.m8_strategy_proxies([])
+    assert empty["n_ballots_asked"] == 0 and empty["n_ballots_cast"] == 0
+    assert empty["abstention_rate"] is None
+
+
+def test_a_wave_that_never_settled_is_in_the_rate_and_out_of_the_per_wave_lists():
+    """一轮有票没有结算记录：`abstention_rate` 的分母数它，`ballot_mandate` 和熵都不数它。
+
+    这个不对称过去只在函数体里成立。读 audit JSON 的人看见逐轮那两串少一项、比率却照旧，
+    没有任何东西告诉他两串数的分母不是同一批票。印出 `n_ballots_asked` 之后这一格变成可核对的：
+    问到的票数比逐轮那两串覆盖的多，多出来的就是没结算那一轮。
+    """
+    unsettled = [_ballot(i, i, 5) for i in range(1, 4)] \
+        + [_ballot(i, i, None) for i in range(4, 7)] \
+        + [_wave(10, {"5": 3}, 5)] \
+        + [_ballot(i, i, None) for i in range(7, 10)]
+    out = metrics.m8_strategy_proxies(unsettled)
+    assert len(out["ballot_mandate"]) == len(out["vote_split_entropy"]) == 1, "没结算那轮进不了逐轮串"
+    assert out["n_ballots_asked"] == 9, "九张落盘的票都在分母里，包括没结算那轮的三张"
+    assert out["n_ballots_cast"] == 3
+    assert out["abstention_rate"] == round(6 / 9, 4)
 
 
 def test_a_tally_with_no_ballots_behind_it_enters_neither_list():

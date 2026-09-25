@@ -9,6 +9,7 @@
 - 延迟矩阵失败单元格：**8**；温度扫描失败档位：**4**
 - 失败单元格保留在下表并注明原因。**未测得即为未知，不得用计划里的估计值冒充实测值。**
 - **另有 7 处的值被 redact 抹去**：features.tokenize/tokenize、features.tokenize/v1/tokenize、features.apc_visibility.has_cached_tokens、features.usage_keys_seen、ratio.en_tokens_per_char、ratio.zh_tokens_per_char、ratio.unit_tokens_estimate。这些格子是防护逻辑遮掉了结论，**不是**端点没返回；要么把结论换成不含凭据键名的形式记录，要么在本节写明该结论不可得。
+  - 上面那句 remedy 的后半已经做了：`CRED_KEYS` 里不再有裸 `token`（就是它当年把 `has_cached_tokens`、`usage_keys_seen` 一起遮掉的），被遮的格子也由 `elided_paths` 逐格报出来而不是静默消失。**下一次 M0 重跑预期能把这些格读回来**——这是从代码读出的预期，不是本次重跑实测（本报告是旧 sidecar 的离线重渲染）。
 | 项 | 失败原因 |
 |---|---|
 | 520 / k=4 | <style>             p {               margin: 10px 0;               color: white |

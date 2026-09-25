@@ -153,12 +153,17 @@ async def play(
     # would interleave two `seq` numberings into an unreadable transcript.
     stamp = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
 
-    llm: LLM | None = None
     if actors is None:
         if transport is None:
             raise ValueError("play() needs either `actors` or a `transport`")
         llm = LLM(transport, cfg)
         actors = {s: LlmActor(llm, cfg, s) for s in state.seats}
+    # The counter has to be read off the LLM that is actually answering. `play()` only mints one
+    # for a table it builds itself, while both shipped entries (`cli._llm_actors`, `batch`) hand
+    # `actors` in — so the local `llm` stayed None on every real game: the file recorded
+    # thousands of completion tokens while `spent()` answered 0, and the ceiling below, which
+    # reads `spent()`, could not fire. Seats share one LLM, so dedupe by identity before summing.
+    counters = {id(a.llm): a.llm for a in actors.values() if getattr(a, "llm", None) is not None}
     kinds = tuple(str(getattr(a, "kind", "unknown")) for a in actors.values())
     log = open_log(cfg, state, Path(out_dir) / f"{stamp}_{game_id}.jsonl", kinds, deal_seed,
                    stamp)
@@ -171,7 +176,7 @@ async def play(
     # and killing the game over it would discard the reason the human was there.
     enforce_clock = all(k == "llm" for k in kinds)
     limit = cfg.max_game_wallclock_s if wallclock_limit_s is None else wallclock_limit_s
-    spent = lambda: llm.completion_tokens_spent if llm else 0  # noqa: E731
+    spent = lambda: sum(c.completion_tokens_spent for c in counters.values())  # noqa: E731
 
     terminal, winner = DRAW_DAY_LIMIT, None
     try:

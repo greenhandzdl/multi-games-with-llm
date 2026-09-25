@@ -1,6 +1,6 @@
 """`wolf` — the whole public surface.
 
-Seven verbs, four of which never touch the endpoint:
+Only `run` and `batch` need an endpoint; the rest read a log that already exists:
 
 * `run` plays a game and writes the JSONL. `--mock` plays it without an endpoint, which is
   the configuration CI runs on; `--dry-run` is the budget tool (plan §11: assemble every
@@ -8,7 +8,7 @@ Seven verbs, four of which never touch the endpoint:
 * `replay` prints a chronicle from a JSONL that already exists, and `--seat`/`--god` choose
   whose eyes the printout has.
 * `audit` answers "what did this game cost, and how often did the engine paper over the
-  model" for one file, which is the same arithmetic `batch`/`compare` do over many.
+  model" for one file; `gate` says what `batch`/`compare` say over many, about existing logs.
 * `export` writes the single shareable HTML file (plan §9), and `watch` tails a game that is
   still being played. Both read the log and nothing else: if the endpoint is offline tomorrow
   the demo still works, because the log — not a re-run — is the artifact.
@@ -17,7 +17,7 @@ Seven verbs, four of which never touch the endpoint:
   code says which of the two happened (0 = a verdict, 1 = a refusal, 2 = the command itself
   was wrong), so a script can branch without parsing prose.
 
-There is deliberately one renderer per concern, shared by all five: `render_chronicle` for the
+There is deliberately one renderer per concern, shared by them all: `render_chronicle` for the
 text timeline, `render_html`/`render_live` for the two views. A live view and a post-mortem that
 format events differently are two truths about the same file, and the whole point of the log is
 that there is only one.
@@ -122,11 +122,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         print(f"配置错误：{err}", file=sys.stderr)
         return 2
     cfg = build_config()
-    if args.max_days is not None:
-        # Goes through the same `apply_overrides` the batch arms use, so the cap that lands in
-        # the manifest is the one that entered `config_hash` — a hand-patched attribute here
-        # would let two runs claim the same hash while playing to different lengths.
-        cfg = batch.apply_overrides(cfg, {"max_days": args.max_days})
+    try:
+        cfg = batch.apply_overrides(cfg, _run_overrides(args))
+    except batch.BadOverride as e:
+        print(f"配置错误：{e}", file=sys.stderr)
+        return 2
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     seeds = [args.seed + i for i in range(args.games)]
@@ -361,19 +361,21 @@ def cmd_audit(args: argparse.Namespace) -> int:
         # meeting `regions.b2`, so `b2_prompts_on_the_floor` counts those prompts and
         # `b2_worst_over_tokens` how far the worst one went — both read the excess assemble wrote
         # per prompt, and `null` says the field had not been written yet, not that it was 0.
+        # `last_fold` 是这一块里唯一读**标记 payload** 的格子：上面的个数说出现过几种折叠状态，这一格说最后那一种还剩几条逐字（抄 `metrics.last_fold_state`，不在此重算）。
         # The pair after them is the C side of the same problem: the shipped `region_tokens` is
         # measured *after* the card is thinned, so the only evidence that a prompt ever lost an
         # accusation line is the count assemble wrote at send time. Its unit is lines, not tokens.
         "compactions": {"max_rounds": max(folds, default=0),
                         "prompts_folded": sum(1 for x in folds if x),
                         "events": kinds.get(Kind.COMPACTION, 0),
-                        "b2_prompts_on_the_floor": None if floor is None
-                        else sum(1 for x in floor if int(x) > 0),
-                        "b2_worst_over_tokens": None if floor is None
-                        else max((int(x) for x in floor), default=0),
+                        "b2_prompts_on_the_floor": None if floor is None else sum(1 for x in floor if int(x) > 0),
+                        "b2_worst_over_tokens": None if floor is None else max((int(x) for x in floor), default=0),
                         "card_prompts_thinned": check["card_prompts_thinned"],
-                        "card_worst_claims_dropped": check["card_worst_claims_dropped"]},
+                        "card_worst_claims_dropped": check["card_worst_claims_dropped"],
+                        "last_fold": metrics.last_fold_state(events)},
         "region_budget_check": check,
+        # 两份 `fallback` 拷贝对过账没有：算术在 `metrics`，这一格只是让它读得出来（`#119`）。
+        "fallback_copy_check": metrics.fallback_copy_check(events),
         "m2_illegal": metrics.m2_illegal_rate(events),
         "m3_gate": metrics.m3_gate_pressure(events),
         "m4_hallucination": metrics.m4_hallucination_rates(events),
@@ -528,13 +530,19 @@ def cmd_batch(args: argparse.Namespace) -> int:
         print(f"批次中止：{e}", file=sys.stderr)
         return 1
     print(f"批次 -> {res.out_dir}（{res.n_logs} 局日志，seed0={res.pair_keys[0]}，"
-          f"canary {res.canary.get('terminal')}，终态 {res.terminal}）")
+          f"canary {res.canary.get('terminal')}，终态 {res.terminal}）；M3 闸门判定见 m3_gate.md")
     return 0 if res.terminal == "ok" else 1
 
 
 def cmd_compare(args: argparse.Namespace) -> int:
     """Refuse or conclude, and write whichever of the two it is. Exit 0 only on a verdict of OK
-    so a script can branch on it; a rejection is a report too, so it lands on disk as well."""
+    so a script can branch on it; a rejection is a report too, so it lands on disk as well.
+
+    `--json` 是这批读数的机器侧出口。为什么落文件而不是像 `audit` 那样印到 stdout：`audit` 一次
+    一局，stdout 就是它的产物；`compare` 的 stdout 已经被 markdown 占了，再接一段 JSON 等于让
+    `wolf compare | jq` 拿到两条流。为什么 JSON 里不许有 `markdown`：那是同一批读数的第二种
+    渲染，落两个地方，改口的时候只有一个是真的。
+    """
     d = Path(args.dir)
     if not (d / "run_manifest.json").exists():
         print(f"配置错误：{d} 里没有 run_manifest.json，不是 wolf batch 产出的目录", file=sys.stderr)
@@ -544,8 +552,49 @@ def cmd_compare(args: argparse.Namespace) -> int:
     dst = Path(args.out) if args.out else d / "comparison.md"
     dst.write_text(out["markdown"], encoding="utf-8")
     print(out["markdown"])
+    if args.json:
+        js = dst.with_suffix(".json")
+        js.write_text(json.dumps({k: v for k, v in out.items() if k != "markdown"},
+                                 ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"JSON -> {js}")
     print(f"{out['verdict']} -> {dst}")
     return 0 if out["verdict"] == "OK" else 1
+
+
+def cmd_gate(args: argparse.Namespace) -> int:
+    """对一个目录里**已经存在**的日志出 M3 判定：不打牌、不碰端点，只读盘。
+
+    为什么要第三个入口：`compare` 进门就要 `run_manifest.json`，`batch` 要重新打牌才有臂，所以
+    三次 `wolf run` 攒出来的一目录真日志，在链上任何地方都拿不到判定——而 §十四 验收第 3 条要的
+    是"全部达标**或有明确失败记录**"。算术仍然只有 `metrics.m3_gate_verdict` 一份、阈值只有
+    `M3_GATE` 一张，这里只是多一个读取点，与 `audit` 那格 `m3_gate_pressure` 分两层：单局只配
+    出原始计数，判定得有一个分母（batch.py 里那段"per-game PASS 离 FAIL 只有一个离群点"）。
+
+    两张配置表不并进一个分母：松散日志身上只剩 `meta.config_hash`，混在一起就说不清塌的是哪张桌
+    子，所以这里拒判、点名，让人去分目录或回到 `batch` 的臂。一份连表都没登记的文件不算第二张表
+    ——它没有 hash 可混，闸门把它单独报成"不是局的文件"（`#99`：以前它贡献一个 `None`，两局好日志
+    因此一起被拒，还被说成"本批 3 局"）。
+    """
+    d = Path(args.dir)
+    rows = batch.read_arm(d)
+    if not rows:
+        print(f"配置错误：{d} 里没有 *.jsonl，没有什么可判的", file=sys.stderr)
+        return 2
+    with_table = [r for r in rows if r.get("config_hash")]
+    tables = sorted({str(r["config_hash"]) for r in with_table})
+    if len(tables) > 1:
+        no_table = (f"（另有 {len(rows) - len(with_table)} 份连配置表都没登记，没算进表数里）"
+                    if len(rows) != len(with_table) else "")
+        print(f"配置错误：{d} 里混着 {len(tables)} 张配置表（{'、'.join(tables)}）{no_table}："
+              "M3 判的是「这一臂的桌子塌不塌缩」，两张表并成一个分母就说不清是谁塌的。"
+              "分成两个目录各自判，或者用 `wolf batch` 的臂目录。", file=sys.stderr)
+        return 2
+    arm = f"cfg={tables[0]}" if tables else "cfg=未登记"
+    out = batch.emit_gate(d, [arm], [{**r, "arm": arm} for r in rows], label="日志目录")
+    v = out["verdicts"][arm]
+    print(out["text"])
+    print(f"{v['verdict']} -> {out['path']}")
+    return 0 if v["verdict"] == "PASS" else 1
 
 
 # ------------------------------------------------------------------------------- main
@@ -567,6 +616,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--dry-run", action="store_true", help="装配全部 prompt 并落盘，零 API 调用")
     r.add_argument("--god", action="store_true", help="时间线里显示私有事件")
     r.add_argument("--quiet", action="store_true", help="只打汇总行")
+    r.add_argument("--set", action="append", default=[], metavar="字段=值", help="换一张预算表再装配，例如 --set regions.b2=400")
     r.add_argument("--max-days", type=int, default=None,
                    help="覆盖日数上限（默认取 Config.max_days）；打到上限即判平局 draw_day_limit")
     r.set_defaults(func=cmd_run)
@@ -612,7 +662,13 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("dir", help="batch 产出的目录")
     c.add_argument("--axis", default="", help="声明的处理轴，逗号分隔，例如 temperature")
     c.add_argument("-o", "--out", default=None, help="默认写在批次目录的 comparison.md")
+    c.add_argument("--json", action="store_true",
+                   help="读数另写一份 JSON，落在 markdown 旁边同基名（comparison.json）")
     c.set_defaults(func=cmd_compare)
+
+    gt = sub.add_parser("gate", help="对一目录已有日志出 M3 判定（离线，不打牌、不碰端点）")
+    gt.add_argument("dir", help="装 `wolf run` 日志的目录，或批次里的一个臂目录")
+    gt.set_defaults(func=cmd_gate)
     return ap
 
 
@@ -631,6 +687,41 @@ def main(argv: list[str] | None = None) -> int:
         # 一次拼错的文件名会被脚本读成"这批数据不可比"。`str(e)` 自带路径和 errno，不重抄。
         print(f"路径用不了：{e}", file=sys.stderr)
         return 2
+
+
+def _run_overrides(args: argparse.Namespace) -> dict[str, Any]:
+    """`run` 那张桌子用的表：`--set` 的每一对，加上 `--max-days` 这个特例拼法。
+
+    这两个函数住在 `main()` 下面是刻意的：文档按行号引本文件下游的语句，插入点每往上一格，
+    那些号就要集体改一遍。两个拼法同时给则拒绝，不比"谁后写谁赢"：`--max-days 4 --set max_days=5`
+    里赢的那个若是字典写入顺序决定的，那份普查按几天打就只有 argparse 的实现细节知道。
+    """
+    sets = _parse_run_set(args.set)
+    if args.max_days is not None:
+        if "max_days" in sets:
+            raise batch.BadOverride(
+                f"--max-days 与 --set max_days= 是同一根旋钮的两个拼法，这次同时给了 "
+                f"{args.max_days} 和 {sets['max_days']}：留一个，普查才知道这桌按几天打")
+        sets["max_days"] = args.max_days
+    return sets
+
+
+def _parse_run_set(pairs: list[str]) -> dict[str, Any]:
+    """`run --set regions.b2=400` → `{"regions.b2": 400}`：一张桌，所以没有臂名前缀。
+
+    只借 `_coerce` 的读法，不借判据——"这一格能不能改"仍然只由 `batch.apply_overrides` 说了算，
+    所以 `run` 的普查和 `batch` 的臂用的是同一张 veto 名单（inert 格子在两侧都停在门口）。
+    """
+    out: dict[str, Any] = {}
+    for pair in pairs:
+        key, sep, raw = pair.partition("=")
+        if not sep or not key.strip():
+            raise batch.BadOverride(f"--set {pair}: 写成 <字段>=<值>，例如 --set regions.b2=400")
+        try:
+            out[key.strip()] = _coerce(raw)
+        except ValueError as e:
+            raise batch.BadOverride(f"--set {pair}: 值读不出来（{e}）") from e
+    return out
 
 
 if __name__ == "__main__":

@@ -28,25 +28,35 @@ from pathlib import Path
 
 from wolfengine import batch, metrics
 from wolfengine.config import Config
+from wolfengine.events import Event, Kind
 
 
-def _table(kinds: list[str] | None, game_id: str = "g1") -> metrics.Game:
+def _table(kinds: list[str] | None, game_id: str = "g1", *,
+           played: bool = False) -> metrics.Game:
     """一张只带页眉的桌：三条被拒路径都不读事件，读的是 `actor_kinds` 那一格。
 
     种类为 None 时连那一格都不写 —— 现实里只有被人手改过的日志会这样，而
     `is_synthetic` 对它是**关门**（不等于 `["llm"]`），所以措辞必须跟着诚实。
+
+    `played=True` 多给一条发言：#99 之后"只有页眉"不再算一局（那是一份被打断的文件，不是一张
+    替身桌），要钉"替身桌被拒时引用的条款"就得先让它真是一局。
     """
     meta: dict[str, object] = {"game_id": game_id}
     if kinds is not None:
         meta["actor_kinds"] = kinds
-    return metrics.Game(path=Path(f"/tmp/{game_id}.jsonl"), meta=meta, events=[])
+    events = [] if not played else [
+        Event(seq=1, kind=Kind.SPEECH, day=1, phase="day_speech", visibility="all", actor=1,
+              payload={"seat": 1, "text": "我先听听再说。", "act": "listen"},
+              request={}, response={"latency_s": 1.0})]
+    return metrics.Game(path=Path(f"/tmp/{game_id}.jsonl"), meta=meta, events=events)
 
 
 # ------------------------------------------------------------------ 局级：种类 → 条款
 def test_a_mock_table_cites_the_clause_that_rules_on_mock():
     """mock 不进结论出自 §十一，不是 §十五：把两者混起来，读者在 §十五 找不到任何关于
     替身 transport 的规定，就会以为这条剔除是随手加的。"""
-    out = metrics.m1_win_rate([_table(["mock"], "g1"), _table(["mock"], "g2")])
+    out = metrics.m1_win_rate([_table(["mock"], "g1", played=True),
+                               _table(["mock"], "g2", played=True)])
     note = out["note"]
     assert out["good_win_rate"] is None, out
     assert "§十一" in note, note
@@ -59,7 +69,7 @@ def test_a_mock_table_cites_the_clause_that_rules_on_mock():
 def test_a_human_seat_table_cites_the_clause_that_rules_on_humans():
     """同一批换成真人坐在 9 号位：这一次 §十五 才是依据，而 §十一 那句"mock 只会自证"
     对着一桌人类说就是假的。两条条款各管一种座位，替换不得只换一半。"""
-    out = metrics.m1_win_rate([_table(["llm"] * 8 + ["human"], "g1")])
+    out = metrics.m1_win_rate([_table(["llm"] * 8 + ["human"], "g1", played=True)])
     note = out["note"]
     assert "plan §十五（含真人座位的局永远不得进入配对评测语料）" in note, note
     assert "§十一" not in note and "mock" not in note, note
@@ -68,7 +78,8 @@ def test_a_human_seat_table_cites_the_clause_that_rules_on_humans():
 
 def test_both_seat_kinds_quote_both_clauses():
     """一臂全 mock、一臂含真人：两句话都要在场，且各自带着自己管的种类。"""
-    out = metrics.m1_win_rate([_table(["mock"], "g1"), _table(["human"], "g2")])
+    out = metrics.m1_win_rate([_table(["mock"], "g1", played=True),
+                               _table(["human"], "g2", played=True)])
     note = out["note"]
     assert "§十一" in note and "§十五" in note, note
     assert "mock" in note and "human" in note, note
@@ -80,7 +91,7 @@ def test_an_unregistered_table_borrows_no_clause():
 
     两种写法都要查：文档里 §十五 与 §15 混用过，只盯一种的断言会对着另一种的假出处放行。
     """
-    out = metrics.m1_win_rate([_table(None, "g1")])
+    out = metrics.m1_win_rate([_table(None, "g1", played=True)])
     note = out["note"]
     assert "§十一" not in note and "§十五" not in note, note
     assert "§11" not in note and "§15" not in note, note
@@ -91,7 +102,7 @@ def test_an_unregistered_table_borrows_no_clause():
 def test_the_gate_and_the_win_rate_cite_the_same_words():
     """同一件事在两个出口里必须是同一串字。这里钉的是措辞本身：谁把其中一处改写成
     另一套说法，这一条就红 —— 因为读者会从两份报告里读到两个不同的出处。"""
-    games = [_table(["mock"], "g1"), _table(["mock"], "g2")]
+    games = [_table(["mock"], "g1", played=True), _table(["mock"], "g2", played=True)]
     m1 = metrics.m1_win_rate(games)["note"]
     gate = metrics.m3_gate_verdict(games)["note"]
     assert "plan §十一（mock 只会自证，这几项不许省）" in m1, m1

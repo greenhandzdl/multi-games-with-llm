@@ -105,6 +105,30 @@ async def test_a_witch_with_one_potion_left_is_still_asked(tmp_path):
     assert any(e.kind == Kind.NOTICE for e in log.all()), "问了却没告诉她倒了谁"
 
 
+async def test_a_self_inconsistent_potion_is_kept_as_the_refused_answer_not_as_a_fact(tmp_path):
+    """`{"act":"save","potion":"poison"}` 被闸门退回，日志里留下的是**被退回的那份原文**。
+
+    `#114` 之前 `_write` 还把 `action.potion` 抄进 payload，于是"她用了哪瓶"有两个写者：一个是
+    `act`，一个是刚被 `potion_act_mismatch` 校验过、按定义不可能和 `act` 不同的那一格。真日志上
+    存着的 7 格 potion 与 act 逐字节相同（00:48:53Z 数的），所以这份抄写从来没有第二个读者。
+    删掉它不丢证据：被拒的答复整条留在 `attempts` 里，那才是模型自相矛盾的唯一证物。
+    """
+    script = {**NIGHT, WITCH: {Phase.NIGHT_WITCH: _a("save", potion="poison")},
+              SEER: {Phase.NIGHT_SEER: _a("check", 6)}}
+    _cfg, _state, log, table, _actors = _table(tmp_path, script, name="mismatch.jsonl")
+
+    await phases.run_night(table)
+
+    witch = [e for e in log.all() if e.kind == Kind.NIGHT_ACTION and e.actor == WITCH]
+    assert len(witch) == 1, witch
+    assert "potion" not in witch[0].payload, "act 之外不该有第二支笔记下她用了哪一瓶"
+    assert witch[0].payload["act"] == "save", witch[0].payload["act"]
+    assert [a["raw"] for a in witch[0].attempts] == [
+        '{"act":"save","target":null,"speech":"","evidence":[],"belief":null,"potion":"poison"}'], \
+        witch[0].attempts
+    assert table.blocked == [], "退回由 attempts 作证，不是由 blocked 作证——两格不是一回事"
+
+
 # --------------------------------------------------------------------- ② 预言家的"无可查"
 async def test_a_seer_with_nothing_left_to_check_reports_no_check(tmp_path):
     """`{"act":"pass","target":3}` 不是"查了 3 号"：既不发布结果，也不留下 blocked 记录。

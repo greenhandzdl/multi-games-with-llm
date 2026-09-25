@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import dataclasses
 
-from wolfengine import phases
+from wolfengine import compress, phases
 from wolfengine.events import Kind
 from wolfengine.state import Phase
 
@@ -54,10 +54,11 @@ async def test_a_house_that_says_nobody_on_a_tie_never_opens_a_pk(tmp_path):
     assert state.alive_seats and len(state.alive_seats) == len(ALL_SEATS), \
         f" {[s for s in ALL_SEATS if not state.is_alive(s)]} 在这张不该死人的桌上出局了"
     # 反向对照：平票本身确实发生了，否则上面三条只是"没人投票"的副产品。而这张桌上"无人出局"
-    # 就是**结论**（没有 PK 会来收回它），所以钉整句而不是钉"平票"两个字——
+    # 就是**结论**（没有 PK 会来收回它），所以钉那一行的整句而不是钉"平票"两个字——
     # `tests/test_judge_wording.py` ①钉的是另一张桌上这句不许出现。
     published = [e for e in log.all() if e.kind == Kind.VOTE_RESULT][-1]
-    assert published.payload["summary"].endswith("平票，无人出局。"), published.payload
+    assert published.payload["pending_pk"] is False, published.payload
+    assert compress.render_line(published).endswith("平票，无人出局。"), compress.render_line(published)
 
 
 # -------------------------------------------------------------------- ② hunter_shoots_on

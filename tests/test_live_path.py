@@ -18,7 +18,9 @@ import dataclasses
 import io
 import json
 import re
+import sys
 import time
+from pathlib import Path
 
 import httpx
 
@@ -26,6 +28,9 @@ from wolfengine import cli, game, metrics
 from wolfengine.config import Config
 from wolfengine.state import Phase
 from wolfengine.transport import HttpTransport
+
+sys.path.insert(0, str(Path(__file__).parent))
+from test_payload_shape import undeclared_keys  # noqa: E402  (形状表那把尺也量折叠标记这一格)
 
 # The acts the gate does not expect a target for (legality.TARGETLESS_ACTS).
 TARGETLESS = {"pass", "last_words", "discuss", "defend", "listen", "save"}
@@ -628,6 +633,7 @@ async def test_a_fold_the_model_was_shown_leaves_a_marker_in_the_log(key, tmp_pa
     g = metrics.read_game(res.path)
     markers = _markers(g)
     assert markers, "编年史折了，日志里没有一格说模型看到的是折过的版本"
+    assert not undeclared_keys(markers), "折叠标记的键没写进 events.Kind 的形状表"
     for m in markers:
         p = m.payload
         assert p["window"] >= 4 and p["folded_days"], p
@@ -698,3 +704,44 @@ async def test_a_prompt_that_was_never_sent_leaves_no_marker(key, tmp_path):
 
     res2, _ = await _play(_oracle, tmp_path / "open", cfg=_squeezed())
     assert _markers(metrics.read_game(res2.path)), "对照组没有标记：上面那条断言是空的"
+
+
+# --------------------------------------------- the counter the shipped wiring never reached
+async def _play_on_actors(handler, tmp_path, cfg: Config, *, seed: int = 7):
+    """CLI 走的这一条：外部把 `actors` 交进来，`transport` 留空。
+
+    `play()` 只在 `actors is None` 时自己造 `LLM`，所以挂在它本地变量上的计数在这条路上是零——
+    这正是要拿这个函数照出来的那条分岔。
+    """
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    try:
+        actors = cli._llm_actors(cfg, HttpTransport(cfg, client=client))
+        return await game.play(cfg=cfg, deal_seed=seed, out_dir=tmp_path, actors=actors)
+    finally:
+        await client.aclose()
+
+
+async def test_the_token_total_the_cli_prints_is_the_one_the_log_records(key, tmp_path):
+    """汇总行的 `completion=` 与文件里 Σ `response.completion_tokens` 必须是同一个数。"""
+    res = await _play_on_actors(_oracle, tmp_path, Config())
+    recorded = sum(int((e.response or {}).get("completion_tokens") or 0)
+                   for e in metrics.read_game(res.path).events)
+    assert recorded > 0, "夹具没往 usage 里写数：这一条就没在钉任何东西"
+    assert res.completion_tokens == recorded, \
+        f"engine says {res.completion_tokens}, the file says {recorded}"
+    assert f"completion={recorded}" in cli._summary_line(res), cli._summary_line(res)
+
+
+async def test_the_completion_ceiling_stops_the_table_the_cli_sits_at(key, tmp_path):
+    """`max_game_completion_tokens`（plan §6 全局预算）在出货路径上必须真的能停下一局。"""
+    cfg = Config()
+    cfg.max_game_completion_tokens = 100
+    res = await _play_on_actors(_oracle, tmp_path, cfg)
+    assert res.terminal == "aborted_budget", (
+        f"花了 {res.completion_tokens} token 对上上限 100，这局却收在 {res.terminal}")
+    assert res.winner is None, "提前停下不等于打赢了"
+    g = metrics.read_game(res.path)
+    note = [str((e.payload or {}).get("text", "")) for e in g.events
+            if e.kind == metrics.Kind.PHASE and "预算耗尽" in str((e.payload or {}).get("text", ""))]
+    assert len(note) == 1, note
+    assert f"completion_tokens={res.completion_tokens}" in note[0], note[0]

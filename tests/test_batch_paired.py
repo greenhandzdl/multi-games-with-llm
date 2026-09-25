@@ -552,6 +552,33 @@ def test_the_conclusion_report_carries_m1_for_each_arm(tmp_path):
     assert out["m1"]["A"]["note"] in md and out["m1"]["B"]["note"] in md
 
 
+def test_the_m1_table_shows_the_files_that_held_no_game(tmp_path):
+    """「局数」那一格在文件比局多时必须同时看得见两个数，否则新发的字段是没人读的第二格。
+
+    `#99` 的 M4 教的就是这一格：把 `n_files` 改成别的算法之后整套全绿，因为标题里那个份数是另一
+    只手数出来的。所以这里不只钉指标，钉的是**渲染器真的从指标里取**：A 臂多一份 0 字节的文件，
+    单元格里就得长出 `（3 份）`，B 臂干净就不许长出括号。下面那一句关于形状的话（`meta_notice`）
+    同理，从 `hollow.note` 原样印出，不在渲染器里另写一遍；"是哪一份"也从指标里取
+    （`hollow.paths`），渲染器只把它接到行尾——`#101` 量的就是这个字段在此之前没有读者。
+
+    不走 `compare` 端到端：只有一臂多出来的文件会先被配对守卫拒掉（两臂 `deal_seed` 集合不同，
+    `batch.py:572`），那条路测的是另一件事，而且它根本到不了这张表。
+    """
+    _paired(tmp_path, _arms(A={}, B={"temperature": 0.6}), games=2)
+    _as_real_table(tmp_path)
+    (tmp_path / "A" / "interrupted.jsonl").write_text("", encoding="utf-8")
+    m1 = {n: metrics.m1_win_rate([metrics.read_game(r["path"]) for r in batch.read_arm(tmp_path / n)])
+          for n in ("A", "B")}
+    assert (m1["A"]["n_games"], m1["A"]["n_files"]) == (2, 3), m1["A"]
+    assert (m1["B"]["n_games"], m1["B"]["n_files"]) == (2, 2), m1["B"]
+    text = "\n".join(batch._m1_md("A", "B", m1))
+    assert "| A | 2（3 份） |" in text, text
+    assert "| B | 2 | 2 |" in text, text
+    assert events.meta_notice({}) in text, "少掉的那一份是什么形状，表里要读得出来"
+    # 整段括住才算点名：印全路径也能过"包含文件名"那一条，而那一屏会被路径挤掉。
+    assert "（文件：interrupted.jsonl）" in text, "只报份数不算点名：拿不到文件名就删不掉那一份字节"
+
+
 def _degrade(tmp_path, arm: str, i: int = 0) -> str:
     """把该局 GAME_OVER 的 `degraded_game` 就地改成"退化"，返回它的 game_id。
 
@@ -913,10 +940,13 @@ def test_relabelling_a_mock_batch_cannot_turn_the_m3_gate_green(tmp_path):
     assert "闸门" in out["markdown"], out["markdown"]
 
 
-def test_a_real_clock_moves_the_gate_from_not_evaluable_to_a_verdict(tmp_path):
-    """把时钟补上，闸门就必须开口说话——PASS 或 FAIL 都行，唯独不能再是"没测到"。
-    到底是哪一条红取决于语料本身的措辞分布，这里不猜（下一用例才去构造一个明确的 FAIL）：
-    钉的是延迟判据从空读数变成 3.0，以及 JSON 与 markdown 说的是同一句话。"""
+def test_a_real_clock_gives_latency_a_reading_without_certifying_the_arm(tmp_path):
+    """补上时钟，延迟那一格就该有读数——但**有了读数不等于这臂合格**：这张桌子的发言是替身座位
+    写的（`_as_real_table` 只改页眉，`meta.rung` 仍然是 -1），主判据拿不到一句模型的话。
+    钉三件事：延迟从空读数变成 3.0、JSON 与 markdown 说同一句话、闸门不许因为"四条都有数了"
+    就给一张模型从没答过的桌发合格证（`#117`；这一条以前落在这里，是因为那时候闸门根本没有
+    "这轮不是模型答的"这一格，PASS 是唯一可能的输出）。
+    到底是哪一条红不取决于措辞分布（下一用例才去构造一个明确的 FAIL）。"""
     _paired(tmp_path, _arms(A={}, B={"temperature": 0.6}), games=2)
     _as_real_table(tmp_path)
     _invent_clock(tmp_path, 3.0)
@@ -925,7 +955,9 @@ def test_a_real_clock_moves_the_gate_from_not_evaluable_to_a_verdict(tmp_path):
         v = out["m3_verdict"][arm]
         assert v["criteria"]["latency_p95_s"]["value"] == pytest.approx(3.0)
         assert v["criteria"]["latency_p95_s"]["ok"] is True
-        assert v["verdict"] in ("PASS", "FAIL"), v
+        assert v["criteria"]["passivity_rate"]["ok"] is None, v["criteria"]["passivity_rate"]
+        assert v["verdict"] == "NOT_EVALUABLE", v["verdict"]
+        assert "引擎代打" in v["note"], v["note"]
         assert f"{arm}｜{v['verdict']}" in out["markdown"], (arm, v["verdict"], out["markdown"])
 
 
@@ -951,20 +983,20 @@ def test_each_arm_gets_its_own_gate_verdict_rather_than_one_shared_answer(tmp_pa
     """两臂各判各的：把 B 的发言全换成同一句，B 就该比 A 多栽在措辞两条上，
     而 markdown 里两行 verdict 必须跟着各自的 JSON 走。
 
-    读法上要小心：A 臂这里的 PASS 是**替身桌自己的措辞**过了措辞判据（补了时钟之后才有读数），
-    不是任何模型行为合格——挡在替身桌前面的是 `is_synthetic`，而这张表的标签正是本用例亲手改掉的。
-    这条钉的只有"各臂各算"。"""
+    读法上要小心：A 臂这里拿到的**不是**合格证——替身桌换了页眉仍然是替身桌，主判据因为
+    "9/9 轮不是模型答的"被记成不计（`#117`），所以它是 NOT_EVALUABLE。B 臂那条 FAIL 是量出来的
+    复读，测量失败优先于缺读数，不会被 A 那一格挡住。这条钉的还是"各臂各算"。"""
     _paired(tmp_path, _arms(A={}, B={"temperature": 0.6}), games=2)
     _as_real_table(tmp_path)
     _invent_clock(tmp_path, 3.0)
     _collapse_arm_b_speech(tmp_path)
     out = batch.compare(tmp_path, axis=("temperature",))
     va, vb = out["m3_verdict"]["A"], out["m3_verdict"]["B"]
-    assert (va["verdict"], va["failed"]) == ("PASS", []), va
+    assert (va["verdict"], va["failed"]) == ("NOT_EVALUABLE", []), va
     assert vb["verdict"] == "FAIL"
     assert vb["failed"] == ["collapse_round", "opening_distinct_rate"], vb
     assert vb["criteria"]["collapse_round"]["value"] == pytest.approx(1.0)
-    assert "A｜PASS" in out["markdown"] and "B｜FAIL" in out["markdown"], out["markdown"]
+    assert "A｜NOT_EVALUABLE" in out["markdown"] and "B｜FAIL" in out["markdown"], out["markdown"]
     assert "- collapse_round = 1.0（需 < 0.35" in out["markdown"], out["markdown"]
 
 
@@ -1464,3 +1496,91 @@ def test_compare_refuses_a_cell_with_no_code_even_when_the_manifest_never_met_th
     assert "tokens.warn" in out["markdown"] and "没有代码" in out["markdown"]
     assert "配对前提已失效" not in out["markdown"], \
         "身份那一类的文案会把人送去重跑批次，而这一格要的是把代码补上"
+
+
+def _flip_fallback_copy(tmp_path, arm: str, i: int = 0, *, pick: int = 0) -> str:
+    """把某一局里一条决策记录的 `result.fallback` 就地翻掉，返回文件名。
+
+    引擎写不出两份不一致的拷贝：`payload.meta.fallback` 由判官侧落笔、`result.fallback` 由每次调用
+    落笔，正常路径上同源。所以这一格只能在文件里造——和 `_damage_seq`、`_cut_tail` 同一类反例，
+    钉的是"批次侧读得出来"，不是"引擎会犯这个错"。只改 `result` 那一份：不碰 `seq`、不碰末行，
+    那两格各有自己的点名节，混进来就分不出是谁报的了。
+
+    挑记录用 `metrics.decisions` 而不是自己认 kind：这一片测的就是"两份拷贝都带 key 的那些记录"，
+    判据跟被聚合的那只手共用一份，才不会测完还不知道对不对得上。
+    """
+    path = [p for p in sorted(Path(tmp_path, arm).glob("*.jsonl"))
+            if not p.name.endswith(".prompts.jsonl")][i]
+    game = metrics.read_game(path)
+    seqs = sorted(e.seq for e in metrics.decisions(game.events)
+                  if "fallback" in e.payload.get("meta", {}) and "fallback" in e.result)
+    assert len(seqs) > pick, f"{path.name}: 只有 {len(seqs)} 条带两份拷贝的记录，翻不到第 {pick} 条"
+    lines = path.read_text(encoding="utf-8").splitlines()
+    for n, line in enumerate(lines):
+        rec = json.loads(line)
+        if rec.get("seq") == seqs[pick] and isinstance(rec.get("result"), dict):
+            rec["result"]["fallback"] = 0 if rec["result"]["fallback"] else 1
+            lines[n] = json.dumps(rec, ensure_ascii=False)
+            path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+            return path.name
+    raise AssertionError(f"{path.name}: seq={seqs[pick]} 的记录不在文件里")
+
+
+def test_the_batch_side_names_files_whose_two_fallback_copies_disagree(tmp_path):
+    """`audit` 从 #119 起会对账，批次侧以前没人聚合：一臂 40 局里有一条对不上，`compare` 是沉默的。
+
+    钉三件事：`n` 按**文件**计而 `divergent` 按**条**计（一份文件里两条对不上是一局的事，不是两局）；
+    找到不一致**不缩小分母**——那条记录既被比过也被点名，所以 `n_compared` 在对上前后必须同一个数；
+    键的形状跟着 `metrics.fallback_copy_check` 走，批次这只手不许自己另起一套名字。
+    """
+    _paired(tmp_path, _arms(A={}, B={"temperature": 0.6}), games=2)
+    clean = batch.fallback_copies_by_arm(_arm_games(tmp_path, "A"))
+    assert clean == {"n": 0, "files": [], "n_compared": clean["n_compared"], "divergent": 0}, clean
+    assert clean["n_compared"] > 0, "0 条都没比过的臂，报 0 和报不出来是同一句话"
+
+    name = _flip_fallback_copy(tmp_path, "A")
+    a = batch.fallback_copies_by_arm(_arm_games(tmp_path, "A"))
+    assert a == {"n": 1, "files": [name], "n_compared": clean["n_compared"], "divergent": 1}, \
+        "对不上的那条被剔出分母了：分母一动，这一格就不再是#119 那只手的口径"
+    assert set(a) == {"n", "files"} | set(metrics.fallback_copy_check([])), \
+        "批次这一格的键和那只共用的手脱钩了"
+    assert batch.fallback_copies_by_arm(_arm_games(tmp_path, "B")) == clean, \
+        "另一臂一个字没改，读数就得一个字不变"
+
+    # 同一份文件里再翻一条：`n`（按文件）与 `divergent`（按条）必须分开活着。少了这一腿，
+    # `sum(d["divergent"] ...)` 换成 `sum(1 for d in per if d["divergent"])` 也能全绿——
+    # 那份实现把"一份文件漂了两条"和"两局各漂一条"压成同一个数，而报告点的是文件。
+    _flip_fallback_copy(tmp_path, "A", pick=1)
+    a2 = batch.fallback_copies_by_arm(_arm_games(tmp_path, "A"))
+    assert a2 == {"n": 1, "files": [name], "n_compared": clean["n_compared"], "divergent": 2}, \
+        "条数被当成局数归约了：局和条是两件事，报告点名的那一格要的是前者"
+
+
+def test_the_batch_report_prints_the_reconciled_denominator_for_both_arms(tmp_path):
+    """报告里这一节存在的理由：`0 条对不上` 只有在同一行印出"比过多少条"时才是读数。
+
+    两臂各一行、干净那一臂照印（`_torn_md` 同一形状）：只在出问题时才开口的守卫，读者分不清
+    "查过、没有"和"没人查"，而后者正是 #119 之前所有批次的真实状态。
+    """
+    _paired(tmp_path, _arms(A={}, B={"temperature": 0.6}), games=2)
+    _as_real_table(tmp_path)
+    name = _flip_fallback_copy(tmp_path, "A")
+    out = batch.compare(tmp_path, axis=("temperature",))
+    assert out["verdict"] == "OK", out.get("why")
+
+    cell = out["fallback_copies"]["A"]
+    assert cell["n"] == 1 and cell["files"] == [name] and cell["divergent"] == 1, cell
+    assert cell["n_compared"] > 0, cell
+    games_a = _arm_games(tmp_path, "A")
+    assert cell["n_compared"] == sum(metrics.fallback_copy_check(g.events)["n_compared"]
+                                     for g in games_a), "批次这一格和逐局那只手对不上数"
+
+    md = out["markdown"]
+    assert "## 两份 `fallback` 拷贝对账" in md, md
+    row_a = [ln for ln in md.splitlines() if ln.startswith("- A：") and "两份拷贝对不上" in ln]
+    row_b = [ln for ln in md.splitlines() if ln.startswith("- B：") and "两份拷贝对不上" in ln]
+    assert len(row_a) == 1 and len(row_b) == 1, (row_a, row_b)
+    assert name in row_a[0] and f"比过 {cell['n_compared']} 条" in row_a[0], row_a[0]
+    b_cell = out["fallback_copies"]["B"]
+    assert f"比过 {b_cell['n_compared']} 条" in row_b[0] and "0 条两份拷贝对不上" in row_b[0], row_b[0]
+    assert b_cell["n_compared"] > 0, "干净臂连分母都没印出来：这一节就退化成一句'没问题'"

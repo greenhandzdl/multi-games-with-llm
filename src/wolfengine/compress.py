@@ -38,6 +38,20 @@ class FoldPlan:
 
 
 CAUSE_ZH = {"wolf_kill": "被狼刀", "poison": "被毒", "exiled": "被投票出局", "hunter_shot": "被猎人带走"}
+
+
+def cause_text(cause: object) -> str:
+    """How a death is said in Chinese — the one place that says it.
+
+    `cause` is the game fact and goes in the log; this is prose about it, so it is derived at
+    render time like `VERDICT_ZH` below. A stored copy beside the enum would be a second writer
+    of one sentence, and the four readers of this sentence used to disagree anyway: the unknown
+    cause fell through to "死亡" here, to nothing in the compact death list, and to the raw enum
+    in the prompt that the model is asked to read as Chinese.
+    """
+    return CAUSE_ZH.get(str(cause), "死亡")
+
+
 # The seer's report is a game fact stored as an enum; the prompt is Chinese prose, so the
 # translation belongs in the renderer rather than in the log, where it would lose its type.
 VERDICT_ZH = {"wolf": "狼人", "good": "好人", "unknown": "无法确定"}
@@ -64,11 +78,13 @@ def render_line(e: Event) -> str:
     if k == Kind.LAST_WORDS:
         return f"[{tag}] {e.actor}号（遗言）：{_said(p)}"
     if k == Kind.DEATH:
-        return f"[{tag}] 法官：{p.get('seat')}号出局（{CAUSE_ZH.get(str(p.get('cause')), '死亡')}）。"
+        return f"[{tag}] 法官：{p.get('seat')}号出局（{cause_text(p.get('cause'))}）。"
     if k == Kind.VOTE:
         t = p.get("target")
         return f"[{tag}] 投票：{e.actor}号→{t}号" if t is not None else f"[{tag}] 投票：{e.actor}号弃票"
     if k == Kind.VOTE_RESULT:
+        # `summary` is the sentence as written before #113 took the pen away from the engine:
+        # old logs keep their own wording, new ones are rendered from the typed fields.
         return f"[{tag}] 法官：{p.get('summary') or _vote_summary(p)}"
     if k == Kind.PHASE:
         return f"[{tag}] 法官：{p.get('text', '')}"
@@ -110,9 +126,9 @@ def _said(p: dict) -> str:
 def _night_text(p: dict) -> str:
     """Renders the act the actor *chose*, not the task label the phase was asked to run.
 
-    `payload["action"]` is the prompt's task name ("save_or_poison"), which stays useful in
-    C4; printing it here made the witch's turn read `save_or_poison→None` — a string that
-    describes a request as if it were an answer.
+    `payload["action"]` is the prompt's task name ("save_or_poison"), and C4 does *not* read it:
+    `PHASE_TASK_ZH[phase]` writes that block from the phase, so #115 found this stored copy has no
+    reader. Printing it made the witch read `save_or_poison→None` — a request dressed as an answer.
     """
     act = str(p.get("act", ""))
     verb = NIGHT_ZH.get(act, act or "未知行动")
@@ -123,12 +139,27 @@ def _night_text(p: dict) -> str:
 
 
 def _vote_summary(p: dict) -> str:
-    """Derived from the tally rather than stored alongside it: a second copy of the truth
-    in the log is a second thing that can disagree with the first."""
+    """The only author of the settlement sentence.
+
+    `phases` used to write this sentence into the payload alongside the tally, and this function
+    re-derived a shorter version of it from the same fields: over the eight logs in `data/` the two
+    disagreed on 30 of 30 settlements, because the derived half dropped the abstention count and the
+    whole outcome clause. A fact with two writers is a defect, so the prose now has one writer and
+    the log stores only what it cannot be recomputed from — `tests/fixtures/vote_settlements.json`
+    replays the 30 real sentences to pin the wording the model was already reading.
+
+    A missing `abstained` omits its clause rather than printing 弃票0人: zero is a claim, not a blank.
+    """
     tally = p.get("tally") or {}
     if not tally:
-        return "无人被投票出局。"
-    return "票型：" + "、".join(f"{s}号{n}票" for s, n in sorted(tally.items(), key=lambda kv: str(kv[0]))) + "。"
+        return "全员弃票，无人出局。"
+    out = ("票型：" + "、".join(f"{s}号{n}票" for s, n in sorted(tally.items(), key=lambda kv: str(kv[0])))) + "。"
+    if p.get("abstained") is not None:
+        out += f"弃票{p['abstained']}人。"
+    exiled = p.get("exiled")
+    if exiled is not None:
+        return out + f"{exiled}号被投票出局。"
+    return out + ("票数并列，先不定人。" if p.get("pending_pk") else "平票，无人出局。")
 
 
 def day_fold_lines(day: int, events: list[Event] | tuple[Event, ...]) -> str:
@@ -142,7 +173,7 @@ def day_fold_lines(day: int, events: list[Event] | tuple[Event, ...]) -> str:
     for e in events:
         if e.kind == Kind.VOTE and isinstance(e.payload.get("target"), int):
             votes[e.payload["target"]] = votes.get(e.payload["target"], 0) + 1
-    deaths = [f"{e.payload.get('seat')}号{CAUSE_ZH.get(str(e.payload.get('cause')), '')}"
+    deaths = [f"{e.payload.get('seat')}号{cause_text(e.payload.get('cause'))}"
               for e in events if e.kind == Kind.DEATH]
     acc: dict[int, int] = {}
     for e in speeches:

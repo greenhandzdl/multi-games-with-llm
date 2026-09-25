@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import random
 
-from wolfengine import game, info, phases
+from wolfengine import compress, game, info, phases
 from wolfengine.agent import Agent
 from wolfengine.actors import MockActor, Proposal, TurnContext
 from wolfengine.config import Config
@@ -187,3 +187,56 @@ async def test_the_repeat_abstainer_is_told_in_her_next_prompt_and_her_neighbour
     assert seen[3].legal.reason_if_empty != "forced_nominate", "刚投过票的人也被当成一直在躲"
     assert "必须点名一个座位" not in seen[3].prompt.messages[2]["content"], \
         "那句提示断言了一次没发生的连躲，没被标记的人不该读到它"
+
+
+# ---------------------------------------------------------------- ④ 弃票只有一个写者
+async def test_the_settlement_keeps_no_second_copy_of_the_abstainers(tmp_path):
+    """`vote_result` 不再抄一份弃票名单：弃票的名单只有票面那一个写者。
+
+    全仓库（`src/`、`tests/`、`scripts/`、`docs/`、`README.md`）没有一处读事件里的 `abstainers`
+    （22:57:35Z 与 23:07:40Z 两次 grep；后者只剩 `rules.VoteResult` 那条有读者的路）。它连多出来的
+    名字都没有：14 份日志的 43 次结算，逐轮把票面 `target` 为空的座位集合与那份名单比对，43/43 完全
+    相同（23:08:28Z 现读；张数口径 22:57:52Z 与 23:08:15Z 两次都是 14/14 一致）。一致是今天没出错，
+    不是结构不允许出错——本文件顶上记的那次"`act != vote` 把投出去的人算成弃票"，犯的正是这类双写：
+    两份实现对同一件事各说一遍，日志就能说出两句相反的话。删的是**事件的**那一份；
+    `rules.VoteResult.abstainers` 的**人数**仍由结算写成 `abstained`——它是这一波裁决的口径
+    （`rules.tally_votes` 把读不通的票也折进弃票），名单之外的那一层信息只有渲染侧读它。
+    """
+    script = {1: _vote(3), 2: _vote(3), 4: _vote(3), 6: _vote(3),
+              7: _vote(5), 8: _vote(5), 3: _pass(), 5: _pass(), 9: _pass()}
+    _cfg, _state, log, table, _actors = _table(tmp_path, {s: [a] for s, a in script.items()})
+
+    await phases.run_vote(table)
+
+    settled = [e for e in log.all() if e.kind == Kind.VOTE_RESULT]
+    assert len(settled) == 1, f"这一桌该有一次结算，实际 {len(settled)} 次"
+    for e in settled:
+        assert "abstainers" not in e.payload, f"e{e.seq} 又把弃票名单抄进结算记录"
+    names = sorted(e.actor for e in log.all()
+                   if e.kind == Kind.VOTE and e.payload.get("target") is None)
+    assert names == [3, 5, 9], f"票面得真的写着这三个人，否则上面那条断言是空的：{names}"
+    assert settled[-1].payload["abstained"] == 3, settled[-1].payload
+    assert "弃票3人" in compress.render_line(settled[-1]), compress.render_line(settled[-1])
+
+
+# --------------------------------- ⑤ 结算只写事实，那句话留给唯一的作者
+async def test_the_settlement_stores_facts_and_leaves_the_sentence_to_the_renderer(tmp_path):
+    """`vote_result` 的负载只有四个 typed 字段，整句人话不在里面。
+
+    手术刀：把发射改回连 `summary` 一起写——键集合那条立刻红，第二句也不再是"只由渲染算出来"。
+    这是弃票双写那条判据走到"这句话"身上的那一步：现读八份日志的三十次结算（00:03:32Z），
+    存着的那句比渲染算出的那句多两截（弃票人数与整个结论子句），三十次没有一次说的一样。
+    """
+    script = {1: _vote(3), 2: _vote(3), 4: _vote(3), 6: _vote(3), 7: _vote(3),
+              3: _pass(), 5: _pass(), 9: _pass()}
+    _cfg, _state, log, table, _actors = _table(tmp_path, {s: [a] for s, a in script.items()})
+
+    await phases.run_vote(table)
+
+    settled = [e for e in log.all() if e.kind == Kind.VOTE_RESULT]
+    assert len(settled) == 1, f"这一桌该有一次结算：{len(settled)}"
+    p = settled[0].payload
+    assert sorted(p) == ["abstained", "exiled", "pending_pk", "tally"], sorted(p)
+    line = compress.render_line(settled[0])
+    assert line.startswith(f"[{info.eid(settled[0].seq)}] 法官：票型："), line
+    assert "弃票3人。3号被投票出局。" in line, line

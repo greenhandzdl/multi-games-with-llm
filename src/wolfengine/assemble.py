@@ -14,8 +14,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .belief import BeliefState, render_card
-from .compress import (WINDOW_BOUNDARIES, FoldPlan, chrono_bytes, chronicle, estimate_tokens,
-                       fold_body, plan_fold, render_line)
+from .compress import (WINDOW_BOUNDARIES, FoldPlan, cause_text, chrono_bytes, chronicle,
+                       estimate_tokens, fold_body, plan_fold, render_line)
 from .config import Config, RegionBudget, TokenBudget
 from .events import Kind
 from .info import Percept, eid
@@ -156,7 +156,7 @@ def _status_card(percept: Percept, pub: tuple) -> str:
         out.append(f"开局座位：{'、'.join(str(s) for s in alive)}号。")
     if deaths:
         out.append("已出局：" + "、".join(
-            f"{e.payload.get('seat')}号(第{e.day}天{e.payload.get('cause_zh') or e.payload.get('cause','')})"
+            f"{e.payload.get('seat')}号(第{e.day}天{cause_text(e.payload.get('cause'))})"
             for e in deaths) + "。")
     else:
         out.append("无人出局。")

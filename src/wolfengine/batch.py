@@ -226,6 +226,7 @@ async def run_batch(arms: Sequence[Arm], *, games: int, seed0: int,
                                            encoding="utf-8")
     if terminal not in ("ok", "SKIPPED"):
         (out / "drift.md").write_text(_drift_md(man, out), encoding="utf-8")
+    emit_gate(out, [a.name for a in arms], rows)
     return BatchResult(out_dir=out, pair_keys=pair_keys, n_logs=len(rows),
                        terminal=terminal, canary=man["canary"], rows=rows)
 
@@ -389,6 +390,25 @@ def truncated_tails(games: Sequence[metrics.Game]) -> dict[str, Any]:
             "lines": sum(d["lines"] for d in per), "chars": sum(d["chars"] for d in per)}
 
 
+def fallback_copies_by_arm(games: Sequence[metrics.Game]) -> dict[str, Any]:
+    """批次侧的"`fallback` 两份拷贝对过账没有"读数：比过多少条、对不上几条、分别是哪些文件。
+
+    算术只有一只手：`metrics.fallback_copy_check` 逐局调用，这里做的和 `truncated_tails` 一样，只是
+    跨局归约，键名也原样搬（批次侧只加 `n`/`files`）。`n` 按**文件**计、`divergent` 按**条**计，
+    两个数不是一回事：一份文件里两条对不上仍然是一局的事，把 `n` 当成条数会把一局说成两局。
+
+    为什么这一格要进报告：`audit` 一次只看一个文件，"这一臂有没有漂"是关于臂的问题，40 局里漂一条
+    要翻 40 次才能发现。#119 落地时实测 464 条里 0 条对不上，那是"目前没坏"；这一格要的是坏的那天
+    有人在场。`n_compared` 与 `divergent` 一起归约，是为了让报告能把它们印在同一行——一个光秃秃的
+    `0` 既可能是"比过 2320 条都没坏"也可能是"一条都没比过"，而后者是 #119 之前所有批次的真实状态。
+    """
+    per = [metrics.fallback_copy_check(g.events) for g in games]
+    hit = [g.path.name for g, d in zip(games, per) if d["divergent"]]
+    return {"n": len(hit), "files": hit,
+            "n_compared": sum(d["n_compared"] for d in per),
+            "divergent": sum(d["divergent"] for d in per)}
+
+
 def region_budget_by_arm(games: Sequence[metrics.Game]) -> dict[str, Any]:
     """One arm's region excess, reduced from the caps each game recorded in its own log.
 
@@ -535,6 +555,10 @@ def compare(batch_dir: str | Path, *, axis: Sequence[str] = ()) -> dict[str, Any
     # didn't finish on paper only because someone's bytes are missing, so this one has to be said
     # where the drop is counted, not two sections away from it.
     stats["torn"] = {a: truncated_tails(games_a), b: truncated_tails(games_b)}
+    # 同一族：#119 让一份日志里的两处 `fallback` 互相对过账，而"这一臂漂了几条"是臂级问题，
+    # 只能住在这里。分母与分子同印，`0` 才是"查过、没有"而不是"没人查"。
+    stats["fallback_copies"] = {a: fallback_copies_by_arm(games_a),
+                                b: fallback_copies_by_arm(games_b)}
     # Same argument as M1/M3 one more time: the caps are per game but the question
     # "did this arm fit its budget" is about an arm, and `audit` only ever sees one file.
     stats["region_budget"] = {a: region_budget_by_arm(games_a),
@@ -607,6 +631,16 @@ def _cell(v: Any) -> str:
     return "—" if v is None else str(v)
 
 
+def _hollow_line(block: dict[str, Any]) -> str:
+    """「不是局的文件」那一行的成品：指标那句 note，后面点名是哪几份。
+
+    `hollow.paths` 从 `#99` 起就算好了，两个出口却都只印 `note`，于是这份文件名单没有读者（`#101`：
+    把它改成恒空列表，整套不红）。名字取的是 basename——批次目录与臂名已经在同一行的前缀里了，
+    拼上全路径只会把那一条屏挤掉。
+    """
+    return block["note"] + (f"（文件：{'、'.join(block['paths'])}）" if block["paths"] else "")
+
+
 def _m1_md(a: str, b: str, m1: dict[str, dict[str, Any]]) -> list[str]:
     """Each arm's absolute win/survival table — the paired test above says *whether the arms
     differ*, and cannot say what either arm's rate is. The note is printed verbatim from the
@@ -617,30 +651,77 @@ def _m1_md(a: str, b: str, m1: dict[str, dict[str, Any]]) -> list[str]:
     for name in (a, b):
         m = m1[name]
         lo, hi = m["wilson95"]
-        L.append(f"| {name} | {m['n_games']} | {m['n_decisive']} | {_cell(m['good_win_rate'])} "
+        # 局与份只在不等时才并进同一格：等的时候括号是噪声，不等的时候没有它就是"两局"说成"两局"
+        # 而第三份字节静默消失（#100）。两个数都从指标里取，渲染器不数第三遍。
+        played = (f"{m['n_games']}（{m['n_files']} 份）"
+                  if m["hollow"]["n"] else f"{m['n_games']}")
+        L.append(f"| {name} | {played} | {m['n_decisive']} | {_cell(m['good_win_rate'])} "
                  f"| [{_cell(lo)}, {_cell(hi)}] | {_cell(m['mean_days'])} |")
     surv = "; ".join(f"{name} 角色存活 {m1[name]['by_role_survival'] or '—'}" for name in (a, b))
-    return L + [f"- {surv}"] + [f"- {name}：{m1[name]['note']}" for name in (a, b)] + [""]
+    return L + [f"- {surv}"] + [f"- {name}：{m1[name]['note']}" for name in (a, b)] + [
+        f"- {name}：{_hollow_line(m1[name]['hollow'])}" for name in (a, b)
+        if m1[name]["hollow"]["n"]] + [""]
 
 
-def _m3_md(a: str, b: str, m3: dict[str, dict[str, Any]]) -> list[str]:
+def _m3_md(names: Sequence[str], m3: dict[str, dict[str, Any]]) -> list[str]:
     """Per-arm gate verdict, printed above the per-utterance table on purpose: if an arm never
     cleared the risk gate, every interval below describes a table that is not worth comparing,
     and the reader should hit that before the numbers, not after them.
 
     The verdicts are joined with `｜` rather than a space so the line is greppable across a stack
-    of reports (`grep -h '｜'` finds every arm's verdict and nothing else)."""
+    of reports (`grep -h '｜'` finds every arm's verdict and nothing else).
+
+    `names` is a sequence instead of two arguments because a batch directory may hold one arm and
+    still has to hold a verdict (`emit_gate` below): a second rendering for the single-arm case
+    is a second place for the five thresholds to rot, and `M3_GATE` is the one table both read.
+    """
     L = ["## M3 闸门（各臂预注册判据，plan §十 M3★）\n"]
-    for name in (a, b):
+    for name in names:
         v = m3[name]
         L.append(f"- {name}｜{v['verdict']}")
         for key in metrics.M3_GATE:
             c = v["criteria"][key]
-            mark = {True: "达标", False: "未达标", None: "无读数"}[c["ok"]]
+            # `refusal` 是"数算出来了，但它不是关于模型的读数"（`#117`）：这一格必须与"没数出来"
+            # （`无读数`）分开印，否则读者会以为闸门缺了一次测量，而实际上它拒绝的是手上这一个数。
+            mark = (f"不计：{c['refusal']}" if c.get("refusal")
+                    else {True: "达标", False: "未达标", None: "无读数"}[c["ok"]])
             L.append(f"  - {key} = {_cell(c['value'])}（需 {c['comparator']} "
                      f"{c['threshold']}，n={c['n']}）{mark}")
         L.append(f"  - {v['note']}")
+        if v["hollow"]["n"]:
+            L.append(f"  - {_hollow_line(v['hollow'])}")
+        L.append(f"  - 截断：{v['truncation']['note']}")
+        L.append(f"  - {v['engine_written']['note']}")
     return L + [""]
+
+
+def emit_gate(d: Path, names: Sequence[str], rows: Sequence[dict[str, Any]], *,
+              label: str = "批次") -> dict[str, Any]:
+    """一批跑完就地写下 `<批次目录>/m3_gate.md`，把文本和各臂判定一起还给调用方。
+
+    发射口挂在 `run_batch` 而不是 `compare` 上，因为 §十 M3★ 判的是"这一臂的桌子塌不塌缩"——
+    一个臂就是一次判定，而 `compare` 进门就要两个配置臂（`--configs A` 那次运行连门都进不去，
+    跑完只剩一行"批次 -> …"）。§十二 验收第 3 条要"或有明确失败记录"，记录得跟日志同目录：
+    不然一次不合格的批次和一次没人去判的批次在磁盘上长得一样。
+
+    返回值里的 `verdicts` 是给"退出码跟着读数走"的调用方用的（`wolf gate`）：在这里判一次、
+    在 CLI 里再算一次，就是同一份算术的第二处实现——而那正是这一页反复在拦的东西。
+    `label` 只改标题里那个名词，因为同一份渲染现在也服务一个没有 manifest 的日志目录。
+    """
+    games = {n: [metrics.read_game(r["path"]) for r in rows if r["arm"] == n] for n in names}
+    verdicts = {n: metrics.m3_gate_verdict(g) for n, g in games.items()}
+    per_arm = "、".join(f"{n} {verdicts[n]['n_games']} 局" for n in games)
+    # 份数从判定里取，不在这里数第二遍：`m3_gate_verdict` 已经把"几局 / 几份"分开数了，标题
+    # 再数一次 `rows` 就是同一句话的两处算术，而读的人只会看见一个数（`#99` 的 M4：把 `n_files`
+    # 改成 `len(played)` 之后 35 条全绿，因为那时候没有任何人读它）。
+    n_files = sum(v["n_files"] for v in verdicts.values())
+    head = [f"# M3 闸门判定（{label} `{d.name}`）\n",
+            f"- 判定对象：{per_arm}（{n_files} 份日志）；阈值表 `metrics.M3_GATE` 单一来源，"
+            f"与 `comparison.md` 里那一节同一段渲染。", ""]
+    text = "\n".join(head + _m3_md(names, verdicts)) + "\n"
+    dst = d / "m3_gate.md"
+    dst.write_text(text, encoding="utf-8")
+    return {"text": text, "verdicts": verdicts, "path": str(dst)}
 
 
 def _degraded_md(a: str, b: str, deg: dict[str, dict[str, Any]]) -> list[str]:
@@ -702,6 +783,27 @@ def _torn_md(a: str, b: str, torn: dict[str, dict[str, Any]]) -> list[str]:
     L.append("被砍掉的那一行通常落在 `game_over` 上，所以这些局同时也不在上面的 usable 对里——"
              "那是文件被砍了，不是这局没打完。这一节不额外剔除任何局，它只交代『没有赢家』那条理由"
              "是怎么来的。")
+    return L + [""]
+
+
+def _fallback_copy_md(a: str, b: str, copies: dict[str, dict[str, Any]]) -> list[str]:
+    """每一臂把 `fallback` 的两份拷贝对过账：比过多少条、几条对不上、分别是哪些文件。
+
+    干净那一臂照印（`_torn_md` 同一形状）：`0 条两份拷贝对不上` 只有和"比过 N 条"同一行才是读数，
+    单看那个 0 与"没人比过"长得一模一样。数字全部来自 `fallback_copies_by_arm`，也就是来自
+    `metrics.fallback_copy_check`；这一只手只把它们排成一句话，不另数一遍。
+    """
+    L = ["## 两份 `fallback` 拷贝对账（只点名不剔除）\n"]
+    for name in (a, b):
+        d = copies[name]
+        line = f"- {name}：比过 {d['n_compared']} 条，{d['divergent']} 条两份拷贝对不上"
+        if d["n"]:
+            line += f"（{d['n']} 局）：" + "、".join(d["files"])
+        L.append(line)
+    L.append("`payload.meta.fallback` 与 `result.fallback` 是同一个事实的两份拷贝：判官侧落前者、每次"
+             "调用落后者，M3 读前者、直播与复盘 HTML 读后者。对不上说明有一只写者漂了，或者有人在"
+             "文件里改过其中一份。这一节不剔除任何局，也不下结论——把两份合并成一份是处理变更，要"
+             "落盘格式与金样本一起动，不在报告里顺手做。")
     return L + [""]
 
 
@@ -826,7 +928,8 @@ def _comparison_md(d: Path, man: dict, a: str, b: str, stats: dict,
          *_degraded_md(a, b, stats["degraded"]),
          *_numbering_md(a, b, stats["numbering"]),
          *_torn_md(a, b, stats["torn"]),
-         *_m3_md(a, b, stats["m3_verdict"]),
+         *_fallback_copy_md(a, b, stats["fallback_copies"]),
+         *_m3_md((a, b), stats["m3_verdict"]),
          *_region_md(a, b, stats["region_budget"]),
          *_prefix_md(a, b, stats["prefix_cache"]),
          "## 逐条率（按局 cluster bootstrap，B=2000）\n",

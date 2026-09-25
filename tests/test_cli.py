@@ -83,6 +83,110 @@ def test_dry_run_reports_the_phases_it_reached(no_network, tmp_path, capsys):
         assert phase in printed, f"{phase} missing from the dry-run report:\n{printed}"
 
 
+def _dump_b_max(directory) -> int:
+    rows = [json.loads(l) for l in
+            next(Path(directory).glob("*.prompts.jsonl")).read_text(encoding="utf-8").splitlines()]
+    return max(r["region_tokens"]["B"] for r in rows)
+
+
+def test_the_budget_tool_can_vary_the_budget_table(no_network, tmp_path, capsys):
+    """§5 的预算表此前只能在 python 里改：`--dry-run` 是预算工具，却不接受 `--set`。
+
+    这句限界在 `#4`（M3★ 要两档前缀长度）上被当成事实引用过，而它是不成立的：
+    `regions.b2` 既有键、也不在 inert 名单里，缺的只是把 `--set` 接到 `run` 上。
+    一条命令补完之后，"这一档前缀够不够长"就不再是一句要读代码才能核的话。
+    """
+    base, cut = tmp_path / "base", tmp_path / "cut"
+    assert cli.main(["run", "--dry-run", "--seed", str(SEED), "--out", str(base)]) == 0
+    rc = cli.main(["run", "--dry-run", "--seed", str(SEED), "--out", str(cut),
+                   "--set", "regions.b2=400"])
+    assert rc == 0, capsys.readouterr().err
+    assert _dump_b_max(cut) < _dump_b_max(base), "换表没有改变装配出来的 B 区"
+
+    # 换过的表要留在产物里，否则两份普查长得一模一样，读者分不清拿的哪张。
+    head = json.loads(next(base.glob(f"*_g{SEED:08d}.jsonl")).read_text(
+        encoding="utf-8").splitlines()[0])
+    meta = json.loads(next(cut.glob(f"*_g{SEED:08d}.jsonl")).read_text(
+        encoding="utf-8").splitlines()[0])
+    assert head["meta"]["regions"]["b2"] == 1500 and meta["meta"]["regions"]["b2"] == 400, \
+        "seq:0 的 meta 记的不是命令行上那张表"
+    assert head["meta"]["config_hash"] != meta["meta"]["config_hash"], \
+        "两张表进了同一个 config_hash——两批不同字节的 prompt 会自称同一臂"
+
+
+def test_the_run_override_meets_the_same_refusals_as_the_batch(no_network, tmp_path, capsys):
+    """`run --set` 必须走 `batch.apply_overrides`，不能自己判什么能改。
+
+    两把尺的代价是：命令行上放行一个 inert 格子，普查就印出一张"改了预算"的表，
+    而发出去的字节一个都没变——那是 `#62` 在批次那一侧刚刚堵掉的同一个洞。
+    """
+    for pair in ("tokens.warn=8000",           # 有键、没人读（INERT_LEAVES）
+                 "actor_kinds=mock",           # 换被试（FORBIDDEN_AXIS）
+                 "regions.not_a_cap=10"):      # 根本没有这一格
+        out = tmp_path / pair
+        rc = cli.main(["run", "--dry-run", "--seed", str(SEED), "--out", str(out),
+                       "--set", pair])
+        err = capsys.readouterr().err
+        assert rc == 2, f"{pair} 被放行了（rc={rc}）"
+        assert "配置错误" in err and "Traceback" not in err, f"{pair}: {err}"
+        assert not list(out.glob("*.prompts.jsonl")), f"{pair} 拒了却还是把桌子打完了"
+
+
+def test_a_run_set_pair_that_cannot_be_read_stops_with_a_hint(no_network, tmp_path, capsys):
+    """`--set regions.b2`（漏了 `=`）与 `--set regions.b2=abc` 都是人要敲出来的东西。
+
+    这两条路各有一句文案（一句是"怎么写"，一句是"读成了什么"），而文案只在终端上出现一次：
+    没有断言读它，改成 traceback 或者改成一句"配置错误"就没人发现——`#50`/`#51` 那一族就是这个形状。
+    """
+    for pair, hint in (("regions.b2", "写成"),          # 少了 `=`：整对读不出键值
+                       ("=400", "写成"),                # 少了键名
+                       ("regions.b2=abc", "类型不符"),   # 值读不进 int 格子
+                       ("regions.b2=", "类型不符"),      # 空值同样不该被当成 0
+                       ("temperature_ladder=[0.7", "值读不出来")):  # 列表格走 json，残缺的要停下
+        out = tmp_path / pair
+        rc = cli.main(["run", "--dry-run", "--seed", str(SEED), "--out", str(out),
+                       "--set", pair])
+        err = capsys.readouterr().err
+        assert rc == 2, f"{pair} 没有被停下（rc={rc}）：{err}"
+        assert "配置错误" in err and hint in err, f"{pair}: {err}"
+        assert "Traceback" not in err, f"{pair} 留下的是 traceback：{err}"
+        assert not list(out.glob("*.prompts.jsonl")), f"{pair} 停了却还是把桌子打完了"
+
+
+def test_the_batch_path_refuses_an_unreadable_value_with_the_same_hint(no_network, tmp_path,
+                                                                       capsys):
+    """`值读不出来` 在 `cli.py` 里印了两遍，此前只有一处有人读。
+
+    两个解析器共用 `_coerce`，却各自抄了一次文案：`_parse_run_set` 的那份被上面那条用例钉住，
+    `_parse_sets` 的这份零断言。文案是同一句、缺一半读者，改另一处不会有人变红——把它试着改成
+    漏出 ValueError，整套绿着走完，就是这个形状。
+    """
+    out = tmp_path / "b"
+    rc = cli.main(_batch_cmd(out, "--set", "B.temperature_ladder=[0.7"))
+    err = capsys.readouterr().err
+    assert rc == 2, f"批次这一侧被放行了（rc={rc}）：{err}"
+    assert "配置错误" in err and "值读不出来" in err, err
+    assert "Traceback" not in err, err
+    assert not (out / "run_manifest.json").exists(), "停在解析，却还是把批次目录建出来了"
+
+
+def test_two_spellings_of_one_knob_do_not_silently_pick_a_winner(no_network, tmp_path, capsys):
+    """`--max-days` 与 `--set max_days=` 是同一根旋钮的两个名字，同时给就是命令行在问两遍。
+
+    有了 `run --set` 之后这一天注定要来：`--max-days` 是它的一个特例。谁赢都不该是
+    字典写入顺序决定的——那份普查到底按几天打，读者必须能只看命令就知道。
+    """
+    out = tmp_path / "both"
+    rc = cli.main(["run", "--dry-run", "--seed", str(SEED), "--out", str(out),
+                   "--max-days", "4", "--set", "max_days=5"])
+    err = capsys.readouterr().err
+    assert rc == 2, f"两个拼法被静默裁决了（rc={rc}）"
+    assert "max_days" in err and "--max-days" in err, err
+    # 反向对照：只给一个拼法时那条路必须照样通，否则上面的 rc 2 只是命令本身坏了。
+    assert cli.main(["run", "--dry-run", "--seed", str(SEED), "--out", str(tmp_path / "one"),
+                     "--set", "max_days=5"]) == 0
+
+
 # ------------------------------------------------------------- the per-game cost inventory
 # Spelled by hand, on purpose: it is the second ruler the guards below compare against.
 SPEECH_PHASES_BY_HAND = {"day_speech", "day_pk_speech", "last_words"}
@@ -348,6 +452,15 @@ def test_audit_counts_match_the_log_it_was_handed(played, capsys):
     assert stats["m4_hallucination"]["n_speech"] == len(
         [e for e in events if e["kind"] == "speech" and e["payload"].get("text")])
     assert stats["compactions"]["events"] == stats["kinds"].get("compaction", 0)
+    # 两份 `fallback` 拷贝在这里再各数一遍，和 audit 那一格对数（`#119`）。这里的分母走的是
+    # 本用例那个"result 里有 fallback 键"的定义，与 `metrics.decisions()` 的"kind + meta"是两条
+    # 独立的路；两者同数才说明那一格读的是同一份文件，而不是另一个口径。
+    both = [e for e in turns if "fallback" in e["payload"].get("meta", {})]
+    assert stats["fallback_copy_check"] == {
+        "n_compared": len(both),
+        "divergent": sum(1 for e in both
+                         if e["payload"]["meta"]["fallback"] != e["result"]["fallback"])}, \
+        stats["fallback_copy_check"]
 
 
 def test_audit_prints_metrics_and_nothing_else(played, capsys):
@@ -361,7 +474,7 @@ def test_audit_prints_metrics_and_nothing_else(played, capsys):
                           "days", "kinds", "speech_acts", "assignment", "soft_flags",
                           "prompt_tokens_est", "prefix_cache",
                           "compactions",
-                          "region_budget_check", "degraded_game",
+                          "region_budget_check", "fallback_copy_check", "degraded_game",
                           "m2_illegal", "m3_gate", "m4_hallucination", "m5_style",
                           "m6_belief_action", "m7_cost", "m8_strategy"}
     assert not any(k in stats for k in ("fallback_rate", "latency_s", "repair_rung")), \
@@ -380,6 +493,10 @@ def test_audit_reads_the_fold_rounds_out_of_the_requests_it_writes_them_into(tmp
     - `card_prompts_thinned` / `card_worst_claims_dropped`：主张卡被动过刀的 prompt 有几个、
       最狠的一条被砍掉几条指控（读 `request.card_claims_dropped`；单位是**条**不是 tok，因为
       那一刀砍的是行，而一行值多少 tok 随主张措辞变）
+    - `last_fold`：最后一格标记记下的那次折叠状态长什么样——逐字窗口的条数与被折掉的日子
+      （逐字抄 `payload.window` / `payload.folded_days`，不重算）。`events` 只说出现过几种
+      状态，这一格说的才是最后那一种的形状；"最后一次发给模型的"不总是它，因为超硬天花板的
+      prompt 按 `agent.py` 的口径不写标记
 
     前两个从 request 里读，所以手工往一份复制的日志里写 3 和 1 就能推动它们；第三个只能由
     真的标记事件推动（见 `tests/test_live_path.py::test_a_fold_the_model_was_shown_leaves_a_marker_in_the_log`）。
@@ -413,13 +530,14 @@ def test_audit_reads_the_fold_rounds_out_of_the_requests_it_writes_them_into(tmp
     assert stats["compactions"] == {"max_rounds": 3, "prompts_folded": 2, "events": 0,
                                     "b2_prompts_on_the_floor": 1, "b2_worst_over_tokens": 96,
                                     "card_prompts_thinned": 1,
-                                    "card_worst_claims_dropped": 4}, stats["compactions"]
+                                    "card_worst_claims_dropped": 4,
+                                    "last_fold": None}, stats["compactions"]
 
     # 一格标记只动 `events`：另两个数读的是 request，折叠状态数不能替它们作证。
     marker = {"seq": 999, "kind": "compaction", "day": 2, "phase": "day_speech", "actor": None,
               "t_wall": 0.0, "visibility": "all",
               "payload": {"summary": "第1天：发言8人。 出局：无人。", "window": 4,
-                          "folded_days": [1], "_idem": "compaction:4:1"},
+                          "folded_days": [1], "_idem": "compaction:c477d287922738af"},
               "request": {}, "response": {}, "attempts": [], "result": {}}
     marked = tmp_path / "marked.jsonl"
     marked.write_text("\n".join(lines + [json.dumps(marker, ensure_ascii=False)]) + "\n",
@@ -429,8 +547,27 @@ def test_audit_reads_the_fold_rounds_out_of_the_requests_it_writes_them_into(tmp
     assert stats["compactions"] == {"max_rounds": 3, "prompts_folded": 2, "events": 1,
                                     "b2_prompts_on_the_floor": 1, "b2_worst_over_tokens": 96,
                                     "card_prompts_thinned": 1,
-                                    "card_worst_claims_dropped": 4}, stats["compactions"]
+                                    "card_worst_claims_dropped": 4,
+                                    "last_fold": {"seq": 999, "window": 4,
+                                                  "folded_days": [1]}}, stats["compactions"]
     assert stats["kinds"]["compaction"] == 1, "events 和 kinds 必须是同一个数，不是两份账"
+
+    # 两格标记时"最后一格"必须真的是后写入的那一格：只有一格时 first==last，这条断言什么都没说。
+    # 后一格窗口更大，抄的是 `data/real-20260924/20260924T153715Z_g00000302.jsonl` 的**顺序**（实测
+    # 01:15:55Z：seq 55 窗口 9 条、seq 87 窗口 15 条；这里前一格沿用上面那个 window=4，两格 `_idem`
+    # 也照抄那一份，虽然这条断言谁都不读它）。钉顺序而不钉极值：max/min 在这两份形状上都会碰巧蒙对。
+    later = dict(marker, seq=1042,
+                 payload=dict(marker["payload"], window=15, folded_days=[1, 2],
+                              _idem="compaction:a990bd77b5e013ad"))
+    twice = tmp_path / "twice.jsonl"
+    twice.write_text("\n".join(lines + [json.dumps(marker, ensure_ascii=False),
+                                        json.dumps(later, ensure_ascii=False)]) + "\n",
+                     encoding="utf-8")
+    assert cli.main(["audit", str(twice)]) == 0
+    stats = _last_json_block(capsys.readouterr().out)
+    assert stats["compactions"]["events"] == 2, stats["compactions"]
+    assert stats["compactions"]["last_fold"] == {"seq": 1042, "window": 15,
+                                                 "folded_days": [1, 2]}, stats["compactions"]
 
     # 字段落地之前的日志读成 `null`，不是 0："`b2_prompts_on_the_floor`: 0" 是一句好消息，
     # 而这份文件从没被测过地板，把它印成好消息就是替作者撒了个没人撒过的谎。
@@ -1060,3 +1197,63 @@ def test_the_two_readers_of_the_region_budget_share_one_implementation(played, c
     assert arm["worst_over"] == printed["worst_over"], arm
     assert arm["games_over"] == {k: int(v > 0) for k, v in printed["worst_over"].items()}, arm
     assert arm["witness_disagreements"] == (0 if printed["b2_witness_agrees"] else 1), arm
+
+
+# ----------------------------------------------------------- compare 的机器侧出口（#121）
+def test_a_compare_verdict_is_readable_without_parsing_the_prose(tmp_path, capsys):
+    """`audit` 一局一个 JSON 对象，`compare` 只有 `comparison.md`：臂级那九格读数（M1 胜率、
+    M3★ 判定、degraded、编号破损、末行截断、两份 `fallback` 拷贝对账、区域预算、前缀缓存、
+    配对分母）只活在散文里，机器要拿就得 grep 中文。
+
+    `#120` 刚把"哪几个文件的 `fallback` 对不上"印进报告，而它的下一句话就是"那谁来自动查"——
+    钉的不是"有没有 JSON"，是**这一格和 markdown 是不是同一份数**：断言的是 `compare()` 返回的
+    键集，所以以后往报告里加一格，它就一起进 JSON，不需要谁来记得第二份名单。
+    """
+    from test_batch_paired import _as_real_table
+    assert cli.main(_batch_cmd(tmp_path, "--set", "B.temperature=0.6")) == 0
+    _as_real_table(tmp_path)
+    assert cli.main(["compare", str(tmp_path), "--axis", "temperature", "--json"]) == 0
+    js = json.loads((tmp_path / "comparison.json").read_text(encoding="utf-8"))
+    cells = batch.compare(tmp_path, axis=("temperature",))
+    assert set(js) == set(cells) - {"markdown"}, (
+        f"少了：{sorted(set(cells) - set(js) - {'markdown'})} 多了：{sorted(set(js) - set(cells))}")
+    assert "markdown" not in js, (
+        "同一份渲染落两个地方：改口的时候只有一个是真的。散文自有 `comparison.md`，JSON 只装读数")
+    assert js["fallback_copies"]["A"]["n_compared"] > 0 and js["m1"]["A"]["n_games"] == 1, js
+    assert "comparison.json" in capsys.readouterr().out, "写了盘却不说写到哪，等于没写"
+
+
+def test_a_refused_compare_still_lands_on_disk_without_inventing_measurements(tmp_path):
+    """拒绝也是一份报告（`cmd_compare` 对 markdown 就是这么定的），所以 `--json` 不能只在出结论时
+    才落盘——否则"这一批没有 JSON"在脚本眼里既可能是"没敲 `--json`"，也可能是"被拒了"。
+
+    这一条真正钉的是**缺席的写法**：被拒批次里那九格臂级读数必须**不存在**，而不是被填成 0。
+    带臂名键空间（`{"A": …, "B": …}`）的格子全在合成桌闸门之后才算，所以这里量的就是"拒绝不许
+    把没算出来的东西印成算出来了"。
+    """
+    assert cli.main(_batch_cmd(tmp_path, "--set", "B.temperature=0.6")) == 0
+    assert cli.main(["compare", str(tmp_path), "--axis", "temperature", "--json"]) == 1
+    js = json.loads((tmp_path / "comparison.json").read_text(encoding="utf-8"))
+    assert js["verdict"] == "SYNTHETIC_TABLE" and js["why"], js
+    for cell in ("m1", "m3_verdict", "torn", "fallback_copies", "numbering", "degraded",
+                 "region_budget", "prefix_cache", "n_pairs"):
+        assert cell not in js, f"{cell} 在被拒批次里被印成了存在的样子"
+    assert js.get("stats") is None or js["verdict"] != "OK", (
+        "`stats` 是合成桌那一批留在盘上的逐条率（paired:305 有用例钉着它不许抹掉），"
+        "它只属于拒绝路径：OK 也带它，就等于同一份率有两个落点")
+
+
+def test_the_json_lands_beside_whichever_markdown_was_asked_for(tmp_path):
+    """`-o` 改的是 markdown 落点，JSON 跟着它走而不是钉死在批次目录：一次比较要留档的人，两个
+    产物分在两个目录里就一定会有一个被忘掉。默认（不敲 `--json`）则什么都不许多产。
+    """
+    assert cli.main(_batch_cmd(tmp_path, "--set", "B.temperature=0.6")) == 0
+    out = tmp_path / "kept"
+    out.mkdir()
+    assert cli.main(["compare", str(tmp_path), "--axis", "temperature",
+                     "-o", str(out / "my.md")]) == 1
+    assert not list(out.glob("*.json")) and not (tmp_path / "comparison.json").exists(), (
+        "没要机器侧的时候凭空多产一份，是把默认路径变成了第二条链")
+    assert cli.main(["compare", str(tmp_path), "--axis", "temperature",
+                     "-o", str(out / "my.md"), "--json"]) == 1
+    assert (out / "my.json").exists(), "JSON 落在了批次目录，而 markdown 在 `-o` 指的地方"

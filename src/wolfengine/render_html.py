@@ -31,7 +31,7 @@ from typing import Any, Iterable
 
 from . import roles
 from .belief import build_belief
-from .compress import render_line
+from .compress import cause_text, render_line
 from .events import (Event, EventLog, Kind, empty_notice, meta_notice, seq_notice, torn_notice,
                      voting_waves)
 from .info import eid
@@ -203,7 +203,7 @@ def _suspicion(events: list[Event], seat: int) -> str:
 
 def _axis(events: list[Event]) -> str:
     cells = [f'<span data-death="{_esc(e.payload["seat"])}:{_esc(e.payload["cause"])}">'
-             f'{e.payload["seat"]}号 {_esc(e.payload.get("cause_zh", ""))}</span>'
+             f'{e.payload["seat"]}号 {_esc(cause_text(e.payload["cause"]))}</span>'
              for e in events if e.kind == Kind.DEATH]
     return ('<h2>出局顺序</h2><div class="axis">' + "".join(cells) + "</div>") if cells else ""
 

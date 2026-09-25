@@ -103,7 +103,7 @@ engine belief（`build_belief(seat, [e for e in events if e.visible_to(seat)])`�
   closed`，而它站在 `finally` 里，把 `return rc` 顶掉：05:23:33Z 实测一局**打完了**的局（60 个事件、
   `draw_day_limit`）返回 1，05:25:14Z 一个跑完了的批次连 `批次 ->` 那一行都没印出来。按
   [comparison.md](comparison.md) 第 38 行那句契约，1 是"拒绝出结论"——脚本读到的是一句判决，实际发生的
-  是一次崩溃。现在请求和关闭共用同一个 loop（`cli._run_and_close`，两个读者 `cli.py:151` / `cli.py:522`），
+  是一次崩溃。现在请求和关闭共用同一个 loop（`cli._run_and_close`，两个读者 `cli.py:151` / `cli.py:524`），
   退出码重新只来自判据。证人不能是进程内调用：`rc` 被 `SystemExit` 接住就看不出形状了，所以那条用例
   在子进程里跑真 `cli.main`、连的是 127.0.0.1 上的桩
   （`test_a_finished_game_exits_0_although_a_socket_was_opened`）。

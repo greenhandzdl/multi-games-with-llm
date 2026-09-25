@@ -135,7 +135,7 @@ def test_the_guard_itself_can_fail():
 
 
 # ------------------------------------------------------------- CLI 命令引用
-SUBCOMMANDS = ("run", "replay", "audit", "export", "watch", "batch", "compare")
+SUBCOMMANDS = ("run", "replay", "audit", "export", "watch", "batch", "compare", "gate")
 WOLF = re.compile(r"\bwolf\s+(?:" + "|".join(SUBCOMMANDS) + r")\b")
 FLAG = re.compile(r"(?<![\w-])(-{1,2}[A-Za-z][\w-]*)")
 
@@ -202,14 +202,18 @@ def test_every_flag_the_docs_show_is_offered_by_that_subcommand():
 
 
 def test_the_negative_flag_claims_in_the_docs_are_negatives():
-    """"`wolf run` 没有 `--set`"（`metrics.md`）也是一条主张：将来给 `run` 加上 `--set`，这句就成了假话。
+    """"`compare` 这一侧没有 `--set`"（`metrics.md`）也是一条主张：将来给它加上，这句就成了假话。
 
     正面引用由上一条管，反向引用没有别的机制能管——扫不到"不存在的参数"，只能把话抄成表。
+    这张表在 2026-09-24 换过一行：`run` 原先也在那句限界里（"没有 `--set`"），加上 `--set` 的那天
+    它红了一次，指名要改文档，所以 `metrics.md` 与 `README.md` 里的引文一起跟着搬了家。反向主张
+    会随代码追上而变假，而"某参数不存在"扫不出来——只能靠这一张表。
     """
     surface = _cli_surface()
-    assert "run" in surface and "batch" in surface, surface.keys()
-    assert "--set" not in surface["run"], "run 现在认 --set 了，`metrics.md` 那句『wolf run 没有 --set』要改"
+    assert "run" in surface and "batch" in surface and "compare" in surface, surface.keys()
+    assert "--set" in surface["run"], "run 不再认 --set 了，`metrics.md` 那句『两处都能进』要改"
     assert "--set" in surface["batch"]
+    assert "--set" not in surface["compare"], "compare 现在认 --set 了，`metrics.md` 那句反向主张要改"
 
 
 def test_the_flag_scanner_sees_a_stale_flag_when_there_is_one():
@@ -223,7 +227,7 @@ def test_the_flag_scanner_sees_a_stale_flag_when_there_is_one():
              "wolf audit /tmp/x/A/*.jsonl | jq '.kinds'\n"
              "wolf audit \"$LOG\" --calibration c.json | grep -A7 '\"calibration\"'\n"
              "wolf compare /tmp/x --axis temperature   # 退出码：0 结论 / 1 拒绝 --not-a-flag\n```\n\n"
-             "`wolf run` 没有 `--set`，别照抄。\n")
+             "`wolf compare` 没有 `--set`，别照抄。\n")
     cited = _cited_flags(probe)
     assert ("batch", "--frobnicate") in cited, cited
     assert ("batch", "--set") in cited, f"续行没接上同一个子命令：{cited}"
@@ -231,7 +235,7 @@ def test_the_flag_scanner_sees_a_stale_flag_when_there_is_one():
     assert ("audit", "-A7") not in cited, f"管道之后的 grep 参数被算到了 wolf 头上：{cited}"
     assert ("compare", "--not-a-flag") not in cited, f"# 注释被当成要敲的参数了：{cited}"
     assert ("compare", "--axis") in cited, cited
-    assert ("run", "--set") not in cited, "把散文当命令扫了（`wolf run` 没有 `--set` 那一句）"
+    assert ("compare", "--set") not in cited, "把散文当命令扫了（`wolf compare` 没有 `--set` 那一句）"
     assert ("audit", "--frobnicate") not in cited, "参数被算到了下一条命令头上"
     assert _stale_flags(cited, surface) == [("batch", "--frobnicate")], _stale_flags(cited, surface)
 
@@ -240,6 +244,18 @@ def test_the_flag_scanner_actually_scans_the_docs():
     cited = [(s, f) for doc in DOCS for s, f in _cited_flags(doc.read_text(encoding="utf-8"))]
     assert len(cited) >= 25, f"只扫到 {len(cited)} 个参数引用，多半是围栏或正则坏了"
     assert len({s for s, _ in cited}) >= 5, cited
+
+
+def test_the_scanner_covers_every_subcommand_the_parser_offers():
+    """`SUBCOMMANDS` 一旦落后于 `build_parser()`，新命令在文档里的参数就扫不到，而且永远绿。
+
+    上面两条扫描用例判的是"扫到的对不对"，扫不到的那一片不会自己报警。这条守卫在建起来的那一秒
+    正好有用：给 CLI 加一个子命令而忘了把名字进这张表，文档里写 `wolf gate --frobnicate 1`
+    没有任何东西会红。
+    """
+    surface = set(_cli_surface())
+    assert set(SUBCOMMANDS) == surface, (
+        f"文档里只 {sorted(set(SUBCOMMANDS))} 会被扫，CLI 实际给的是 {sorted(surface)}")
 
 
 # ------------------------------------------------------------- 用例计数引用
@@ -617,15 +633,83 @@ LINE_CITE = re.compile(r"([\w.-]+\.py):(\d+)")
 STOP = {"src", "docs", "tests", "scripts", "python", "readme", "wolfengine", "self", "args",
         "return", "none", "true", "false", "str", "int", "bool", "path", "prompts"}
 PY_CITED = re.compile(r"([\w./-]+)\.py")
+SENT_END = re.compile(r"[。！？；;]")
+ASCII_TOK = re.compile(r"[A-Za-z_][A-Za-z0-9_]{3,}")
+QUOTED = re.compile(r"'([^'\n]{1,40})'|\"([^\"\n]{1,40})\"")
+BACKTICK = re.compile(r"`([^`\n]{1,60})`")
+PATHISH = re.compile(r"\.py$")
+CJK = re.compile(r"[぀-ヿ一-鿿]")
 
 
-def _line_citations(bodies: dict[str, str]) -> list[tuple[str, int, str, int, set[str]]]:
-    """(文档, 行号, 被点的文件, 句里写的号, 同一句话里出现的标识符)。
+def _cited_sentence(block: list[str], idx: int, col: int) -> str:
+    """The citation's own sentence, and nothing else from its paragraph.
 
-    Identifiers are gathered from the citation's own paragraph (±2 doc lines), because Markdown
-    prose wraps and a name can sit on the next physical line.
+    Bounded by the nearest blank line (a Markdown paragraph break) and by the nearest 句末标点 on
+    either side. Lines are joined with a single space so a wrapped sentence stays one sentence,
+    while two identifiers on neighbouring lines can't fuse into a third one.
+    """
+    start = idx
+    while start > 0 and block[start - 1].strip():
+        start -= 1
+    end = idx
+    while end + 1 < len(block) and block[end + 1].strip():
+        end += 1
+    joined = " ".join(block[start:end + 1])
+    at = sum(len(b) + 1 for b in block[start:idx]) + col
+    lo = max([0] + [s.end() for s in SENT_END.finditer(joined[:at])])
+    hi = min([s.end() for s in SENT_END.finditer(joined) if s.end() > at], default=len(joined))
+    return joined[lo:hi]
 
-    凡是这一段里点过名的 `.py`，它的词干都不算证据（`PY_CITED` 那一减法）：`events.py:410` 与
+
+def _quoted_literals(sentence: str) -> set[str]:
+    lits = set()
+    for a, b in QUOTED.findall(sentence):
+        lit = (a or b).strip()
+        if CJK.search(lit) or len(lit) >= 3:
+            lits.add(lit)
+    return lits
+
+
+def _evidence(sentence: str) -> set[str]:
+    """Names this sentence offers as evidence: ASCII identifiers plus quoted literals.
+
+    The literal half is not decoration — a sentence like "那格改成 `or '无'`" names a Chinese
+    string, and a rule that only sees ASCII would call that "没写出可核对的名字" (`#108`).
+    """
+    return set(ASCII_TOK.findall(sentence)) | _quoted_literals(sentence)
+
+
+def _strong_names(sentence: str) -> set[str]:
+    """这句话里**被当作名字写出来**的那批：反引号里的内容，加引号里的字面量。
+
+    注释行只认这一类（`#108` 的第二半）。源码注释里满是英文散文词，句子里任何一个 ASCII 词都可能
+    碰巧落在被指那一行上：22:17:28Z 逐 token 核出，README 指 `DECISIVE` 的那个号写着 251（它上面那
+    行注释，定义在 253），而 251 里有 "a batch of outages"，句子里又写着"batch 的分母"，于是错号靠
+    `batch` 绿着。22:18:41Z 量这一族的范围：整份语料 107 处里落在注释行上的共 4 处，3 处反引号里
+    就写着那行出现的名字，规则加上去代价为零，逮到的正是剩下那一处。
+
+    路径形状的 span（`src/wolfengine/metrics.py:251`）剔掉：它指的是文件不是行，留着反而能给注释行里
+    抄了同一条路径的那一行背书。
+    """
+    names = {s.strip() for s in BACKTICK.findall(sentence)} | _quoted_literals(sentence)
+    # `metrics.DECISIVE` 在源码里写的是 `DECISIVE`——把模块前缀剥掉，但只剥"名字.名字"这种形状：
+    # 路径 `src/wolfengine/metrics.py` 的尾段是 "py"，收下它等于给任何含 "py" 的注释放行。
+    names |= {n.rsplit(".", 1)[-1] for n in names
+              if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*", n)}
+    return {n for n in names if n and ".py:" not in n and not PATHISH.search(n)}
+
+
+def _line_citations(bodies: dict[str, str]) -> list[tuple[str, int, str, int, set[str], set[str]]]:
+    """(文档, 行号, 被点的文件, 句里写的号, 句里的标识符, 句里**写成名字**的那些)。
+
+    Identifiers come from the citation's **own sentence** (`_cited_sentence`), not from the ±2-line
+    paragraph. The paragraph was measured to be too loose twice over: 21:44:40Z a `metrics.py`
+    pointer that had drifted 3 lines stayed green because some other word in the paragraph sat on
+    that line, and 22:10:17Z the whole corpus (107 pointers, all green under the old rule) turned up
+    **9** that only passed on a neighbour sentence's name or on a word the sentence never wrote as a
+    name. Wrapping is still handled: a sentence may span several physical lines.
+
+    凡是这句话里点过名的 `.py`，它的词干都不算证据（`PY_CITED` 那一减法）：`events.py:410` 与
     `cli.py:623` 写在同一句里时，`events` 这个词会给两个号同时背书，而它对其中一个才是真名字。
     代价实测为零——13:51:02Z 数整份语料 50 处引用，去掉这一格会多放行 1 处（`assemble.py:201`
     靠 `persona` 站着，`persona` 不是这一段点名的文件），去掉后它仍然绿。
@@ -635,11 +719,12 @@ def _line_citations(bodies: dict[str, str]) -> list[tuple[str, int, str, int, se
         lines = body.splitlines()
         for no, line in enumerate(lines, 1):
             for m in LINE_CITE.finditer(line):
-                para = "\n".join(lines[max(0, no - 3):no + 2])
-                toks = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]{3,}", para))
-                stems = {Path(p).stem for p in PY_CITED.findall(para)}
+                block = lines[max(0, no - 3):no + 2]
+                sentence = _cited_sentence(block, no - 1 - max(0, no - 3), m.start())
+                stems = {Path(p).stem for p in PY_CITED.findall(sentence)}
+                drop = stems | {Path(m.group(1)).stem, m.group(1)} | STOP
                 out.append((doc, no, m.group(1), int(m.group(2)),
-                            toks - stems - {Path(m.group(1)).stem, m.group(1)} - STOP))
+                            _evidence(sentence) - drop, _strong_names(sentence) - drop))
     return out
 
 
@@ -656,7 +741,7 @@ def _bad_line_cites(cites) -> list[tuple[str, int, str, str]]:
     the sentence names. A citation with no identifier beside it is reported too — an unchecked
     pointer is the rot this gate exists to catch, and the fix is to write the name."""
     bad = []
-    for doc, no, target, line_no, toks in cites:
+    for doc, no, target, line_no, toks, strong in cites:
         path = _resolve_source(target)
         if path is None:
             bad.append((doc, no, f"{target}:{line_no}", "src/tests/scripts 里没有这个文件"))
@@ -672,17 +757,22 @@ def _bad_line_cites(cites) -> list[tuple[str, int, str, str]]:
         # 而一段话通常有 5~11 个标识符、源文件那五行总有一行提到别的名字——13:48:25Z 实测：真实语料
         # 里 `cli.py:620` 与 `cli.py:624` 都是这么绿的，而它们想指的 `except LogDamage` 在 623 行。
         window = rows[line_no - 1]
-        if not any(t in window for t in toks):
+        # 注释行只接受**写成名字**的证据：那里的英文散文词太多，随便一个词都能给错号背书
+        # （`#108`：`DECISIVE` 的号指着它上面的注释，靠句里的 `batch` 绿着）。
+        pool = strong if window.lstrip().startswith("#") else toks
+        if not any(t in window for t in pool):
             # 措辞要自带归因：一次插行造成的"顶偏"和"这句话本来指点别的东西"不是同一件事，前者
             # 改文档里的号就完事，后者要改句子。变异电池把本闸门当证人时读的就是这一格（`#77`）。
-            shown = sorted(toks)[:5]
-            occ = [i for i, r in enumerate(rows, 1) if any(t in r for t in toks)]
+            head = ("号落在注释行上，而这句话没把被指的东西写成名字（散文词不算）"
+                    if pool is strong else "那一行没有")
+            shown = sorted(pool)[:5]
+            occ = [i for i, r in enumerate(rows, 1) if any(t in r for t in pool)]
             if not occ:
-                bad.append((doc, no, f"{target}:{line_no}", f"那一行没有 {shown}，整个 {target} 里也找不到"))
+                bad.append((doc, no, f"{target}:{line_no}", f"{head}：{shown}，整个 {target} 里也找不到"))
                 continue
             want = min(occ, key=lambda i: abs(i - line_no))
             bad.append((doc, no, f"{target}:{line_no}",
-                        f"那一行没有 {shown}；它在第 {want} 行（差 {want - line_no:+d} 行）"))
+                        f"{head}：{shown}；它在第 {want} 行（差 {want - line_no:+d} 行）"))
     return bad
 
 
@@ -752,6 +842,106 @@ def test_a_number_one_line_off_is_a_bad_pointer_and_a_file_name_is_not_evidence(
     # 走过（全套 777 条里没有一处引用超出文件长度），所以它当时是一支假装存在的分支。
     out = probe(len(rows) + 5)
     assert len(out) == 1 and "超出文件长度" in out[0][3], out
+
+
+def test_a_name_from_the_neighbouring_sentence_is_not_evidence_for_this_pointer():
+    """`#108`：段里**隔壁那句**的名字不许替这个号背书——取词范围必须是引用所在的那一句。
+
+    两回现世：21:44:40Z，`metrics.py` 第二次被插行之后 `truncated_call` 那个号已经偏了 3 行，闸门
+    照样绿（同段里有别的词落在那五行上）；22:10:17Z 拿整份语料量收成的代价——107 处 `文件.py:行号`
+    引用在旧判据下**全绿**，把取词从 ±2 行收到同一句话新报 9 处（README 的 804/1473/1533/1862/2932/
+    3029/3254/3310/3542），其中 2 处是号本身错了（`_hollow_files` 写在 487 而定义在 507），7 处号没错、
+    只是句子里没把被指的东西写出名字来。`#72` 把窗口从 ±2 收到整行是同一族的第一半：窗口窄了，可
+    标识符仍然取自整段，于是"这句话旁边"实际是"这段话里"。
+    """
+    rows = (ROOT / "src/wolfengine/cli.py").read_text(encoding="utf-8").splitlines()
+    n = next(i for i, r in enumerate(rows, 1) if "_games_error" in r)
+    m = next(i for i, r in enumerate(rows, 1) if r.startswith("def main("))
+    assert abs(m - n) > 3, (n, m)
+    # 前提自己也要站着，否则红是"测试写坏了"而不是"闸门变严了"。
+    assert "main" not in rows[n - 1] and "_games_error" not in rows[m - 1], (rows[n - 1], rows[m - 1])
+
+    def probe(number: int) -> list[tuple]:
+        body = (f"`main` 是整个 CLI 的入口。\n"
+                f"地板谓词 `cli._games_error` 落在 `cli.py:{number}`。\n")
+        cites = _line_citations({"probe.md": body})
+        assert len(cites) == 1, cites
+        return _bad_line_cites(cites)
+
+    assert probe(n) == [], f"对的那个号被报红了：{probe(n)}"
+    out = probe(m)
+    assert len(out) == 1, (
+        f"`cli.py:{m}` 那一行只有 `main`，而本句点的是 `_games_error`——它却绿了，"
+        "说明取词范围还在整段")
+    # `_games_error` 在 cli.py 里有定义 + 两处读者，所以"它想去哪一行"取最近的那一处（`#77` 的措辞）。
+    occ = [i for i, r in enumerate(rows, 1) if "_games_error" in r]
+    want = min(occ, key=lambda i: abs(i - m))
+    assert len(occ) > 1, occ
+    assert "_games_error" in out[0][3] and f"第 {want} 行" in out[0][3], out[0]
+
+
+def test_a_literal_named_in_the_same_sentence_is_evidence_too():
+    """收紧取词范围时，句子里点的是**字面量**而不是标识符的那类主张不能被冤枉。
+
+    形状是真的：README 里写着"`render_live.py:222` 那格改成 `or '无'`"，被指的东西就是一个中文字面量，
+    只认 ASCII 标识符的判据会把这句正确主张说成"这句话没写出可核对的名字"。但收益要按量出来的说：
+    22:15:16Z 数整份语料 107 处引用，**只靠字面量站着的是 0 处**，所以这一半今天在真语料上换不来任何
+    新读数，它的牙长在构造的夹具上——和 `#105`、`#107` 一样，这一条得写清楚。它仍须装上，是因为
+    `#108` 的注释行那一半把"是否写成名字"当判据，不认引号里的字面量，那种形状就是下一个被冤枉的句子。
+    """
+    rows = (ROOT / "src/wolfengine/render_live.py").read_text(encoding="utf-8").splitlines()
+    n = next(i for i, r in enumerate(rows, 1) if "'无'" in r)
+    m = next(i for i, r in enumerate(rows, 1) if r.startswith("def _read("))
+    assert "'无'" not in rows[m - 1], rows[m - 1]
+
+    def probe(number: int) -> list[tuple]:
+        body = f"终局那一格改成 `or '无'`（`render_live.py:{number}`）。\n"
+        cites = _line_citations({"probe.md": body})
+        assert len(cites) == 1, cites
+        return _bad_line_cites(cites)
+
+    assert probe(n) == [], f"句子里写着被指的那个字面量，却被当成没写名字：{probe(n)}"
+    out = probe(m)
+    assert len(out) == 1, f"错号还绿着：{out}"
+
+
+def test_a_pointer_at_a_comment_line_needs_a_name_written_on_that_line():
+    """`#108` 的第二半：号落在**注释行**上时，句子里的散文词不算证据。
+
+    收紧到同一句话之后，语料里仍有一处错号是绿的，22:17:28Z 逐 token 核出来：README 指 `DECISIVE`
+    写的是 `metrics.py:251`，那是它上面那行注释，定义在 253——而 251 里正好有英文散文词 "a batch of
+    outages"，句子里又写着"batch 的分母"，于是 `batch` 替一个错号背了书。22:18:41Z 量这一族的范围：
+    整份语料 107 处引用里落在注释行上一共 4 处，其中 3 处（`config.py:77`、`agent.py:376`、
+    `cli.py:352`）反引号里就写着那行出现的名字，只有 `DECISIVE` 这一处没有。所以这条规则的代价实测
+    为零，而它逮到的正是那唯一一处真错号。
+    """
+    rows = (ROOT / "src/wolfengine/metrics.py").read_text(encoding="utf-8").splitlines()
+    n = next(i for i, r in enumerate(rows, 1) if r.startswith("DECISIVE = frozenset"))
+    c = n - 2
+    assert rows[c - 1].lstrip().startswith("#"), rows[c - 1]
+    assert "DECISIVE" not in rows[c - 1], rows[c - 1]
+
+    def probe(number: int) -> list[tuple]:
+        body = (f"胜率的分母是拿 `DECISIVE` 筛的（`src/wolfengine/metrics.py:{number}`，"
+                f"batch 那一侧也读它）。\n")
+        cites = _line_citations({"probe.md": body})
+        assert len(cites) == 1, cites
+        return _bad_line_cites(cites)
+
+    assert probe(n) == [], f"对的那个号被报红了：{probe(n)}"
+    out = probe(c)
+    assert len(out) == 1, (
+        f"`metrics.py:{c}` 是 `DECISIVE` 上面的注释行，句里那个散文词 `batch` 又替它背了书——"
+        "错号还绿着")
+    assert "注释" in out[0][3], f"红了但没说清是注释行这一族：{out[0][3]}"
+
+    # 反过来：注释行上真写着名字的形状不许被冤枉（README 指 `config.py` 那段注释就是这一族）。
+    crows = (ROOT / "src/wolfengine/config.py").read_text(encoding="utf-8").splitlines()
+    k = next(i for i, r in enumerate(crows, 1) if r.lstrip().startswith("#") and "c_belief" in r)
+    body = f"这条分工写在 `src/wolfengine/config.py:{k}` 那段注释里（只有 `c_belief` 后面真有一刀）。\n"
+    cites = _line_citations({"probe.md": body})
+    assert len(cites) == 1, cites
+    assert _bad_line_cites(cites) == [], f"注释行里写着名字，仍被当成没写：{_bad_line_cites(cites)}"
 
 
 def test_a_moved_number_names_the_line_it_wanted_and_a_missing_name_says_so():

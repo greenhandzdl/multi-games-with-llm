@@ -34,7 +34,7 @@ git log -S'WOLF_LLM_API_KEY' --oneline      # 谁动过这个键
 git log -p | rg -n 'sk-[A-Za-z0-9]{20,}'    # 值本身
 ```
 
-## 七个动词，其中四个不碰端点
+## 命令一览：只有 `run` 和 `batch` 需要端点
 
 | 命令 | 干什么 | 需要端点？ |
 |---|---|---|
@@ -45,6 +45,7 @@ git log -p | rg -n 'sk-[A-Za-z0-9]{20,}'    # 值本身
 | `wolf audit <file>` | 一局的质量与成本计数（JSON） | 否 |
 | `wolf batch` | N 局 × K 配置的可配对批次（同一批 `deal_seed`） | 默认需要；`--mock` 不需要 |
 | `wolf compare <dir>` | 两臂配对检验：要么出结论，要么写明为什么不出 | 否 |
+| `wolf gate <dir>` | 对一目录**已经存在**的日志出 M3 闸门判定 | 否 |
 
 ```bash
 wolf run --mock --seed 7 --out data --quiet     # 合成替身打牌，纯压状态机
@@ -54,6 +55,7 @@ wolf run --mock --seed 3 --max-days 2 --out data --quiet   # 压日数上限（R
 wolf batch --out data/batch-demo/A-vs-B --configs A,B \
            --set B.temperature=0.6 --games 2 --seed0 1000 --mock
 wolf compare data/batch-demo/A-vs-B --axis temperature   # 退出码：0 结论 / 1 拒绝 / 2 用法错
+wolf gate data/batch-demo/A-vs-B/A                       # 同一批日志再判一次闸门：不重打牌
 ```
 
 `--mock` 的桌子**不是数据**：替身按剧本说话，能压崩状态机、压不出模型行为，所有指标都会把
@@ -142,7 +144,7 @@ wolf audit "$LOG" --calibration data/calibration.json | grep -A7 '"calibration"'
 `tests/test_cli.py` 一条，四个名字钉的是同一格 `request.assigned_act`）、13:00:19Z 数到 **767**（`#69`
 那四条全在同一个新方向上：写侧的幂等守卫，两个失败方向各要有证人）、13:30:20Z 数到 **775**（`#70`
 那八格也在一根链条上：白名单放行摊平后的那一格、聚合算术四格、机器出口两格）、13:40:38Z 数到
-**776**（`#70` 的电池量出来的那一格：分母那句话原本写了两份、谁都没读，现在是一处实现加一个绝对值）、14:06:11Z 数到 **777**（`#72` 那格：行号闸门的窗口从 ±2 收成被点名的那一行，多出来的那条断言是变异体 E2 先活下来、之后要回来的）、14:24:19Z 数到 **779**（`#71` 那两格：体检脚本里第二份 `cached_tokens` 读法收进 `usage_from()`，一条管行为一条管"只有一个读取点"，后者由变异 M2 单独证明它不是重复）、14:59:14Z 数到 **791**（`#73` 那十二格落在四个新文件里：`tests/test_vote_wave.py` 4 条、`tests/test_night_guards.py` 4 条、`tests/test_last_words.py` 2 条、`tests/test_house_wired.py` 2 条；这一片没改产品代码，改的是"哪句散文有读者"）；
+**776**（`#70` 的电池量出来的那一格：分母那句话原本写了两份、谁都没读，现在是一处实现加一个绝对值）、14:06:11Z 数到 **777**（`#72` 那格：行号闸门的窗口从 ±2 收成被点名的那一行，多出来的那条断言是变异体 E2 先活下来、之后要回来的）、14:24:19Z 数到 **779**（`#71` 那两格：体检脚本里第二份 `cached_tokens` 读法收进 `usage_from()`，一条管行为一条管"只有一个读取点"，后者由变异 M2 单独证明它不是重复）、14:59:14Z 数到 **791**（`#73` 那十二格落在四个新文件里：`tests/test_vote_wave.py` 四条、`tests/test_night_guards.py` 四条、`tests/test_last_words.py` 二条、`tests/test_house_wired.py` 二条——这四个数是 `#73` 那天的**历史读数**，写成汉字才不被"每天核现行条数"那格闸门顶成新数（今天的 `tests/test_vote_wave.py` 现 6 条，`#110`、`#113` 各补了一条进去；`tests/test_night_guards.py` 现 5 条，`#114` 补的那一条钉的是被闸门退回的那份原文）；这一片没改产品代码，改的是"哪句散文有读者"）；
 墙钟不是账：同一份 767 在 12:55:31Z 那跑 47.04s、13:06:15Z 那跑 114.47s，差的是机器负载（套件里有两条
 在真实时间里等完退避），所以末行那个秒数只用来判断"跑完了没有"，不用来比快慢；
 不要再往这行加 `-q`
@@ -157,7 +159,7 @@ wolf audit "$LOG" --calibration data/calibration.json | grep -A7 '"calibration"'
 和 `tests/test_calibrate_rehearsal.py` 真的开 socket，开的是 127.0.0.1 上自己起的桩）；`#58`–`#60`
 那几格（`--games` 地板的参数化与空普查的退出码、越界的 `--seat`、要一块不存在的板子的 `--set`、
 只有开局记录的文件上的座位视图、`--god` 与 `--seat` 同时给时的次序）住在 `tests/test_cli.py`
-（现 52 条、跑起来 61 个用例，三条各参数化为 4/6/2 个）。往上数这条链的账：691 是
+（现 60 条、跑起来 69 个用例，三条各参数化为 4/6/2 个）。往上数这条链的账：691 是
 2026-09-22T06:02:58Z 数的、701 是 06:49:10Z、704 是 08:06:23Z、759 是 11:51:54Z（`#63`/`#67`
 把 C2 那把尺子和刀的读数接进日志之后），前几格都被后续新增的用例顶掉了，留着
 是因为**它们各自是那一刻的账**，不是抄来的。
@@ -186,9 +188,11 @@ wolf audit "$LOG" --calibration data/calibration.json | grep -A7 '"calibration"'
 同一个文件还扫第二类"读者会照抄的东西"：**文档里印出来的命令**。围栏代码块和行内代码串里以
 `wolf ` 开头的片段被取出参数，逐个对照 `cli.build_parser()` 活对象上的 `option_strings`——这个
 函数是这一片顺手从 `main()` 里拆出来的，拆之前想知道"batch 认哪些参数"只能按引号扫 `cli.py`
-源码，那是典型的第二处实现。散文不参与：`metrics.md` 有一句"`wolf run` 没有 `--set`"，按行扫
+源码，那是典型的第二处实现。散文不参与：`metrics.md` 有一句"`compare` 这一侧没有 `--set`"，按行扫
 `wolf` 这个词会把它读成一条命令、报出一个并不存在的过期参数。这种**反向主张**由一张表钉住
 （`test_the_negative_flag_claims_in_the_docs_are_negatives`），因为"某参数不存在"没法从引用里扫出来。
+这张表换过一次行：它原先钉的是 `wolf run` 没有 `--set`，2026-09-24 给 `run` 加上这根旋钮的那天它红
+了一次、指名要改文档——反向主张会随代码追上而变假，而除了这张表没有别的机制看得见它。
 
 一条只写"assert 没有过期引用"的守卫分不清"文档干净"和"扫描器坏了"，所以四类引用各配一条喂假
 数据的对照用例（`_stale` / `_stale_flags` / `_stale_values` 都是纯函数，语料由调用方给）和一条规模
@@ -234,7 +238,7 @@ wolf audit "$LOG" --calibration data/calibration.json | grep -A7 '"calibration"'
 | D35 收名字时不再统一大小写（`SPEECH_SOFT_LIMIT` 对不上小写主张） | 对照 |
 | D36 `_src_names` 只收 `ast.Name`（丢掉参数名）——**预期活下来** | 见下面那段：它防的是误报，不是漏报 |
 
-重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（21 条、跑起来 21 个用例，
+重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（25 条、跑起来 25 个用例，
 两秒内，不发请求）。D1 不是凭空设计的——第一次写这个闸门时确实只走了 `ast.FunctionDef`，于是把
 `test_a_marker_is_public_but_never_becomes_chronicle`（`test_live_path.py` 里的协程）误报成了
 文档过期。**误报也是这个闸门的输出**，所以它的红用例名要留在这里。
@@ -430,6 +434,10 @@ maximum/token"，那是一条压缩令，解药在 assembler 手里。其余一�
 不可造九十个假行为。** 我第一版写的还是正面清单 `(401, 403, 404, 405, 410)`，是 `422` 让我改成
 默认拒绝：一个还没见过的状态，没有理由默认它能进语料。
 
+但这一句里"抛 `EndpointUnavailable`、收在 `aborted_endpoint`"当时只在**端点答了话**的形状上量过
+（401 那一支有真日志）。"连不上、也答不出"那一支要到 2026-09-25 才有第一次真测量，而它当时走的
+不是这条路：席位 deadline 先响，一局照打，账见〈端点断了 45 秒一次，但它一次也没说"断"〉（`#116`）。
+
 写这段的时候我自己犯了一次，值得记：把正面清单换成默认拒绝时，我机械地把 `"<html" in low or
 "upstream error" in low` 一起搬进了"按轮处理"那一侧的括号里，方向正好反了——于是 502 变成"这一轮
 的问题"。抓住它的不是新用例，是**旧**的那条 `test_a_5xx_and_a_gateway_html_page_are_both_unhealthy`
@@ -598,7 +606,7 @@ K5 第一轮活下来是一次真实的漏，而且漏在夹具而不是代码�
 报告里每个判定都被两头钉过一次，写死任何一个结论都会红。
 
 ```bash
-.venv/bin/pytest tests/test_calibrate_rehearsal.py   # 15 条，只碰 loopback，不需要 key
+.venv/bin/pytest tests/test_calibrate_rehearsal.py   # 16 条，只碰 loopback，不需要 key
 ```
 
 它抓到的不是测试里的 bug，是产物里的四条，外加两条本可以永远留在散文里的对账：
@@ -794,10 +802,10 @@ H5/H6 才是这轮买到的东西。`game_id` 在一帧里印两处（页眉、�
 "两份"就是一个可以被追问的问题：**这两份各有没有测试读它**。答案要一具变异才拿得出来
 （`/tmp/mut_predup.py`，修前一跑 2026-09-22T01:14:10Z，每具只把一份判据拧成永不匹配）：
 
-- **P1** `src/wolfengine/metrics.py:296` 那份（`read_dir` 里的 `endswith`）：`tests/test_cli.py` 红，具名一条
+- **P1** `src/wolfengine/metrics.py:367` 那份（`read_dir` 里的 `endswith`）：`tests/test_cli.py` 红，具名一条
   （`test_the_batch_loader_ignores_the_prompt_dumps`），另两套绿。有断言。（号码在 10:24:31Z 重指过：
   `#65` 那一族在同文件里插了 29 行，把它顶歪了一格，行号闸门当场报红——这就是那套闸门要防的事。）
-- **P2** `src/wolfengine/batch.py:263` 那份：**三套测试全部 SURVIVED**。零条断言读过它。
+- **P2** `src/wolfengine/batch.py:264` 那份（`endswith` 那一支）：**三套测试全部 SURVIVED**。零条断言读过它。
 - **P3** 改**写入方**那个 f-string（`src/wolfengine/cli.py:243`，`.prompts.jsonl` →
   `.prompt-dump.jsonl`）：红 4 条。也就是说这份约定从写入方到 `read_dir` 是连上的，到 `read_arm`
   根本没连——两份判据长得一模一样，其中一份是装饰品。
@@ -861,7 +869,7 @@ seq/kind/day/visibility（它有的键是 attempt/messages/…），这不是一
 `配置错误：…` 加 rc 2，`cmd_compare` 对没有 manifest 的目录也是 rc 2，本模块 docstring 写着
 "2 = the command itself was wrong，脚本可以不解析散文就分流"。`LogDamage` 是唯一没有这层处理的
 期望错误类——修前 src/ 里只有一处 `except LogDamage`，在 `events.py:410`，那是给自己包文件名的手，
-不在终端这一侧；接住它的那一处 `cli.py:623` 是这一轮的修法。
+不在终端这一侧；接住它的那一处是 `main()` 里 `except LogDamage` 的那个分支，是这一轮的修法。
 
 修法是一处，不是四处：`main()` 接住 `LogDamage`，印一句 `日志读不下去：…` 到 stderr，返回 2。
 四个读文件的出口（`audit`/`replay`/`export`/`watch`）因此共用同一句话，而用例也按四个出口逐个
@@ -1279,7 +1287,7 @@ is closed`。而它在 `finally` 里，所以它**顶掉**了 `return rc`。三�
 `#51` 里被从 1 手上拿走，一个**成功**的批次却由崩溃把它按回 1 上。脚本和无头评测读的就是这一格。
 
 修的是"在哪个 loop 关"，不是"要不要关"：`cli._run_and_close`（`cli.py:71`）让请求和 `aclose()`
-共用同一个 loop，`finally` 留着，两个读者各改一处（`cli.py:151` 的 `run`、`cli.py:522` 的
+共用同一个 loop，`finally` 留着，两个读者各改一处（`cli.py:151` 的 `run`、`cli.py:524` 的
 `batch`）。修后拿真端点复验过一次（05:29:08Z）：退出码 1、stderr 0 行、stdout 那一句一模一样，
 `/tmp/live401` 那份 14 行日志的末行还是 `terminal=aborted_endpoint` 且 `fallback` 兜底 0 次——
 这一轮**没有**动归因，那是 `#39` 已经钉住的部分，它继续绿着才是这次复验的意义。
@@ -1307,7 +1315,7 @@ is closed`。而它在 `finally` 里，所以它**顶掉**了 `return rc`。三�
 | M6 跑完不看返回值、恒 `return 0` | set0 红两条：拒答那条（退出码腿）+ 批次那条；set1 也红 | `asyncio.run(body())` 换成丢掉返回值，崩溃就不发生了，于是"rc 是读数"这一格没人钉 |
 
 M6 的预期要披露一次写错：05:33:37Z 那版（`/tmp/mut57.out` 第 10 行）把 set1 写成"预期 SURVIVED"，
-脚本报 `WRONG`。我漏读的是——`cmd_batch` 拿走的不只是一个整数，`cli.py:530` 还要 `res.out_dir`，
+脚本报 `WRONG`。我漏读的是——`cmd_batch` 拿走的不只是一个整数，`cli.py:532` 还要 `res.out_dir`，
 所以"恒 return 0"在那一处不是丢掉读数、是换掉了类型，红的是 `'int' object has no attribute 'out_dir'`。
 这和这一路反复撞到的那条是同一条：**变异预期只能来自读过的断言**，不能来自"哪些断言在比 0"这种
 分类。改完声明重跑，AS-EXPECTED。
@@ -1355,7 +1363,7 @@ wolf run --mock --dry-run --games 0 → 印"没有捕获到任何 prompt —— 
 修的是两格，都没有新增分支：
 
 * **一个地板谓词、两个读者**：`cli._games_error`（`cli.py:88`）说"不足 1 局什么都不产，比较也没有
-  分母"，`cmd_run` 的第一行（`cli.py:121`）和 `cmd_batch` 紧挨臂名检查那一处（`cli.py:491`）各自读
+  分母"，`cmd_run` 的第一行（`cli.py:121`）和 `cmd_batch` 紧挨臂名检查那一处（`cli.py:493`）各自读
   它，走的还是既有的 `配置错误：…` + rc 2 那条腿。关键是**站在 `mkdir` 与落盘之前**——地板如果
   放在 `run_batch` 里面，`run_manifest.json` 就已经在盘上了。
 * **普查自己说失败的时候，退出码跟着说失败**：`_print_census` 从"印一句话然后返回 None"改成返回
@@ -1388,7 +1396,7 @@ ZeroDivisionError 换回来，有了地板它是冗余但不是错误；不顺�
 
 ```bash
 .venv/bin/python /tmp/mut_batch58.py    # 7 具，约 1.5 分钟，全程离线
-.venv/bin/pytest tests/test_cli.py      # 52 条、跑起来 61 个用例（三条参数化），1 秒
+.venv/bin/pytest tests/test_cli.py      # 60 条、跑起来 69 个用例（三条参数化），1 秒
 ```
 
 修后同一个探针（05:58:20Z）：三个头都变成一行 `配置错误：--games 要至少 1 局（收到 0）…`、rc 2，
@@ -1399,8 +1407,9 @@ ZeroDivisionError 换回来，有了地板它是冗余但不是错误；不顺�
 这一片自己也被文档闸门抓过一次：那句重跑注释先按收集数写的"四十五条"，而闸门核的是文件里的定义数。
 按 `<模块名> N 条 = def 数` 的既有写法改口才对上——这正是 `#44` 补那道闸门时立下的用途。（同一格在
 `#59`/`#60` 之后重数过一次，`#63`/`#67`（C2 的刀与刀的读数）又给这个文件加了两条、`#68`
-（指派的读者）再加一条、`#70`（前缀缓存的读者）再加两条：
-现在 `tests/test_cli.py` 52 条、跑起来 61 个用例。）
+（指派的读者）再加一条、`#70`（前缀缓存的读者）再加两条、`run --set` 这一轮再加五条（下面〈把前缀
+长度拧到两档〉那节）：
+现在 `tests/test_cli.py` 60 条、跑起来 69 个用例，含最下面 `#121` 那三条）
 
 #### 类型过了、范围没过：越界的 `--seat` 印出一份观众视图，要一块不存在的板子留下一个空目录
 
@@ -1417,7 +1426,7 @@ ZeroDivisionError 换回来，有了地板它是冗余但不是错误；不顺�
 修的是三格，都没有新增分支：
 
 * **一个谓词、两个读者**：`cli._seat_error`（`cli.py:98`）说"越界的座位号是命令写错了"，`cmd_replay`
-  （`cli.py:392`）和 `cmd_watch`（`cli.py:412`）各自读它，走的还是既有的 `配置错误：…` + rc 2 那条腿。
+  （`cli.py:394`）和 `cmd_watch`（`cli.py:414`）各自读它，走的还是既有的 `配置错误：…` + rc 2 那条腿。
   名册**从文件里读**（`render_html.seats_of`，和票型矩阵的行是同一个读者），不再抄第二份 9；文件里
   根本没有名册时它让路——那种文件该拿的是 `#53` 那句"没有开局记录"，而不是"这一局没有 42 号"。
 * **板子只有 `roles` 知道**：`batch._set_path` 在类型校验之后、`replace()` 之前问一次 `roles.board_for`
@@ -1465,7 +1474,7 @@ W10 是这一片留下的一格，和 `#58` 的 V7 同族：行为看不见第�
 一行、`/tmp/b59probe` 不存在，说明它站在缺 key 那道腿**之前**。
 
 同一次探针顺带量出来的第二格是次序：`--god` 与 `--seat` 同时给，输出与只给 `--seat` 逐字节相同。这一支
-次序以前**没有读者**（`cli.py:209` 那句排在 `god` 那一支前面，把两支换序不会有任何用例红），而
+次序以前**没有读者**（`cli.py:209` 那句 `if as_seat is not None:` 排在 `god` 那一支前面，把两支换序不会有任何用例红），而
 [docs/views.md](docs/views.md) 要写它。补的特征化用例
 `test_sitting_at_a_seat_wins_over_the_god_view_on_the_same_file` 第一遍就绿（08:00:19Z）——它钉的行为
 本来就在，所以它的强度不靠"红过"证明，靠三具变异：P1 换序只有它红，P2 拿掉座位那一支它和另外两条一起
@@ -1494,7 +1503,7 @@ W10 是这一片留下的一格，和 `#58` 的 V7 同族：行为看不见第�
 3 处是碰巧过关（±2 行里确实有个同名标识符，但不是这句话要指的东西）——那一次的命令行输出没落盘，这两个
 数只能算口账，所以不拿它当证据；能复敲的是修完之后的账：25 处在用（README 23 + views.md 2，点 `cli.py`
 的 18 处），闸门报 `bad = []`（07:47:28Z）。修的时候连文档里那句"src/ 里唯一那一处 `except LogDamage`"
-一起改：它连号带主张两处都错，真号在 `events.py:410`，而 `cli.py:623` 是第二处。
+一起改：它连号带主张两处都错，真号在 `events.py:410`，而 `main()` 里那个 `except LogDamage` 分支是第二处。
 
 两向都证过（`/tmp/mutline.py`，07:33:24Z，6/6 AS-EXPECTED、字节还原，输出 `/tmp/mutline.out`）：
 探针那条用例（`test_the_line_citation_probe_fires_on_a_number_that_moved_and_only_on_that`）故意抄一个
@@ -1525,7 +1534,7 @@ W10 是这一片留下的一格，和 `#58` 的 V7 同族：行为看不见第�
 带 5~11 个标识符。两边都宽，于是"这段里有个词在那五行里出现过"几乎总能成立——**这句话当时就是假的**，
 不是不够严。缺陷是 `#70` 那轮撞上的（13:38Z）：`cli.py` 被插入 3 行之后，README 里两处指向同一个
 `except LogDamage` 的引用漂到了 `cli.py` 的 620 行与 616 行，而真实那一行是 623。改完号之后闸门仍然全
-绿，也就是说这两处**不是被闸拦下来的，是被"我去核了一下"发现的**。同一段里还点着 `events.py:410`，那
+绿，也就是说这两处**不是被闸拦下来的，是被"我去核了一下"发现的**。同一段里还点着 `events.py:410` 那句 `except LogDamage`，那
 个 `events` 因此成了一个万能标识符。
 
 于是量了而不是猜：把三份窗口规则摆在全语料上过一遍（`/tmp/linewin4.py`，13:49:37Z，50 处引用）——
@@ -1669,7 +1678,7 @@ SURVIVED 也是账的一部分）。基线账：真实语料 6 处主张、29 �
 1. `batch.apply_overrides` 的循环入口（`#62`）：顶层的同类拒绝住在 `_set_path`，那里每层只看得见一个
    字段名，`head == "regions"` 时分不清 `b0` 还是 `b2`，而这一格的全部意义就是两者不同。
 2. `report.axis_diff` 的第三个桶 `inert`（`#64`）：`compare` 读的是 manifest 里记下来的配置
-   （`batch.py:460`），手改过的那一份、以及**旧版本跑出来的那一批**都不经过门口。这一处是补文档
+   （`batch.py:480`），手改过的那一份、以及**旧版本跑出来的那一批**都不经过门口。这一处是补文档
    的时候翻出来的——`docs/comparison.md` 写着"名单只有一张，两处读同一个常量"，而 09:41:02Z 的实测是
    `model` 两处都拒、`enable_sheriff` 与 `regions.b0` 只在门口拒：那句话对**身份**成立，对**记账**
    这一类一直是假的。
@@ -1739,7 +1748,7 @@ R9/R10 那一具为什么会被对账守卫也抓到：它的判据是"读取点
 #### 反重复回灌的四个名额全花在同一句话上：`#65`
 
 plan §7 第 3 条要求把"本轮已经出现的说法"回灌进 C4，让第 N 个座位别再念别人念过的模板。这条链住得
-很散（`metrics.template_top_fragments` → `persona.repeat_fragments` → `src/wolfengine/phases.py:212`
+很散（`metrics.template_top_fragments` → `persona.repeat_fragments` → `src/wolfengine/phases.py:211`
 → `src/wolfengine/assemble.py:198`），而 10:15:27Z 实测 `grep -rn "repeat_fragments|禁止复述" tests/*.py`
 是**空的**：整条链一个断言都没有，拆掉任何一环，742 条照样绿。
 
@@ -1749,7 +1758,7 @@ plan §7 第 3 条要求把"本轮已经出现的说法"回灌进 C4，让第 N 
 `我先听听大家；先听听大家的；听听大家的发；听大家的发言`：四个滑窗把四个名额全花光，第二个模板一个字
 都没进提示词。`docs/metrics.md` 那句"专盯『我先听听大家的发言』这类 ≥6 字重复片段"在修前是假的。
 
-修法是 `_grow`（`src/wolfengine/metrics.py:120`）：每个达标的窗口左右各长，长到"所有出现位置的邻居
+修法是 `_grow`（`src/wolfengine/metrics.py:179`）：每个达标的窗口左右各长，长到"所有出现位置的邻居
 不再一致"为止，撞到文本边缘就停。增长不会把门槛放低——延长后的片段出现在**恰好**同样的那几份发言里
 ——所以 `min_count` 的语义一点没动。
 
@@ -1757,7 +1766,7 @@ plan §7 第 3 条要求把"本轮已经出现的说法"回灌进 C4，让第 N 
 生效）、抓到的是整句而不是窗口、那一行自己不能把 C 区吃掉（最多 4 条 × 每条 24 字，`regions.c_task`
 那一格在这个函数里唯一的读者），以及整条链接上了没有（一桌各自答同一句开场白，第 4 个座位起的提示词
 里必须有那句"禁止复述"；只有两个座位听得见的狼话不得出现在给全桌的黑名单里）。
-`tests/test_golden_game.py:490` 那条只钉了 `template_top_fragments` 返回空集合那一侧。
+`tests/test_golden_game.py:511` 那条只钉了 `template_top_fragments` 返回空集合那一侧。
 
 `/tmp/mut66.py`（10:34:40Z→10:39:36Z，12 具 × 两套，约 13 秒跑完；四只被改的文件还原后
 `byte-identical`）12/12 CAUGHT。set0 = 本族 12 条，set1 = `tests/test_golden_game.py` +
@@ -1802,8 +1811,7 @@ W4 的预期写错了一次：我按"只有 `test_no_seat_is_warned_about_phrase
 #### 一个名字承诺比例、值却是份数、且没有读者的读数：`#66`
 
 `#65` 收尾时翻出来的下一格。plan §8 M5 那格写的是"`template_top1_freq`（≥6 字且出现 ≥3 次的片段
-**占全体比例**）"，实现给的是 `frags[0][1]`——被说的**份数**，一行都没有除以分母（修后长什么样见
-`src/wolfengine/metrics.py:768`，那一行现在是 `round(frags[0][1] / len(r), 4)`）。两半都是问题，
+**占全体比例**）"，实现给的是 `frags[0][1]`——被说的**份数**，一行都没有除以分母。两半都是问题，
 而第二半更严重：10:48:41Z 实测 `grep -rn "template_top1" src/ tests/ scripts/` 只命中
 产出它的那两行，**全仓库没有一个读者、测试里零断言**。也就是说这个数从 M5 长出来之后，从来没有一
 条断言说过它等于几，改它没人拦，读它的人只能猜。
@@ -1814,7 +1822,12 @@ W4 的预期写错了一次：我按"只有 `test_no_seat_is_warned_about_phrase
 份数，没有模板的轮给 `0.0` 而不是 `None`（`None` 会被 `mean()` 悄悄吞掉，"没测到"和"测出来干净"
 就分不开了）。这条链的旧读数不进版本库（`data/` 除外，而那里没有真端点的数据），所以不留兼容键。
 
-判据住在 `tests/test_m3_gate.py`（现 15 条）新增的一条里，那里有全仓库唯一的 `_round(...)` 轮构造器；
+那一格今天的算术在 `src/wolfengine/metrics.py:159` 的 `template_top_share` 里（`#105` 搬的：分母从
+本轮条目数换成开口人数，并且给"话筒不足三面"的轮发 `None`）。所以上面那句"没有模板的轮给 `0.0`
+而不是 `None`"从今天起只对**量过**的轮成立：三个人以上开口、确实没有共享片段 → `0.0`；两份发言的轮
+压根不可能有 ≥3 的候选 → `None`。这一条改动是 `#95`/`#103`/`#104` 那条规矩的第四次兑现，见本页末尾。
+
+判据住在 `tests/test_m3_gate.py`（现 52 条）新增的一条里，那里有全仓库唯一的 `_round(...)` 轮构造器；
 `tests/test_golden_game.py` 的 M5 用例走的是金样本，而金样本里没有任何一句话被 ≥3 份发言共享，钉不住
 非零读数——这是 `set1 零红` 的原因，见下。
 
@@ -1843,14 +1856,14 @@ plan §5 那张表列着 B0 和 C1–C4 五格，`#62` 之后 `--set` 只肯接�
 多少"都没有**。这一族静默和 `#62` 同形：不是算错，是压根没算，所以没有任何一条已存在的断言会红。
 
 `#63` 把尺子从五根涨到九根。逐格的长度由 `src/wolfengine/assemble.py:86` 的 `block_tokens` 从发出去的
-字节上量，名单与顺序只有一处：`src/wolfengine/metrics.py:956` 的 `REGION_CAP_KEYS`——批次表头那 12 格
+字节上量，名单与顺序只有一处：`src/wolfengine/metrics.py:1195` 的 `REGION_CAP_KEYS`——批次表头那 12 格
 由它派生，不是有人另数了一遍（`test_the_budget_table_header_names_every_ruler_the_rows_carry`）。
 `B` 故意不在名单里：B1+B2 量的是同一批字节的两种问法，再记一遍等于给同一件东西发第二份权威。
 
 **九根尺子里只有一把后面有刀。** 触发条件从"整段超 `c_total`"变成"整段超 **或** 主张卡那一块超
 `c_belief`"（`src/wolfengine/assemble.py:225`），缩卡那一轮也拿 `c_belief` 判装没装下：两把尺拉同一个
 杠杆，所以只有一把超的时候也不多砍。另外四格改的是"越界局数"里的红字，不动发出去的字节，这条分工
-就写在 `src/wolfengine/config.py:77` 那段注释里——人格卡砍薄是 §7 的 P1/P3 防线静默失效，任务块砍掉
+就写在 `src/wolfengine/config.py:77` 那段注释里（那里点名只有 `c_belief` 后面真有一刀）——人格卡砍薄是 §7 的 P1/P3 防线静默失效，任务块砍掉
 是 act 闸门失效，私有信息块是夜里那几句话在整份 prompt 里唯一的副本。三局 mock 的出厂峰值
 71/57/328/111/115（11:12:16Z）：四把警报尺一声没响，最紧的 C2 也还在 450 以下。响得上的那一种在
 合成夹具里——20 条新主张的预言家草稿卡单块 459 tok，而整段 C 才 672，离 1450 差一倍多，所以
@@ -1861,11 +1874,11 @@ plan §5 那张表列着 B0 和 C1–C4 五格，`#62` 之后 `--set` 只肯接�
 的长度，单看它分不出"这张卡本来 11 条"和"本来 14 条被削掉 3 条"——后者才是模型收到的处理差异，而预算
 宽紧本来就是轴的一部分，两臂的 C 长度允许不同。这一条链走通了五站：`Prompt.card_claims_dropped`
 （`src/wolfengine/assemble.py:57`）→ 落盘白名单（`src/wolfengine/assemble.py:310`）→
-`metrics.region_budget_check` 那两格 `card_*`（`src/wolfengine/metrics.py:981`）→ 臂级聚合
-（`src/wolfengine/batch.py:432`）→ 表尾"削过主张卡的 prompt：A 臂 0 个、B 臂 109 个（最狠的一条少发
+`metrics.region_budget_check` 那两格 `card_*`（`src/wolfengine/metrics.py:1200`）→ 臂级聚合
+（`src/wolfengine/batch.py:452`）→ 表尾"削过主张卡的 prompt：A 臂 0 个、B 臂 109 个（最狠的一条少发
 14 条指控）"。两格 `card_*` 故意算在 `meta.regions` 那道守卫**之前**：一把没量过的尺子不该顺手抹掉
 两格不需要尺子的读数（`test_a_log_without_the_caps_in_meta_prints_null_not_zero`）。判据落点：
-`tests/test_wiring.py`（现 58 条、跑起来 79 个用例）里那六条，和
+`tests/test_wiring.py`（现 61 条、跑起来 82 个用例）里那六条，和
 `tests/test_batch_paired.py` 里那四条，另有一条在 `test_cli.py` 的 audit 出口。
 
 11 具变异体**全部 CAUGHT**（12:01:58Z→12:04:24Z 串行，`/tmp/mut_run.py`，每具跑完 `cmp` 逐字节还原、
@@ -1901,7 +1914,7 @@ Z9–Z11 第一版是 **SURVIVED** 的：`tests/test_batch_paired.py` + `tests/t
 
 分母借不来。`soft_flags` 里的 `act_not_as_assigned` 只记**被打回过**的轮，"没指派"、"指派了且听了"、
 "指派了没听"三者在它那里都是"没有这条码"，所以分母只能来自 `request` 本身。于是
-`assignment_compliance`（`metrics.py:499`）读的就是 `e.request`，而 `cli.py:347` 把它挂在
+`assignment_compliance`（`metrics.py:604`）读的就是 `e.request`，而 `cli.py:347` 把它挂在
 `speech_acts` 旁边：两格并排，一格是行为，一格是行为对指派的符合度，谁也不替代谁。
 
 "0 与缺席"在这一格上要逐字段重判，不能继承别处的结论：`recorded`（这个键在不在记录里）与 `turns`
@@ -2079,6 +2092,19 @@ P6 不是没测到，是**今天测不出来**：全仓库只有一处往记录�
 `cached_tokens` 第一次走完了"从一根线到 `wolf audit` 那一格"的全程，所以"每一格形状都来自手搭
 日志"不再成立——线仍然是桩的，报的仍是测试写死的 700，不是端点报的数。真数照旧等 M0，
 账见〈端点上那一格到 audit 之间还有两跳没有人读：`#74`〉。
+
+**"真数照旧等 M0"这一句到 2026-09-24T16:47Z 只对一半了。** 三局真桌的日志逐行扫过（173 次带回答的
+调用）：每一次的 `usage` 都只有 `prompt_tokens`、`completion_tokens`、`total_tokens` 三个键，整份文件里
+`cached_tokens` 出现 **0 次**——不是报了 0，是压根没有这个键。于是读侧那条 `null` 第一次有了真证人：
+`reuse_ratio: null` 现在说的是"这批真调用里没一次报过这件事"（`src/wolfengine/cli.py:352` 那句话），
+而不是"还没跑过真桌"。**剩下那半句仍要等 M0**：为什么不报（端点不支持 / 要显式开关 / 版本没带这个字段）
+只有体检里那一格能答，而它恰好住在这份报告承认被自家 `redact` 遮掉的 7 格里
+（`features.apc_visibility.has_cached_tokens`）。遮它的守卫已经收窄（`scripts/calibrate.py:53` 的
+`CRED_KEYS` 里不再有裸 `token`），所以重跑一次 M0 就能把这格读回来——但那是"为什么"，不是"有没有"。
+
+后果得说全：plan §5 的前缀缓存经济性**目前没有可证的读法**。这不是"还没量"，是量它的那根线不通。
+要么让端点把这个字段报出来，要么另找证据（同一份 prefix 的字节跨调用相同，只能证明"该被复用"，不能证明
+"被复用了"）——那是新的一票（`#96`），不在这里替它下结论。
 
 
 #### 体检脚本自己抄了一份 usage 读法，于是一个 200 被说成端点故障：`#71`
@@ -2883,17 +2909,19 @@ seq 101 vote_result  {"summary": "票型：3号2票。弃票1人。3号被投票
 ```
 
 94 号把"无人出局"当**结论**印出去，95 号立刻收回，101 号再把它推翻。这不只是给人看的那一栏错了：
-`summary` 是模型读到的那一句话（`compress.py:72` 把它原样拼进编年史），同一局的第 97 行（3号的 PK 发言，
+`summary` 是模型读到的那一句话（`compress.py:88` 那一句：存过 `summary` 就照抄，没有才现拼），同一局的第 97 行（3号的 PK 发言，
 `phase=day_pk_speech`）的 `request` 字段里，`[e94]` 与 `[e95]` 就一字不差地挨着躺在 prompt 中，那天后面
 三次投票（seq 98/99/100）和 3号的遗言（seq 103）带着同一对进上下文。**发现时**全仓库没有一条断言钉过这个
 字符串（10:40Z grep `无人出局`，只有 src 命中）。三份留存日志里只有这一局的 `vote_result` 说过这句话，
 且只有一处。
 
 根因是**一个谓词两处写**：这个条件原本只写在 `phases.run_vote` 的那一支 `and` 上
-（`res.tied and res.pk_seats and house.tie_break == "pk_once_then_nobody"`），而句子
-（`phases._tally_text`）根本没读房规，于是分支和文案各说各话。收成一条 `rules.will_pk(state, res)`
+（`res.tied and res.pk_seats and house.tie_break == "pk_once_then_nobody"`），而句子（当天在 `phases.py`
+里拼，`#113` 起搬进 `compress._vote_summary`）根本没读房规，于是分支和文案各说各话。收成一条 `rules.will_pk(state, res)`
 （`src/wolfengine/rules.py:293`），两边同问它：分支在 `phases.py:229`，句子经 `_publish` 的
-`pending_pk` 旗标（`phases.py:230/276`）走到 `phases.py:301`。**旗标而不是在 `_tally_text` 里重算**：
+`pending_pk` 旗标（`phases.py:229/275`）随结算记录一起落盘，如今由 `compress.py:141` 的 `_vote_summary`
+读它决定说哪一句。
+**旗标而不是在渲染侧重算**：
 一句话该不该说"先不定人"取决于**这是今天第几波**，这个事实只有调用方知道——第二波再平是终局
 （`pk_once_then_nobody` 里那个 once），那时"平票，无人出局"是**真**结论，必须照说。所以复投那次不传旗标。
 
@@ -2907,9 +2935,9 @@ seq 101 vote_result  {"summary": "票型：3号2票。弃票1人。3号被投票
 
 根因只有一处：`game.play` 收尾写的是 `winner=winner or "draw"`，把"没有阵营获胜"压成了阵营键空间里的
 一个字符串，渲染器因此无从分辨平局和狼赢。修法**不是**给渲染器加一张 `"draw" → "平局"` 的表（那是给一个
-不该存在的值找翻译），而是让它回到 `null`：写侧 `src/wolfengine/game.py:225`，`compress.py:81` 补
+不该存在的值找翻译），而是让它回到 `null`：写侧 `src/wolfengine/game.py:230`（`winner=winner` 那一行，上面 229 是 `log.append(Kind.GAME_OVER,`），`compress.py:97` 补
 `camp is None` 那一支，`render_live.py:222` 那格改成 `or '无'`。"哪些终局算获胜"这件事仓库里**早就有唯一
-来源**——`metrics.DECISIVE`（`src/wolfengine/metrics.py:194`，batch 的分母就是拿它筛的），它 key 在
+来源**——`metrics.DECISIVE`（`src/wolfengine/metrics.py:253`，batch 的分母就是拿它筛的），它 key 在
 `terminal` 上，所以 `winner` 里不需要任何占位符。事件 schema 那行注释（`src/wolfengine/events.py:82`）
 跟着写成 `str|null`，并且**刻意保持行数不变**：那次注释多了一行，README 里 4 处 `events.py:NNN` 引文
 当场被顶成错位（`#77` 那一族抓的正是这种事）。
@@ -2922,8 +2950,9 @@ PK 发言确实是 3、5 号，防止"永远不说无人出局"这种退化修�
 不印 `None`、终局名还在；决定性终局照旧点名阵营 + "获胜"）；④
 `test_the_live_frame_shows_no_camp_as_the_winner_of_a_draw`（同一件事的第二块屏幕）。③④ 自己用 mock
 重放一局到 `max_days` 上限（`test_day_cap._draw_at`），所以不再依赖 `/tmp`。另把
-`tests/test_house_wired.py:60` 从 `"平票" in summary` 加强成整句 `endswith("平票，无人出局。")`——那张桌上
-这句话就是**结论**，没有下一行来收回它。
+`tests/test_house_wired.py:61` 从 `"平票" in summary` 加强成整句 `endswith("平票，无人出局。")`——那张桌上
+这句话就是**结论**，没有下一行来收回它。（`#113` 之后这句人话不再躺在事件里，所以那一行改成从
+`compress.render_line` 拿句子，并在它上面补了一条 `pending_pk is False`：钉的还是同一句结论。）
 
 八具手术刀（`/tmp/mut87.py`，八具的预期写在它自己的 docstring 里、先落盘再跑；基线 11:09:17Z
 `rc=0 red=[]`，同一套 11:01:45Z 跑过一次，逐字相同）。`mutlib.check()` 只报 CAUGHT/SURVIVED，这一轮的
@@ -2931,9 +2960,9 @@ PK 发言确实是 3、5 号，防止"永远不说无人出局"这种退化修�
 
 | 具 | 改动 | 红了谁 |
 |---|---|---|
-| K1 | `phases.py:301` 的 `elif pending_pk:` → `elif False:` | CAUGHT ①（句子不再读 PK） |
-| K2 | 第二波那次 `_publish(t, second)`（`phases.py:239`）也传 `pending_pk=True` | CAUGHT ②（终局平票改口成"先不定人"） |
-| K3 | `phases.py:230` 第一波不传旗标 | CAUGHT ① |
+| K1 | `phases.py` 的 304 行（当天）里那句 `elif pending_pk:` → `elif False:` | CAUGHT ①（句子不再读 PK）。`#113` 起写句子的手搬进了 `compress.py`，同一支刀现在砍那里，证人还是 ① |
+| K2 | 第二波那次 `_publish(t, second)`（`phases.py:238`）也传 `pending_pk=True` | CAUGHT ②（终局平票改口成"先不定人"） |
+| K3 | `phases.py:229` 第一波不传旗标 | CAUGHT ① |
 | K4 | `rules.will_pk` 恒 `False` | CAUGHT ①② + `test_vote_wave.py` 的 `test_the_pk_revote_gets_its_own_cut_after_the_first_tally_goes_public`（PK 整条链没了） |
 | K5 | `will_pk` 少读房规那一支 | CAUGHT `test_a_house_that_says_nobody_on_a_tie_never_opens_a_pk` |
 | K6 | `game.py` 的 `winner or "draw"` 装回去 | CAUGHT ③④（压平回来了） |
@@ -2958,10 +2987,10 @@ PK 发言确实是 3、5 号，防止"永远不说无人出局"这种退化修�
 第三处发现**没有修**，因为它的代价不是这一条该付的：`rules.NightResult.peace`（平安夜，`rules.py:146`，
 `rules.py:213` 算出来）在产物链上**零读者**，只有 `tests/test_rules.py` 和 `tests/test_night_guards.py` 读它。
 于是女巫救人的那一夜什么公开句子都不发——上面那份留存日志的第一夜正是这一种：seq 13 狼刀 3号，seq 15
-5号交出解药（`"potion": "save"`，可见域只有 `[5]`），seq 17 验人，seq 18 直接"天亮了，第1天开始。"，中间
+5号交出解药（`"potion": "save"`，可见域只有 `[5]`；`#114` 之后的日志不再有这一格，那一瓶由 `act` 说），seq 17 验人，seq 18 直接"天亮了，第1天开始。"，中间
 既没有 `death` 也没有一句"昨晚平安夜"。那瓶药花掉了，而这在九个座位的公开视图里等于没发生，"昨晚是平安夜"
 只活在没人读的布尔值里。补一句公告要**新增事件**→ seq 整体后移 → 金样本重钉（
-`tests/test_golden_game.py:309` 的 `_key(events) == GOLDEN_KEYS`、`:454` 的 `"平票，2、3号进入PK" in
+`tests/test_golden_game.py:310` 的 `_key(events) == GOLDEN_KEYS`、`:455` 的 `"平票，2、3号进入PK" in
 _ev(events, 63)`）+ metrics 钉值连带改，而且它改变模型读到的输入分布，那是**改处理**不是修句子。所以另立一条
 任务（`#88`），不塞进这一节。
 
@@ -3003,12 +3032,12 @@ McNemar 的配对前提）；第 362 行的落实方式才是要求局文件与 
 第 287 行：「**必须真端点（mock 只会自证，这几项不许省）**」。所以读者照着印出来的那一格去找条款，只会
 找到一条关于**玩家**的规定，然后得出恰恰相反的结论：替身 transport 没人管。
 
-同一句假出处写了三遍，加上文档两遍：`batch.py:509` 那句印 `actor_kinds` 的拒绝语、`metrics.py:400`
-的 note、`metrics.py:617` 的 note，以及 `docs/comparison.md` 的拒绝表、`docs/metrics.md` 的分母规则。这与 `#87`
+同一句假出处写了三遍，加上文档两遍：`batch.py:529` 那句印 `actor_kinds` 的拒绝语、`metrics.py:488`
+的 note、`metrics.py:762` 的 note，以及 `docs/comparison.md` 的拒绝表、`docs/metrics.md` 的分母规则。这与 `#87`
 的"一个谓词两处写"同形，所以修法也同类——一张表 `metrics.SYNTHETIC_CLAUSE`（两个键，mock 指 §十一、
-human 指 §十五）加一只 `metrics.synthetic_basis`，三个出口都从它取：`batch.py:510` 的
-`metrics.synthetic_basis(synth)`、`metrics.py:401` 的 `synthetic_basis(synthetic)`、
-`metrics.py:618` 同名的那一处。
+human 指 §十五）加一只 `metrics.synthetic_basis`，三个出口都从它取：`batch.py:530` 的
+`metrics.synthetic_basis(synth)`、`metrics.py:489` 的 `synthetic_basis(synthetic)`、
+`metrics.py:763` 的 `synthetic_basis(played)` 那一处。
 
 同一行里还藏着第二句假话，而且它比出处更贵：note 写死「actor_kinds 含 mock/human」，但批次顶层那一格
 只有两种取值（`batch.py:207` 的 `kinds = ["mock" if mock else "llm"]`，由 `--mock` 推出来），它
@@ -3070,7 +3099,7 @@ BYTE-IDENTICAL（字节码投毒的防护照 `#79`：每子进程一次性 `PYTH
 to show』，两个渲染器一条规则，这次是 HTML 这一半掉队——它掉的还是那条规则在页面这一侧唯一没被任何
 用例覆盖的一格：直播那三句各有用例，页眉这三个计数一条都没有，所以第一次跑才有三条同时红。
 
-第二处同源，而且更贵：`_counts` 的 `refused` 读的也是被过滤后的列表，而 `metrics.py:189` 的
+第二处同源，而且更贵：`_counts` 的 `refused` 读的也是被过滤后的列表，而 `metrics.py:248` 的
 `DECISION_KINDS` 里含 `wolf_chat` 与 `night_action`——`wolf audit` 的 `refused_turns` 把私有频道上的被拒
 算进去，观众页把它擦掉。一局狼聊被闸门打回的日志，观众页会说「闸门拒绝0次」，而这句在这项产品里读起来
 是"模型一次都没被赶回去重说"：闸门自己的战绩不见了。
@@ -3122,6 +3151,1434 @@ baseline（任何刀之前）`rc=0 red=[]`；`/tmp/mut90.py` 第二跑 `total=7 
 它自己写进的那一次的时刻，只引用它确实读过的那一次。文档侧跟着改了一格：`docs/views.md` 里"渲染层 ……
 条用例（两个模块各几条）"那一格的两个数从 23 与 52 变成 27 与 56，因为这一节给那个模块加了四条，而
 计数闸门（`#44`、`#61`）当场把没改的那一版顶红了两次。上面 `#89` 那节的 822 是带时间戳的历史读数，不顶。
+
+#### 六成九的真回答撞在自家 `max_tokens` 上，而闸门那一屏看不见这件事：`#92`
+
+端点恢复之后跑掉的三局真桌（`data/real-20260924/`，`actor_kinds=['llm']`，`config_hash` 三局同一个
+`fb3e99579b7e`，两局在第 3 天、第三局在第 4 天的夜里判 `wolf_win`——那局狼人刀掉最后一名好人时还没走到
+白天，所以它全天只有 2 次调用）从 `m7_cost_profile` 身上读到的第一格是
+`truncations=120` 对上 `n_calls=173`：**120/173 = 69.4%** 的回答是被我们自己的预算切掉的。逐相位
+（同一只函数的 `by_phase`，各格相加 120、与顶层那一格对得上；16:34:11Z）：
+
+    day_vote 62/67 · day_speech 30/58 · night_wolf 12/18 · last_words 5/8
+    night_witch 5/8 · night_seer 4/10 · hunter_shot 2/2 · day_pk_speech 0/2
+
+不是"差一点撞上"：被切的那些回答里最长的正好停在 `cap-1`——`day_speech` 与 `last_words` 是 139，
+其余相位是 59，而价目表只有两个数（`max_tokens_speech=140`、`max_tokens_action=60`，取价的那只手在
+`src/wolfengine/config.py:196`）。全局兑现率 `fill_rate=0.9123`（Σ 生成 14433 ÷ Σ 问价 15820，173 次调用
+全部报了 `max_tokens`，覆盖面满格；16:34:29Z）。逐局：33/57、41/58、46/58。
+
+缺陷不在算术，在**位置**。这一格以前只有 `wolf audit` 的 `m7_cost_profile` 读得到，而它扭曲的那两条判据
+住在另一屏：M3★ 对这三局给的是 `collapse_round=0.0191`（n=9 轮）、`passivity_rate=0.0333`（n=60 次）
+——两个数都读作"没塌缩"。可被剪掉后半句的发言在 `collapse_round` 眼里像模板、在 `passivity_rate` 眼里像
+"没点任何人的名"，而**读闸门的人没有一个字告诉他句子是半截的**。看不见天花板的人分不出"塌缩的桌子"和
+"被剪的桌子"，这正是 `#87` 那一族的形状：数字全对，句子少了它自己需要的那半句。
+
+修法是**一个谓词、三个读者**：`src/wolfengine/metrics.py:1235` 的 `truncated_call`（`None` 表示端点压根
+没报 `finish_reason`，与"报了、没被切"是两件事），`m7_cost_profile` 的两格照旧走它（数值一字未变），
+`m3_gate_verdict` 在 `criteria` 旁边多带一块 `truncation`，`_m3_md` 于是给每一臂加一行
+`  - 截断：…`。**没有**加第六条判据：`M3_GATE` 那五条是 plan §十 预注册的，新读数是**报告**不是**阈值**——
+塞进同一张表等于事后改判据。也没有另开一节：判据和它适用的对象隔一屏，早晚有一屏会把它丢掉。
+
+真数据上印出来的是这一句（16:29:51Z，三局一起进 `m3_gate_verdict`）：
+
+    120/173 次回答被 `max_tokens` 截断（120/173 = 69.4%），最多的是 `day_vote`：
+    上面的风格判据量的是截断后的文本，不是模型想说完的那句。
+
+四条判据在 `tests/test_m3_gate.py`（`#92` 那一段，先写失败：三条红在 `KeyError: 'truncation'`、一条红在
+闸门文件里少那一行）。它们各钉一格：`n_recorded` 与 `n_calls` 分得开（9 条被切断的发言 + 3 次投票，
+投票里 1 次报 `length`、2 次报 `stop` → `(12, 12, 10)`，率的分母是"报了这件事的"）；一次都没报的批次说
+"读不出来（不是 0）"；`worst_phase` 取被切最多的那个相位；一刀没切过的批次说"无一被截断"，而后半句要在
+**盘上的** `m3_gate.md` 里读到（`clean` 与 `cut` 两个批次目录各一份）。
+
+上面那张逐相位表和 120/173 在 16:50Z 又用一份**不 import 引擎**的逐行统计复算过（直接读 `jsonl` 的
+`response.finish_reason`，按行上的 `phase` 分组）：173 次带回答的调用、120 次 `length`、
+`day_vote 62/67`、`day_speech 30/58`、`night_wolf 12/18`、`night_seer 4/10`、`night_witch 5/8`、
+`last_words 5/8`、`hunter_shot 2/2`、`day_pk_speech 0/2`——八行全部对上，`p95=12.23` 与
+`context_overflows=0` 也是同一次复算读出来的。
+
+这一票的手术刀四具（M1–M4，与 `#93`/`#94`/`#95` 共 14 具一起跑，16:51Z，基线三跑全绿）。M1、M2、M4
+第一轮就红，且都只在摘掉新用例之后才绿（`仅新用例抓得住`）。**M3 第一轮活了下来**：把
+`worst_phase` 的 `max` 换成 `min`，`tests/test_m3_gate.py` 24 条全绿、整套也绿。它不是"没人读的字段"——
+那条用例里明写 `cut["worst_phase"] == "day_speech"`——是**等价变异**：夹具里那三次投票没带
+`finish_reason`，被 `truncated_call` 判成 `None` 而进不了 `per_phase`，那个字典只剩一个键，max 和 min
+是同一个值。给投票补上 `"length"`/`"stop"`（就是上面那句 `(12, 12, 10)`）之后，同一把刀红在指名它的
+那一条上，还原 `cmp` 字节相同、再跑绿。**夹具的强度是一个要量的量，不是写完就成立的性质**——一条断言
+里出现字段名，不等于那个字段的算法有证人。
+
+限界三条。① 69.4% 是三局、九个发言轮量出来的，**不是** §十 预注册的那片 M3★ 切片（两种前缀长度各 5 次），
+所以它是"这一格从此有了读数"的证据，不是"M3 过了"的证据。② 抬 `max_tokens` 不是免费的：同一批真桌
+`latency_p95_s=12.23` 对着 `< 20.0` 只剩 7.8 秒余量，所以那次改动必须**量**出来（跑 1–2 局真桌再读
+`truncation` 与 `latency_p95_s`），不是拍一个更大的数——`#92` 报的那半格（读数进报告）已经闭环，抬到哪里
+这半格交给 `#112`（下面 ⑤ 说明为什么它不能从这批日志外推）。③ 逐相位的细节只在
+`audit` 的 `m7_cost_profile` 里，闸门那一行只报 `worst_phase`：两边共用同一只谓词，但一份产物一行。
+
+补两条今天量出来的东西，都是给"下一次该怎么量"用的。④ **天花板比 69.4% 更挤**：把 173 次真调用按
+`token_budget_for` 分成两档看生成长度（23:54:11Z 现读），发言档 68 次里 35 次、动作档 105 次里 85 次的
+`completion_tokens` **全部正好停在 cap-1**（139 与 59），也就是发言档的中位数就是撞顶的那个值；而未切的那
+些里也各有 2 次停在同一个 139 / 59 上、只是 `finish_reason` 写的是 `stop`——贴着边界的回答用计数分不开，
+只有端点那一句 `length` 能分，所以 69.4% 是端点自己的口径，不是我们复算出来的一个更严的数。
+⑤ **抬多少不能从这 173 次外推**：拿 `latency_s ~ prompt_tokens + completion_tokens` 做最小二乘（同分钟现读），
+整体拟合给出负的 decode 斜率，分档拟合给出发言档 0.016 s/token、动作档 0.36 s/token 且该档 prefill 系数为负、
+中位残差 2.6 秒——这不是"算出了代价"，是这批日志里两个解释变量根本不同步变化（每次调用几乎都打到顶），
+延迟主要由端点侧的排队与批量决定。所以那一格的下一步是一次**专门的探针**（同一份提示词、只换
+`max_tokens_speech` 与 `max_tokens_action` 各跑几次，读 `truncation.rate` 与 `latency_p95_s`），
+任务记在 `#112`，端口开着才能做。预算那一侧倒是**不用端点就有读数**：同一张桌、同一 seed 的 `--dry-run`
+普查（零 API 调用；出厂档 23:57:17Z、抬档 23:56:53Z）每局完成预算从 6480 tok 变 8820 tok，仍然低于每局硬顶
+`max_game_completion_tokens` 那道 20000——所以卡着这一格的是延迟，不是预算，探针只需要盯 `latency_p95_s`。
+
+#### 预算天花板挂在 `play()` 的一个本地变量上，而两个出货入口都不走那条构造路径：`#93`
+
+`plan §6` 的全局预算是 `max_game_completion_tokens`（出厂 20000，`src/wolfengine/config.py:119`），执行它的
+那一句读的是 `spent()`。修前 `spent()` 读的是 `play()` 自己的本地 `llm`，而那只 `LLM` 只在
+`actors is None`（引擎自造九座）时才存在——`cli._llm_actors` 与 `batch` **都是**把 `actors` 交进来的，
+于是真桌上 `llm` 恒为 `None`：文件里记着几千个生成 token，`spent()` 答 0，天花板是一个永远不会响的警报。
+
+拿同一只桩、同一份 `actors` 交付路径、上限拧到 100，两版引擎各跑一局（16:33:04Z，`/tmp/probe93.py`，
+旧版是 `git archive HEAD` 出来的整包副本）：
+
+    pre-fix  : res.completion_tokens=0    terminal=good_win       winner=good | 文件里 Σ=2240
+    shipped  : res.completion_tokens=920  terminal=aborted_budget winner=None | 文件里 Σ=920
+
+修前那一局**打完了**（还判了好赢），比修后多烧 1320 个 token 的预算——上限 100 对它没说过一个字。
+三局真桌的 Σ 生成是 4889（`…153245Z_g00000300`）/ 4483（`…153509Z_g00000301`）/ 5061（`…153715Z_g00000302`）
+（16:30:26Z 逐局从 `timed_decisions` 相加，16:50Z 又逐行加过一遍 `response.completion_tokens`，两遍同值；
+局号各自标出，因为按文件顺序读它们是**递减再增**的，不是一列升序），离 20000 还差四倍，
+所以这三局本来也撞不上；要紧的是**"它撞不上"这件事从来不是判据给的**，是计数没接上给的。
+
+修法是把计数从**真正在答题的那只 `LLM`** 身上取：`src/wolfengine/game.py:166` 的 `counters` 按 `id` 去重
+（九座共用一只 `LLM`，不去重就是把同一份账记九遍），`src/wolfengine/game.py:179` 的 `spent()` 求和。
+〔预算耗尽〕那条公告里的数字跟着变成真数（`src/wolfengine/game.py:200`），汇总行的 `completion=` 也是
+（`src/wolfengine/game.py:239`）。墙钟那一半不受影响，它本来就不读 `llm`。
+
+两条用例在 `tests/test_live_path.py`（`#93` 那一段）：一条钉"汇总行印的数 == 文件里 Σ 的数"（先断言
+`recorded > 0`，否则这条断言是空的），一条钉"上限 100 在出货路径上真的把桌子停下、`winner` 是 `None`、
+公告里带着那个真数"。两条都走 `cli._llm_actors`——**这就是它们照见这一格的原因**，老用例走的是
+`actors is None` 那半边。
+
+这一票的手术刀两具：M12 把 `counters` 退回 `play()` 的本地 `llm`（就是原缺陷本身），M13 把公告里的
+数字写死成上限。两具都第一轮红，红的集合正是上面点名的那两条（一具不多、一具不少），摘掉新用例后回到
+绿（`仅新用例抓得住`），还原 `cmp` 字节相同。
+
+限界：替身座位不经 transport，mock 批次的 `rows[].completion_tokens` 就是 0（16:31:20Z 那批实测），所以
+这一节只谈 LLM 路径；上限本身该设多少仍归 `#41`/`#43` 那两套读数管，不是这里。
+
+#### M3★ 的判定只有两臂对比时才印得出来，单臂批次跑完是沉默的：`#94`
+
+`m3_gate_verdict` 是 `#15` 落地的，发射口当时只有一处：`compare()`。而 `compare` 进门就要**两个配置臂**——
+`wolf batch --configs A` 那种"先跑一臂看看桌子塌不塌"的批次，跑完落一堆日志加一份 `run_manifest.json`，
+**没有一个字**说闸门判了什么。§十 M3★ 问的恰恰是"这一臂的桌子塌不塌缩"：一个臂就是一次判定，两臂对比是
+下一次。`stats["m3_verdict"]`（`src/wolfengine/batch.py:540`）住在 `compare` 的产物里，单臂批够不着它。
+
+修法是**同一个渲染器多一个调用点**，不是第二份渲染：发射口挂在 `run_batch` 收尾（`src/wolfengine/batch.py:229`
+的 `emit_gate`），写 `<批次目录>/m3_gate.md`；`_m3_md` 那份渲染逻辑原封不动被两处共用，所以 `comparison.md`
+里的那一节和这个文件是同一段字节。判据仍然只从 `m3_gate_verdict` 取，闸门表仍然只有 `M3_GATE` 一张。
+终端那句跟着改了（`src/wolfengine/cli.py:533` 尾部那半句印 `m3_gate.md`）：
+
+    批次 -> /tmp/gate94（1 局日志，seed0=21，canary SKIPPED，终态 ok）；M3 闸门判定见 m3_gate.md
+
+盘上那份（16:31:20Z，一臂一局的替身批；中间五条判据行以 `…` 略去，余下逐字）：
+
+    # M3 闸门判定（批次 `gate94`）
+
+    - 判定对象：A 1 局（1 份日志）；阈值表 `metrics.M3_GATE` 单一来源，与 `comparison.md` 里那一节同一段渲染。
+
+    ## M3 闸门（各臂预注册判据，plan §十 M3★）
+
+    - A｜NOT_EVALUABLE
+      - passivity_rate = —（需 < 0.4，n=0）无读数
+      …
+      - 本批 1 局全为替身桌（actor_kinds=['mock']），依据 plan §十一（mock 只会自证，这几项不许省）：
+        不入评测语料，闸门不给判定，不是给通过。
+      - 截断：本臂的可用局里没有一次带回答的调用，这一格读不出来（不是 0）。
+
+三条用例在 `tests/test_m3_gate.py`（`#94` 那一段）：第一条钉文件真的落在批次目录里，第二条钉 `--mock` 批
+**不许**印 PASS（它是 `NOT_EVALUABLE`，理由那句说的是"全为替身桌"而不是"没数据"），第三条钉终端那句话
+指得到这个文件。
+
+这一票的手术刀四具：M9 单臂批次不写文件、M10 闸门那一屏丢掉`截断`行、M11 丢掉`依据`行、M14 摘要行不再
+指那个文件。第一轮全部红，`仅新用例抓得住`，还原字节相同。**M9 的预注册证人有一半没兑现，如实记**：期待
+它顶红三条，实测红的是"单臂留判定文件""替身批不给 PASS"两条**加上 `#92` 的 `m3_gate.md` 读取那条**
+（它从盘上读，文件消失它先炸），而点名它的 `test_the_batch_summary_line_points_at_the_gate` **没红**——
+那条只钉终端那句话里有没有文件名，不查盘上的文件在不在。M14 才是它的证人。四具里没有一具是白造的，
+但"M9 该由谁来抓"这件事我预先写错了一格。
+
+限界：`emit_gate` 只在批次收尾时写一次，中途 `BatchAborted`（金丝没跑过、目录建到一半）不补一份**半成品**
+闸门——`drift.md` 那一路同理。
+
+#### 一轮全桌沉默，旧的两把尺子一个报"彻底塌缩"、一个当场炸：`#95`
+
+`collapse_round` 与 `opening_distinct_rate` 都是"这一轮说了什么"的尺，可它们从没被问过"**这一轮有人说话吗**"。
+拿 HEAD 那一版（`git archive` 副本）与现在这一版各量一遍同样的五种输入（16:30:54Z）：
+
+| 这一轮的发言 | `collapse_round` 修前 → 修后 | `opening_distinct_rate` 修前 → 修后 |
+|---|---|---|
+| 9 条全空 | `1.0` → `None` | **`ZeroDivisionError`** → `None` |
+| 2 条全空 | `1.0` → `None` | **`ZeroDivisionError`** → `None` |
+| 1 条空 | `0.0` → `None` | **`ZeroDivisionError`** → `None` |
+| 这一轮没发生（`[]`） | `0.0` → `0.0` | `1.0` → `None` |
+| 8 空 + 1 条真话 | `0.7778` → `0.0` | `1.0` → `1.0` |
+
+两半都是谎，方向还相反。空话两两之间的 4-gram 集合交并比是 `1.0`（并集为空时 `jaccard` 返回 1.0），所以
+一桌沉默在 `collapse_round<0.35` 上是一张**假 FAIL**；`opening_distinct_rate` 的分母写的是"非空发言数"，
+全空时是 0，于是 `wolf audit` 走到 `m5_style_collapse` 就抛 `ZeroDivisionError`——一个**读侧崩溃**，触发
+条件是"某一轮的文本全空"（三局真桌里这种轮一次都没有：空 `content` 的答复 0 条，所以它是可达但没被走到
+的路径，定性仍压在 `#40`）。`[]` 那一行是另一个方向：这一轮压根没发生，旧尺答 `1.0` = "所有开头各不
+相同"，在 `>0.8` 上是一张**免检通行证**。
+
+修法是"没量过就不要冒充量过"：两把尺子全空时给 `None`（`src/wolfengine/metrics.py:73` 与
+`src/wolfengine/metrics.py:91`），`m3_gate_verdict` 的两条风格判据把没有读数的轮**从池子里拿出来**而不是
+投一票（`src/wolfengine/metrics.py:727` 的 `n_collapsed`，于是 `n` 只数有读数的轮），`m5_style_collapse` 的均值（走 `round_mean`）与
+`worst_round` 同一条规则（`src/wolfengine/metrics.py:974` 的 `round_mean` 与 `src/wolfengine/metrics.py:1016` 的 `worst_round`）。一臂全是
+沉默轮 → `ok=None` → `NOT_EVALUABLE`，走的是空分母那条**已经存在**的规则，没有新增阈值。"沉默"这件事由
+`passivity_rate` 说：它是主判据，量的本来就是"没点名的听客比例"，不是措辞。
+
+`8 空 + 1 条真话` 那一行留个限界：修后 `collapse_round=0.0` 是"< 2 条可比发言"的**定义值**（沿用旧约定，
+不是"测出来零塌缩"），这一轮的真相在 `passivity_rate` 那一格里。两条判据在 `tests/test_m3_gate.py`
+（`#95` 那一段：一条钉"全空的轮不给 opening 读数"，一条钉"闸门其余四格照旧量得出，只有这一格是 `None`"）。
+
+这一票的手术刀四具（M5 全空轮把 collapse 报成 `0.0`、M6 把 opening 报成 `1.0`、M7 闸门池子不摘 `None`、
+M8 `m5` 的均值不摘 `None`）第一轮全部红，`仅新用例抓得住`，还原字节相同。要记的一笔：**三具（M5、M7、M8）
+的证人是同一条用例**——`test_a_silent_round_leaves_the_gate_without_a_reading_but_keeps_the_measured_ones`
+是闸门口那一格，三种手术都改它的读数，所以它天然一夫三职；反过来说，摘掉那一条（同一次摘除跑里就是这么做的）
+三具同时活。这不是四具各有各的钉子。
+
+数一遍：**837 passed**（17:02:22Z 起、65.89s 收尾那一跑，读的就是上面这四节写进来之后的 README 与
+`docs/`，含被 `#93`/`#94`/`#95` 那三节改过的 `docs/metrics.md`、`docs/comparison.md` 和重渲染的
+`docs/calibration.md`）。这一批的账：M3 那一页（`tests/test_m3_gate.py`）从 20 涨到 24、`tests/test_live_path.py` 从
+24 涨到 26 条。
+
+还有一笔要记的：**这一节里有一处改动是被闸门顶回来的**。我先把"遮掉的那 7 格下次重跑能读回来"两句
+手写进了 `docs/calibration.md`，`tests/test_calibrate_guard.py::test_the_committed_report_is_still_what_the_code_renders`
+当场红——那份报告是 `scripts/calibrate.py` 的**输出**，不是一篇可以手写的散文（这条测试本身就是为一次
+真实分叉事故写的）。改动因此搬进了渲染器（`blind` 那一支），再用 `--from-json` 离线重渲染落盘，零 API
+调用。顺带把渲染串里两处接缝丢掉的空格修了。**一个文件长得像文档不代表它是文档**：判据是"谁写它"。
+
+#### M3 判定读不到"独立 run 出来的日志"，三局真数据因此答不了验收第 3 条：`#98`
+
+`compare` 进门就要 `run_manifest.json`，`batch` 要重新打牌才有臂。于是三次 `wolf run` 攒出来的一个
+目录（2026-09-24 那三局真桌正是这个形状）在链条上**任何地方都拿不到闸门判定**，而 §十四 验收第 3
+条要的是"全部达标**或有明确失败记录**"。缺的从来不是算术，是第三个读取点。
+
+先否掉的接法是"让 `wolf audit` 顺手印一块 verdict"。`batch.py` 里那段写着的理由成立：闸门是
+**关于一批**的主张，单局的最近秩 p95 就是它最慢的那一次，一个 per-game 的 PASS 离 FAIL 只差一个
+离群点。`audit` 停在 `m3_gate_pressure` 那一格的原始计数层是对的，不该替一批人背书。
+
+落地的是 `wolf gate <dir>`（`cmd_gate`）：读一个目录里**已有**的日志，按 `meta.config_hash` 认臂，
+走同一份 `emit_gate` + `_m3_md` 渲染，判定落在被读的那个目录里。阈值仍然只有 `M3_GATE` 一张，
+算术仍然只有 `m3_gate_verdict` 一处，退出码跟着读数走（0 只在 PASS，与 `compare` 同一条约定）。
+两张配置表混在一个目录里它**拒判**：rc 2、点名两个 hash、一份半成品都不落——并成一个分母就说不清
+塌的是哪张桌子，那是 `compare` 的轴守卫在门口拦的同一件事。
+
+四条用例住在 `tests/test_m3_gate.py` 的 `#98` 那一节（先写失败：四条一起红在
+`invalid choice: 'gate'`）：`test_loose_logs_get_a_gate_without_a_batch_manifest` 钉"读得到"并且
+退出码跟着读数走，`test_a_gate_over_loose_stand_in_logs_refuses_to_say_pass` 是反面对照（替身桌挑平
+了也还是不给判定，且 rc 非 0），`test_the_loose_gate_prints_the_same_numbers_as_the_batch_gate` 逐字
+比对五格数字与 `m3_gate_verdict` 的输出（新命令最容易犯的错是抄一份更顺手的渲染），
+`test_a_folder_of_two_config_tables_gets_no_gate` 钉那句拒绝。第五条是给闸门自己补的牙：
+`tests/test_doc_citations.py::test_the_scanner_covers_every_subcommand_the_parser_offers`——
+`SUBCOMMANDS` 那张名单落后于 `build_parser()` 时，新命令在文档里的参数是扫不到的，而"扫不到"不会
+自己报警（这条是在加 `gate` 的那一秒先红给我看的）。这一轮收口那一格的账：`tests/test_m3_gate.py` 那一页
+从 24 涨到 28，整套 847 个用例——本轮之后的现读，见下面 `#99` 那一节。
+
+真端点那三局现在第一次有了判定（18:07:15Z 现跑现读：`wolf gate data/real-20260924`。那个目录是
+gitignored 的本机留存，克隆仓库的人要复敲得先有自己的真日志；余下逐字，五条判据行照盘上原样）：
+
+    # M3 闸门判定（日志目录 `real-20260924`）
+
+    - 判定对象：cfg=fb3e99579b7e 3 局（3 份日志）；阈值表 `metrics.M3_GATE` 单一来源，与 `comparison.md` 里那一节同一段渲染。
+
+    - cfg=fb3e99579b7e｜PASS
+      - passivity_rate = 0.0333（需 < 0.4，n=60）达标
+      - collapse_round = 0.0191（需 < 0.35，n=9）达标
+      - opening_distinct_rate = 1.0（需 > 0.8，n=9）达标
+      - latency_p95_s = 12.23（需 < 20.0，n=173）达标
+      - context_overflows = 0（需 <= 0，n=173）达标
+      - 截断：120/173 次回答被 `max_tokens` 截断（120/173 = 69.4%），最多的是 `day_vote`
+
+两处限界跟着这段读数一起写，不然它会被引用成"M3★ 通过"。① 分母是 3 局 / 9 个发言轮 / 60 次发言 /
+173 次带回答的调用，而 §十 预注册的切片是"两种前缀长度各 5 次"——这一格既不够 5 局，也没有第二档
+前缀（~5k 那一档按上面的外推根本不在当前几何里，见下一节）。② 同一份文件最后一行写着 69.4% 的回答
+被自家 `max_tokens` 切掉，也就是 `collapse_round` 与 `opening_distinct_rate` 量的是截断后的文本，不是
+模型想说完的那句。所以这一格读得出来的只有："闸门第一次在真数据上印出来，五条判据**都有读数**且都
+达标，没有一个分母是空的"——这正是 §十四 第 3 条要的那句"有记录"，而它不是"风险已排除"。
+
+#### 把前缀长度拧到两档：入口是真的，~5k 那一档不在当前几何里
+
+plan §十 的 M3★ 切片写着"在两种前缀长度（~2k 与 ~5k）各跑 5 次"，而这份 README 在此之前一直写着
+"缺的是一个能把前缀长度拧到 ~2k / ~5k 的入口"。**那句话是假的**，2026-09-24 量过之后搬掉了：入口
+就是 `run` 的一根旋钮，零 API 调用，从新克隆的仓库就能复敲。
+
+> `wolf run --dry-run --seed 300 --out /tmp/pfx1500`（出厂表）
+> `wolf run --dry-run --seed 300 --set regions.b2=400 --out /tmp/pfx400`（把 B 段的软预算掐紧）
+> `wolf run --dry-run --seed 300 --set regions.b2=1000000 --out /tmp/pfx_nocap`（当作没有折叠）
+
+三格的读数（同一局 mock 桌的 56 次装配，`*.prompts.jsonl` 里逐条数出来的）：A 段始终 945 tok，
+它是模板、没有旋钮；B 段峰值 946 → 449（掐到 400 那格，449 而不是 400 是日子地板
+`min_window=4` 在拦，见 [docs/metrics.md](docs/metrics.md) 那段"宁可超软预算"）；抬到一百万那一格
+与出厂那一格**逐字节相同**（`cmp` 过），因为 mock 桌的编年史峰值本来就够不着 1500——折叠没触发时
+这根旋钮是空转的。这条链由五条用例钉住：`test_the_budget_tool_can_vary_the_budget_table`（拧得动、
+meta 里落的是拧过的那张表、两次 `config_hash` 不同）、
+`test_the_run_override_meets_the_same_refusals_as_the_batch`（inert 格子与 `actor_kinds` 在 `run`
+门口同样拒，名单不另抄一份）、`test_two_spellings_of_one_knob_do_not_silently_pick_a_winner`
+（`--max-days` 与 `--set max_days=` 同时给则停，不由字典写入顺序裁决），加上"值读不进来"的两条：
+`test_a_run_set_pair_that_cannot_be_read_stops_with_a_hint`（五种敲错的拼法各留一句人话、rc 2、
+不打完桌子）和 `test_the_batch_path_refuses_an_unreadable_value_with_the_same_hint`（同一句
+"值读不出来"在 `cli.py` 的两个解析器里各抄了一遍，而 `batch` 那一处此前零读者——`#97`）。
+
+这五条的牙口是一具一具变异量出来的（`/tmp/mut_runset.py`，2026-09-24T17:56Z，9 座，全程离线）。
+**两半基线各自先绿才开工**：快的那半（五条）与整套那半各跑一次"什么都不改"，任一不绿就不开电池——
+上一轮我只给快的那半量了基线，整套里两条一直红着的文档计数闸门（我加了用例没同步改上面那三个数）
+就被印成了两具变异体的 "CAUGHT(仅整套)"。补上这道守卫之后它当场又拦了一次。9 座里 7 座红在点名的
+用例上：M1 换表算了不用、M2 两个拼法的冲突、M3 inert 名单、M5 没有这一格、M6 少 `=` 的那句提示、
+M7a 与 M7b（同一句话的两处，各红在自己那一侧——`#97` 就是这样现形的：第 5 条用例写出来之前，
+M7a 那一处改成 traceback 也没人红）。剩下 2 座只有整套抓得住，且证人都在 `batch` 侧：
+M4（`_set_path` 的身份/处理那道门）红在 `test_a_derived_field_is_not_a_treatment_axis` 与
+`test_an_unimplemented_knob_is_refused_for_the_right_reason`，说明 `run` 门口那条只验到
+`apply_overrides` 的名单、没验到再往下一层；M8（`--max-days` 不再转交）红在
+`test_run_exposes_the_cap_on_the_command_line` 等三条。每座改完按 sha256 整文件还原并核对，
+收尾复跑五条与整套都绿（那一跑 842 个用例；`#98` 之后是 847，见下面那一节的账）。
+
+真端点那三局的形状就只能离线读了（2026-09-24T17:09Z 现查：TCP 通、不带 key 打 `/v1/models` 得 401、
+`WOLF_LLM_API_KEY` 仍未 export——鉴权那层活着，缺的是凭证，不是代码；17:48Z 再查是同一个 401，
+没有翻面也没有新变量可取）：
+
+| 读数 | 值 | 从哪读的 |
+|---|---|---|
+| 带回答的调用数 | 173（57/58/58） | 三份日志各自的 `request` 行 |
+| A 段 | 945，三局同一个数 | `request.region_tokens.A` |
+| B 段 | 65 → 1506（1506 出在一次**没**折叠的调用上，正是它把折叠顶起来的那一格） | 同上，`request.region_tokens.B` |
+| 端点自己数的 prompt | min 1232 / p50 2456 / max 3354 | `response.prompt_tokens`，173 次全在 |
+| 折叠发生过的调用 | 65 / 173，这一族里 B 最大 1483，`b2_over_cap` 173 次全 0 | `request.compactions`、`request.b2_over_cap` |
+
+把这三局的公开编年史**不折叠**地逐字装配（离线，`chrono_bytes(pub, (), len(pub))`），三局分别是
+61 / 61 / 63 条公开事件、2381 / 2134 / 2503 tok，加 A 段就是 A+B 天花板 3326 / 3079 / 3448——这就是
+当前几何下"整局编年史全量上桌"最贵的样子。于是 ~2k 那一档根本不用拧：出厂的表就在真桌上量出
+p50 2456；而 **~5k 那一档不是旋钮能到的地方**。按实测每条公开事件 ≈35–40 tok（上表三局各自的
+条数与总 tok）外推，要凑到 5k 前缀需要约 102–116 条公开事件，这三局打完（3/3/4 天）只有 61–63 条。
+外推就是外推：它假设发言长度不变，而 #92 那格说明真模型的发言长度还没定下来。
+
+所以 `#4` 剩的不是缺键，是一个口径决定：要么把预注册切片改成"更长的一局"（`--max-days` 抬到 6–7 天，
+每次调用同时多付约 1.5k tok），要么把 ~5k 这一档改写成"当前几何的天花板 ~3.4k"。这个决定归
+人类伙伴，不在离线加固这一批里替它拍。
+
+#### 一份 0 字节的文件被闸门数成一局，还被认成"又一桌替身"：`#99`
+
+`#98` 把 `wolf gate` 立起来的头一天，它就印了假话。形状有两种"里面没有一局"：**连页眉都没有**
+（0 字节，`write_meta()` 没跑成）和**只有页眉**（开局记录落了盘，第一条事实没落）。这两句话在仓库里
+早就有唯一出处——`events.py` 的 `meta_notice` 与 `empty_notice`，互斥，replay / export / watch 三个
+出口都在用。闸门这一侧一个读者都没有：它拿的是 `len(games)`，于是字节数也进了"局"这个字。
+
+18:40:24Z 拿一份真目录量了四种文件（两局真端点日志，加上 `head -1` 造出的只剩页眉的一份、`: >` 造出的
+0 字节一份），两道门各自说什么：
+
+| 文件 | `is_synthetic` | `seat_kinds([g])` | 事件数 | 旧的分臂守卫看见的配置表 |
+|---|---|---|---|---|
+| 两局真日志 | False | `['llm']` | 88 / 90 | `fb3e99579b7e` |
+| 只剩页眉（抄真日志的页眉） | **False** | `['llm']` | 0 | `fb3e99579b7e` |
+| 0 字节 | **True** | `[]` | 0 | `None` ← 被当成第二张表 |
+
+四句假话都从这一格里出来：
+
+1. 标题"本批 3 局"，而里面只有两局打过牌（18:20Z 那份更早的读数里，它连"全为替身桌"都说了出来）。
+2. 0 字节那份被并进"替身桌"那一堆。`is_synthetic` 是一道**关门**（没登记 `actor_kinds` 就不许进结论），
+   反过来当成"登记成了替身"就是替一份 0 字节的文件编了一张座位表——`#89` 刚为同一类假出处收过口。
+3. `cmd_gate` 的分臂守卫取 `meta.config_hash` 的集合，0 字节贡献一个 `None`，于是两局好日志被拒成
+   "混着 2 张配置表（None、fb3e…）"、rc 2、一份判定都不落：**一个坏字节让整目录读起来像数据不可比**，
+   那是 `#51` 那一族。
+4. 修完前三条、18:40:38Z 再量，又冒出一格新的：`n_games_usable=3` 而 `n_games=2`、
+   `n_synthetic_excluded=-1`。算术是 `len(played) - len(usable)`，而 `usable` 还从 `games` 里选——
+   两个不同底的集合相减，减出来的不是任何数量；这一格若被谁拿去印"剔了几局"，读者看到的是负数。
+
+修法是让"这份文件里没有一局"成为闸门也读的一句判据：`Game.hollow_notice`（`src/wolfengine/metrics.py:336`）
+把 `meta_notice(...) or empty_notice(...)` 原样请过来（一个字都不重写，出处仍然只有一处），
+`m3_gate_verdict` 先分 `hollow` / `played`，`usable` 再从 `played` 里选；读数分成 `n_games`（局）与
+`n_files`（份）两个键，不等时标题里两个数同时印，另起一行点名少掉的那几份各是什么形状。`cmd_gate`
+那边只数**登记了** hash 的文件，没登记的那一份不再是一张表，回到「不是局的文件」那一行。现在的逐字
+读数（18:44:57Z，`wolf gate /tmp/hollow99`，rc 0；那两份坏文件用上面表里的两条命令就能在任意日志目录
+里造出来，真日志目录本身 gitignored）：
+
+    - 判定对象：cfg=fb3e99579b7e 2 局（4 份日志）；阈值表 `metrics.M3_GATE` 单一来源，与 `comparison.md` 里那一节同一段渲染。
+    - cfg=fb3e99579b7e｜PASS
+      - passivity_rate = 0.0513（需 < 0.4，n=39）达标
+      - 不是局的文件：2 份（这一局只有开局记录：后面一条事件都没有；这个文件没有开局记录（manifest 那一行）：说不出它是哪一局）——它们没有事件，上面五条判据的 n 里没有它们一笔。
+
+五条判据的 n（39 / 6 / 6 / 115 / 115）全部来自那两局真的——多出来的两份文件挪不动任何一个分母，
+这正是第一条用例钉的东西。八条用例在 `tests/test_m3_gate.py` 的 `#99` 那一节（现 52 条、整套 874 个
+用例，22:35:16Z 与 22:39:25Z 两次现读同为 874，跑法见下面 `#108` 那一节）：
+
+- `test_a_file_without_a_manifest_is_not_counted_as_a_game`：份数涨了，`criteria` 那五格一个字都不许变。
+- `test_a_log_that_only_opened_is_not_a_second_stand_in_table`：两个 `*_notice` 互斥，"本批 N 局全为
+  替身桌"里的 N 只数真的那一桌替身。
+- `test_a_folder_of_such_files_says_there_is_no_game_rather_than_a_stand_in_table`：全是坏文件时说的
+  是"没有一局"，不是"这些桌子都是替身"。
+- `test_a_hollow_llm_log_does_not_join_the_usable_pool`：第四条假话，那个 `-1`。
+- `test_a_log_without_a_config_table_is_not_a_second_config_table` 与
+  `test_two_real_config_tables_still_refuse_even_with_a_tableless_file_there` 在 CLI 门口成对照：
+  前者放好日志过去，后者仍然拒两张真表——两边都在，"忽略无表文件"才不是一句把守卫改宽的借口。
+- `test_the_headline_counts_the_files_it_judged_not_the_files_it_was_handed`：给最后一格补的读者，
+  见下。
+- `test_a_log_with_events_and_no_manifest_line_is_still_a_game`：判据自己的边界——页眉被删掉、事件
+  还在的文件不是"没有一局"。这一格是量 `#100` 时现出来的，见下一节。
+
+M4 那一具变异顺手抓出了第二个缺陷：`n_files` 是个**没有读者的字段**——把标题里的份数改成任何数，
+整套都不红，因为 `emit_gate` 自己数了一遍 `len(rows)`。这一族的规矩是"只在散文里活着的主张就是缺陷"
+（`#20` 同形），所以接线到 `sum(v["n_files"])`：同一句话只有一处算术，而标题里那两个数说的是同一批
+文件。牙口是 9 具变异、18:52:17Z 全程离线（`tests/test_m3_gate.py` 那一页当时从 34 涨到 35，基线先绿才开工，每座
+按 sha256 还原并核对）：M1 判据恒空、M2 `usable` 回到从 `games` 里选、M3 极性对调、M4 份数塌成局数、
+M5 无表文件算一张表、M6 分臂守卫整个不拦、M7 那一行不印、M8 局数改用份数、M9 接线退回 `len(rows)`
+——9/9 CAUGHT，全部红在点名那一页。M9 在接线**之前**跑过一次，那时它 MISSED（整套 853 全绿），
+这才有上面那条用例：把一份行的臂名改成不在名单里的，两处数法才被掰开（`A 2 局（3 份日志）` 是接线前
+的读数）。
+
+两处限界跟着这一格写。① 当时同一条判据只接到了闸门这一侧：`m1_win_rate` 的 `n_games` 数的还是文件，
+同一个目录它报 4（`n_decisive` 走 `DECISIVE` 筛过的分母，所以胜率本身没错，错的只是"本批 N 局"那一格，
+而 `batch.py:658` 那张臂级表头的"局"列拿的就是它）。这一句"还没有读者"由下面 `#100` 收掉，那一节
+量的是它在胜率层漏出来的两句新假话。② 本轮往 `metrics.py` 里插了两段，把 README 点它的
+行号引用顶偏 26 处（第一次 17、修完第四句假话后 9），逐条 grep 到目标语句才敢改号。这一族的成本就是这样：
+名字有闸门兜底，行号只能靠改的时候手上有 grep。
+
+#### 胜率层把两份没有局的文件数成了五局：`#100`
+
+`#99` 那条限界①不是"还没接"那么轻：同一条判据接进了闸门，胜率层仍然从传进来的列表开头选，于是那
+两份没有局的字节在那里照样是局。拿真端点的三份日志（`data/real-20260924/`，gitignored）加上 `#99`
+表里那两条命令造出的坏字节（只剩页眉的一份、0 字节一份）放进同一目录，19:19:08Z 量两种代码各说什么
+（末列是同一批真日志去掉坏字节的对照）：
+
+| 读数 | 胜率层没有这条判据 | 修完之后 | 只剩三份真日志 |
+|---|---|---|---|
+| `n_games` | 5 | 3 | 3 |
+| `n_files` | 5 | 5 | 3 |
+| `n_synthetic_excluded` | 1 | 0 | 0 |
+| `excluded` | `{"unfinished": 1}` | `{}` | `{}` |
+| `hollow.n` | 0 | 2 | 0 |
+| `good_win_rate` / `wilson95` / `mean_days` | 0.0 / [0.0, 0.561] / 3.33 | 同左 | 同左 |
+
+最后一行是这个缺陷的形状：**胜率那三个数从头到尾没错**（`is_synthetic` 与 `DECISIVE` 那两道筛本来
+就把它们挡在区间外面），错的只是"本批 N 局"这一格和拿它渲染的臂级表头。中间两行才是新东西，它们是
+`#99` 那四句假话在胜率层的孪生：一份 0 字节的文件被算成"剔了一桌替身"（替没人登记的字节编了一张
+座位表），一份只有页眉的被算成"打完了没分出胜负"（把"后面没人写下事实"说成模型的行为）。
+
+修法与 `#99` 同形：`m1_win_rate` 先分 `hollow` / `played`（`src/wolfengine/metrics.py:449`），
+`synthetic` / `usable` / `decisive` 三条链全部从 `played` 出发，`n_games` 只数有局的份、`n_files` 数
+交进来的份。"不是局的文件"那一格抽成一次算术（`_hollow_files`，`src/wolfengine/metrics.py:507`）：
+共享的是谓词（几份、每份什么形状），结论那半句仍各出口自带——胜率点名它的分子分母，闸门点名五条
+判据的 n。整句共享会把 `#99` 里那条 18:44:57Z 的逐字读数改掉，而散文里钉过的历史不该为了少写一个
+参数就重钉。渲染侧 `src/wolfengine/batch.py:644` 的 `_m1_md` 只在两个数不等时并排印 `2（3 份）`，
+相等时括号是噪声，两个数都不许渲染器自己数第三遍。同一目录修完后的逐字读数（19:19:08Z）：
+
+    hollow.note: 不是局的文件：2 份（这一局只有开局记录：后面一条事件都没有；这个文件没有开局记录（manifest 那一行）：说不出它是哪一局）——它们没有事件，上面胜率的分子与分母里没有它们一笔。
+    gate: PASS n_games 3 n_files 5 hollow 2
+
+量这一格的时候顺手抓出第二个缺陷，这次在判据自己身上：`hollow_notice` 拿的是
+`meta_notice(...) or empty_notice(...)`，而 `meta_notice` 说的是**叫不出这是哪一局**，不是**这里没有
+一局**。19:03:35Z 现测：一份页眉被删、9 条发言还在的日志，在 `#99` 之后的闸门里报 n_games=0、
+NOT_EVALUABLE——那一局真打了，事件就在字节里；页眉缺失从 `#52` 起有自己的读者和自己那句话。改成
+`events` 先判（`src/wolfengine/metrics.py:351`）。这一条先有用例再有代码，正反两向都在：有事件、没
+页眉＝一局且五条判据的 n 照旧；把同样的事件删干净＝零局。
+
+四条新用例：
+
+- `test_m1_counts_a_file_with_no_game_in_the_files_not_in_the_games`：3 份里有 1 局，`n_files` 是 3、
+  `hollow.n` 是 2，而胜率、区间、平均天数、角色存活、分层与 `excluded`、`n_synthetic_excluded`
+  逐字段等于只喂那一局时的值——多加两个坏字节，一格数字都不许动。
+- `test_m1_over_a_folder_of_such_files_says_there_is_no_game`：整目录都是坏文件时说的是"没有一局"，
+  胜率给 `None`、区间给满格，既不写"全为替身桌"也不沿用那句"仅作描述"（后者假设有一批局被采样了）。
+- `test_the_m1_table_shows_the_files_that_held_no_game`：那一格有读者了——臂级表里 A 印 `2（3 份）`、
+  B 印 `2`，另起的一行带着 `meta_notice` 的原句。它不绕 `compare`，因为往一臂多塞一份文件会先撞上
+  配对守卫（`#49` 那一族）。
+- `tests/test_synthetic_attribution.py` 里走 `m1_win_rate` 的那五格，夹具从"只有页眉的文件"换成"真的
+  替身桌"（`played=True`，`#99` 加的开关）。断言一个字没松：它们测的是那道门，而门现在只管有局的
+  那几份。
+
+牙口是 11 具变异、19:20:40–19:23:52Z 全程离线（证人四页：金样本、配对批次、替身归因、闸门；基线先绿
+才开工，每具按 sha256 还原并核对）：M1 判据退回 `#99` 那一版、M2 胜率层不拆（本体）、M3 `usable`
+回到从 `games` 里选、M4 `n_games` 数文件、M5 `n_files` 塌成局数（`#99` 那格死字段的探针）、
+M6「没有一局」那一支恒不触发、M7 表格恒带括号、M8 表格不印那一行、M9 共享措辞里丢掉"每份是什么
+形状"、M10 胜率层那一格恒空——10/10 CAUGHT，全部红在点名页里，"这一具被哪条用例抓住"是可指的。
+牙口开的是那四页而不是整套，所以"其余全绿"不由这次电池担保；M11 是唯一另跑了整套的一具，而它正是
+这次唯一的 MISSED，预注册在先：把闸门那一格结论的尾巴（"……上面五条判据的 n 里没有它们一笔"）删掉，
+858 个用例仍全绿。渲染器把 `hollow` 那一格的原句搬进 `comparison.md`（`batch.py:691`），但没人断言
+那半句——它和 `#99` 的 M4 同族（那里是"发出去的字段没有读者"，这里是"印出来的句子没有断言"，同一
+件事的两个方向：改它没人红），差别是这次明知代价才选：共享谓词、不共享整句。要收掉它就得把那整句
+钉进用例，而 `#99` 那条历史引文就会从读数变成断言的俘虏。
+
+另一处限界跟着写：这一格修的是读侧聚合，字节层没有新东西——造成那两份文件的仍是半截落盘（`#46`、
+`#53` 各自已有名字），读侧的义务是把半截说成半截，这一条尽到了；写侧的落盘顺序不在本轮决定里。
+
+#### 「不是局的文件：2 份」说得出份数，说不出是哪两份：`#101`
+
+`#100` 收尾时那一格里还剩最后一格没接上：`_hollow_files` 除了份数和形状，还算了一份
+`paths`（每份文件的 basename），而**两个出口都只印 `note`**。19:34:39Z 拿这条探了一遍：把
+`paths` 改成恒空列表，整套 858 条一个字都不红——那正是 `#99` 的 M4 抓过的形状（发出去的字段没有
+读者）。这一族在本仓库有现成的口径，`docs/comparison.md` 的退化局那一节早就写了"**只报计数不算
+点名**：拿着 3/40 开不了那一局的转录"；份数同理，拿着"2 份"删不掉那一份字节，而它留在目录里会
+继续污染下一批的局数。
+
+修法是给那一行补一个读者，不新写句子：`_hollow_line`（`src/wolfengine/batch.py:634`）把指标的
+`note` 和 `paths` 拼成出口那一行，闸门与胜率两处共用它；指标里那句 `note` 一个字不动，`#99` 与
+`#100` 各自钉着的两条逐字读数因此仍然是对当时输出的真实复述。真日志目录 + 两份坏字节的现读
+（19:41:20Z，`wolf gate /tmp/hollow101`，rc 0，行尾就是新加的那半句）：
+
+      - 不是局的文件：2 份（这一局只有开局记录：后面一条事件都没有；这个文件没有开局记录（manifest 那一行）：说不出它是哪一局）——它们没有事件，上面五条判据的 n 里没有它们一笔。（文件：20260924T888888Z_zero-byte.jsonl、20260924T999999Z_opened-only.jsonl）
+
+牙口两条：新用例 `test_the_gate_names_which_files_held_no_game`（走 `cli.main(["gate", …])`，
+从落盘的 `m3_gate.md` 里读那一行），和给既有的
+`test_the_m1_table_shows_the_files_that_held_no_game` 补的一格（胜率那张表）。断言写的是**整段**
+`（文件：interrupted.jsonl）`，不是"包含文件名"：第一版用包含写法时，把 `paths` 换成全路径的变异
+M2 会绿——路径里当然也含那个名字，而一整条路径会把那一屏挤掉，这正是 basename 的理由。
+6 具变异、19:38:50–19:41:10Z 全程离线（证人还是那四页，基线先绿，每具按 sha256 还原并核对）：
+M1 点名整个不加、M2 印全路径、M3 只胜率出口点名、M4 只闸门出口点名、M5 `paths` 恒空（就是
+19:34:39Z 那具 MISSED，现在红了）、M6 名字由渲染器自己造一遍（第二处算术）——6/6 CAUGHT，
+M3/M4 各自只红在对应那一个出口的用例上，说明两处读者是真的两处。
+
+一处限界跟着写：那半句没有上限。`compare` 的 `HASH_MISMATCH` 那一族印前 5 个（`bad[:5]`），这里
+一份没截：坏文件上几十份时那一行会很长。先长着的理由是这一族的方向反了——"这一批里有 40 份字节
+不是局"本身就是要响的那件事，把它折成"……等 40 份"等于把规模重新藏回数字里。真要截，得同时说清
+去哪里看全表，那是下一个决定。
+
+#### 一个主判据、两个分母：`#102`
+
+`#101` 那条限界（"分母"这一族还有别的洞）在收尾的现读里就露出来了。闸门那一侧的轮次来自
+`src/wolfengine/metrics.py:694`，单局视图那一侧来自 `m5_style_collapse` 的第一行——**同一个
+`speech_rounds`、同一份事件**，可对主判据给出两个数：`wolf gate` 按次合并（被动次数 ÷ 全部次数），
+`wolf audit` 的头条 `passivity_mean` 是"每轮速率再取均值"。19:49:01Z 在
+`data/real-20260924/20260924T153509Z_g00000301.jsonl` 上现读，那一局三个发言轮规模 9/2/7、逐轮速率
+0.1111、0.5、0.0：
+
+      按轮取均值   (0.1111 + 0.5 + 0.0) / 3 = 0.2037   ← 改动前 `wolf audit` 的头条
+      按次合并     2 / 18                  = 0.1111   ← 闸门一直读的，也是现在两边的数
+
+（0.2037 是拿现在的逐轮读数复算出来的，与 19:49:01Z 改动前 audit 直接印出来的那格一致；0.1111 是
+20:08:50Z 两个出口各自的现读。）1.83 倍，同一局、同一判据、隔一个命令行。
+
+构造桌把它顶到阈值上（19:51:04Z）：一轮九个人、五个人被动，加一轮只有一个人开口，共十个 turn，
+被动五次。按轮均值是 **0.2778**（看着达标），按次合并是 **0.5**（闸门判 FAIL），而阈值是
+`< 0.4`——两个数正好一边一个判法。这不是"两个视图各说各话"可以放过去的理由，因为
+`m5_style_collapse` 的返回值里就带着 `gate` 那一格（把闸门阈值原样搬过来给人比大小）：拿着一个
+不同分母的数去比那个阈值，就是把一桌沉默读成达标。
+
+修法是让一个算术只有一处，不是把闸门拉低。抽出三把尺子：`round_readings`（每轮一把，两个出口共用）、
+`round_mean`（按轮均值）、`pooled_passivity`（按次合并，连同分母一起返回）。`m3_gate_verdict` 里那三行
+自己写的 list-comprehension 全部删掉，`m5_style_collapse` 的头条改名 `passivity_pooled`——把分母写进
+名字里，因为 `#102` 之后仓库里同时存在两种聚合口径，靠名字区分比靠记忆可靠。另外两条判据**口径没动**
+（两处本来就相等，动它是改预注册判据的语义，不是修 bug），但它们也一并走 `round_readings`/`round_mean`：
+以前闸门平均的是**未取整**的值、单局视图平均的是取整到 4 位的值，同一批轮在两边的均值能差 0.0001，
+正好够在 `< 0.35` 那一格改判——取整次序也是"两个分母"的一种。
+
+      - passivity_rate = 0.1111（需 < 0.4，n=18）达标     ← 20:08:50Z，`wolf gate` 只放那一局真日志
+
+牙口两条：`test_the_passivity_headline_pools_turns_instead_of_averaging_rounds` 钉住 0.5 并写明
+"每轮均值会把这一格读成 0.2778"；`test_the_audit_view_and_the_gate_report_the_same_primary_criterion`
+把两个出口的三条判据逐个对齐（后两条今天相等，放进这一条是钉子：谁再把它们拆开就该红）。金样本
+`test_golden_game` 那格跟着重钉 `1/9/3` → `1/17`（那一局三轮 9/6/2 共 17 个 turn、一次被动），
+`docs/metrics.md` 的替身桌读数跟着重测 `0.1175` → `0.1154`（同一批 mock 字节，两个口径）。
+
+6 具变异、20:00:10–20:07:20Z 全程离线（基线先绿：861 passed，每具按 sha256 还原并核对）：
+M1 `pooled_passivity` 退回每轮均值（CAUGHT，行为侧证人两条）、M2 闸门再自己算一遍（CAUGHT，唯一
+证人是对齐那一条，正是它该红的地方）、M3 `round_mean` 把没有读数的轮当成 0（CAUGHT，`#95` 那条
+沉默轮用例）、M4 判据的 `n` 数全部轮而不是有读数的轮、M5 `dup_exact6_mean` 取错列（预注册 MISSED，
+兑现）、M6 每轮的 `passivity_rate` 恒 0（**预注册 MISSED，实际 CAUGHT**——被本轮新加的那条按轮断言
+抓住了，预注册失效，如实记在这里）。
+
+M4 那一具名义上 CAUGHT，实际不算：它唯一的红是
+`test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_beside_it`，也就是 `#77`
+点过名的那类假证人（它比的是行号两侧的 token，不看 `n` 是多少）。读 `n` 的断言有两条，但两条都不
+带沉默轮——`criteria["collapse_round"]["n"] == 4` 那条的夹具四轮全有读数，`len(per)` 和它有读数的
+轮数本来就是同一个数；有沉默轮的那条只断言 `value is None`，没数分母。所以"M4 被抓住了"这句不能
+当作这一格的担保。
+
+一处限界跟着写，并且它就是 `#103`：闸门两条风格判据的**分母**没有行为读者（上段），`dup_exact6_mean`
+是审计输出里的一格而全仓库没有一条断言读过它（20:08:45Z 现读 `wolf audit` 的 `m5_style` 键：
+`collapse_round_mean`、`dup_exact6_mean`、`opening_distinct_mean`、`passivity_pooled` 四格，而
+`docs/metrics.md` 的 M5 那节写的是"两条措辞尺子取均值"，第三把尺子从来没在文档里出现过名字）。
+另一处：主判据换成按次合并之后，`#102` 之前所有印在文档与提交里的 `passivity_mean` 读数都是按轮
+口径的历史值，本仓库不重述它们，也不拿新数去覆盖那些带时间戳的复述。
+
+#### 一轮只有一张话筒时，两条尺子发的是通行证：`#103`
+
+`#102` 那具只红了行号闸门的 M4，值得回头查清它凭什么没红在行为上。读 `n` 的断言其实有两条：
+`criteria["collapse_round"]["n"] == 4` 那一条的夹具四轮全有读数，`len(per)` 与"有读数的轮数"当时是
+同一个数；有沉默轮的那一条只断言 `value is None`，没数分母。顺着这条线把 `collapse_round` 的分支读
+一遍，撞见了比 `n` 更大的东西——`if len(spoken) < 2: return 0.0`。
+
+一轮里只有一个人开口时，两条措辞尺子各交回一个**通过方向**的定义值：`collapse_round` 给 `0.0`
+（`< 0.35` 达标）、`opening_distinct_rate` 给 `1.0`（`> 0.8` 达标），而 plan §8 给前者的定义是"同轮内
+**两两** char-4-gram Jaccard 的均值"——一个人没有可比的一对。`#95` 立的规矩（"沉默不是塌缩，也不是
+一切各不相同"）当时只落在"整轮全空"那一档，`[]` 还留在旧的 `0.0` 上，于是两兄弟对"没有可比对象"
+这件事给两个答案（`collapse_round([])` 是 `0.0`、`opening_distinct_rate([])` 是 `None`）。
+
+真日志不是假想敌。20:12:07Z 现读 `data/real-20260924/…g00000301`：day-1 那个 PK 轮有两条发言记录，
+其中一条是空串，所以开口人数是 1。
+
+      轮（day/phase）        开口人数   collapse_round        opening_distinct_rate
+      1 / day_speech            9       0.0127                     1.0
+      1 / day_pk_speech         1       None（改前 0.0）     None（改前 1.0）
+      2 / day_speech            7       0.0140                     1.0
+      闸门那一格                        0.0089 → 0.0134        n=3 → n=2
+
+`0.0089` 是 `(0.0127 + 0.0 + 0.0140) / 3`，`0.0134` 是 `(0.0127 + 0.0140) / 2`：那 34% 的"更不塌缩"
+是一次没有可比对象的投票换来的。构造桌把它顶到整一半（20:13:16Z）：九人轮加一个"一人开口、一人空手"
+的轮，闸门 `collapse_round` 读 `0.0216`（n=2），而九人轮自己那格是 `0.0433`。
+
+修法是两条尺子的地板一起抬到"两个开口的"，`[]` 收进同一条规则（不再有"这一轮没发生"和"这一轮一个人
+说话"两个口径），批级 `n` 只数有读数的轮。主判据一个字不动：空手那一条也是一个 turn，`passivity_rate`
+量的本来就是行为，一个都不该少算——新用例里 `n` 那一格因此钉的是 11，不是 10。
+
+连带一处：`scripts/calibrate.py` 的温度扫描以前写的是 `round(collapse_round(speeches), 3)`，某个温度下
+若干次采样只成 1 次时，`None` 会直接被 `round()` 接住而 `TypeError`——工具在真端点上花完钱之后才炸，
+正是这一族该防的位置。现在 `None` 原样进表，那一格是空格，旁边一格就是 `n_speech`，读表的人自己看得
+见为什么没数。渲染侧不用改：`render_md` 的 `table()` 本来就把 `None` 画成空格，这是仓库里"没有读数"
+的既有画法。
+
+牙口两条，RED 是干净失败而不是报错（20:13:55Z）：`assert 0.0 is None` 和
+`assert 2 == 1`——前者是定义值冒充测量，后者是分母收留了没有读数的轮。
+
+6 具变异、20:19–20:26Z 全程离线（基线先绿：863 passed，每具跑完按 sha256 还原并核对）：M1 把
+`collapse_round` 退回 `#95` 的口径（只挡全空那一档）、M2 对 `opening_distinct_rate` 做同一件事、
+M3 把闸门的 collapse 分母数成全部轮、M4 对 opening 分母做同一件事、M5 让 `collapse_round` 数条目
+而不是数开口的人（"一人开口 + 一人空手"会被当成可比的一对）。五具全部 CAUGHT，两个细节值得记：
+M1 的证人有三条，第三条是 `#95` 那条沉默轮用例——新规矩没有把旧规矩顶掉；M3 的证人两条，其中一条
+是行为侧的 `test_a_one_microphone_round_is_left_out_of_the_style_denominators`，也就是说行号闸门这次
+只是**第二个**读者而不是唯一的读者，`#102` 点名的那类假证人不再单独担保这一格。M5 有 4 个证人，最后
+那一个要单独点名它红的方式：`test_a_finished_batch_prints_its_line_and_exits_0` 单独重跑（20:39:47Z）
+看到的是 `ZeroDivisionError`——守卫改成看条目之后，替身桌那轮"两条发言都是空串"过了守卫、
+`combinations(spoken, 2)` 给空、`sum / len` 当场炸，批次那一行连同 traceback 一起沉进 stderr。这是一只
+崩溃证人，不等于"批次出口读着这个数字"；它顺带证实替身桌真会产出全空的轮，也就是 `#95` 与本轮立地板时
+说的那件事。
+
+M6（`calibrate.py` 不接 `None`）预注册 MISSED，兑现：863 条全绿、证人为空，那一格改完当时无人读。
+补上的读者是 `tests/test_calibrate_rehearsal.py` 最后一条
+`test_a_single_success_in_the_diversity_scan_is_reported_as_no_reading`——桩在这个温度下只让一次采样
+成功，表里两格必须是 `None`，而旁边的 `seat_mention_rate` 仍要有数，因为点名率是逐条算的，一份发言
+也量得到。同一具变异重跑、20:35–20:38Z（基线先绿：864 passed）：CAUGHT，唯一证人就是它。模块因此
+15 → 16 条，整套 863 → 864 个用例。
+
+一处限界跟着写：地板抬到"两个开口的"之后，第三条尺子还在旧口径上。`shared_substring_rate`
+（`dup_exact6_rate`，plan §8 M5 那格点名的第三条）对同一个 PK 轮交回的仍是 `0.0`（20:12:07Z 现读），
+理由是它的判据是"有没有 ≥2 份共享的 6 字窗口"，一份发言在算术上确实没有共享者——但"确实没有共享"
+和"没有可比对象"在这一点上读起来是同一件事，而它连一个读者都没有：`dup_exact6_mean` 在 `wolf audit`
+的输出里是一格（20:08:45Z 现读那四个键之一），全仓库没有一条断言读过它，`docs/metrics.md` 的 M5
+那一节写的是"两条措辞尺子取均值"，第三把尺子从来没在文档里出现过名字。这一族交给 `#104`。
+
+#### 第三条尺子站在旧地板上，而且没有读者：`#104`
+
+`#103` 收尾时把那半句留给了这里。三把措辞尺子里，`collapse_round` 和 `opening_distinct_rate` 是闸门
+的判据（有阈值，所以它们红得起来），`dup_exact6_rate` 不是——plan §8 只点了它的名字，没给阈值，它
+只出数。"只出数"的字段最容易在两件事上同时失守：口径跟着旧规矩走，而且没人读它。
+
+20:45:51Z 现测（改动前）这一族的两个洞：`shared_substring_rate([solo])`、`([solo, ""])`、`([])`
+全是 `0.0`——`#103` 抬的地板（开口人数不到两个 → 没有读数）没抬到它；更要紧的是它的分母取的是
+"本轮条目数"而不是"本轮开口人数"，所以**两个人逐字复读、七个人空手**的一轮读成 `0.2222`，而这句话
+本该读 `1.0`。空手在这里不是"没重复"，它是把分母撑大的一票，正是 `#95` 拒过的东西。
+
+真日志同一格的账（20:43:00Z 现读，实现落地后 20:51:53Z 复核）：
+
+      局                每轮 `dup_exact6_rate`        `dup_exact6_mean`
+      g00000301    0.6667 / None（改前 0.0）/ 0.8571    0.5079 → 0.7619（n=3 → n=2）
+      g00000300    0.8889 / 1.0 / 1.0                   0.9630（无变化）
+      g00000302    1.0 / 0.8571 / 0.6                   0.8190（无变化）
+
+`g00000301` 那三成的"更不重复"和 `#103` 里那半场"更不塌缩"是同一个 PK 轮投出来的：两条发言记录，
+一条是空串。另外两局没有这种轮，所以数字一格没动——这也再次说明为什么要拿真日志量，而不是按
+"最坏情况会怎样"写文档。
+
+修法不是再抄一遍守卫。地板搬到一处（`src/wolfengine/metrics.py:63` 的 `comparable_speeches`），
+它一次回答"本轮开口的有哪几份"，三把尺子各自的那句 `if len(spoken) < 2: return None` 都从它取数；
+`round_readings` 里那一格跟着改成 `None if dup is None else round(dup, 4)`，批级均值因此自动跳过它
+（`round_mean` 早就两端都判 `None`）。三处各写一遍正是这一族的来路：`#95` 写了两次，`#103` 补了
+一次，`#104` 再漏一次——漏的那处从来不是算术错，是没人把第三条尺子当回事。
+
+读者的那一半更要紧：`dup_exact6_mean` 在 `wolf audit` 的 `m5_style` 里是一格，而 `#102` 电池里
+"把它换成 `collapse_round_mean` 的列"那具变异是**当场兑现的 MISSED**（863 条全绿）。今天它有两个
+读者：`test_dup_exact6_mean_has_a_reader_and_skips_the_round_it_cannot_measure` 钉"跳过没有读数的轮"
+（夹具是九个人里两个逐字复读 + 一个单人 PK 轮，均值必须是 `0.2222`，改动前现测是 `0.1111`），
+金样本 `test_m5_treats_a_pk_round_as_its_own_round` 钉数值 `0.1111`（那一局三轮 `0.0 / 0.3333 / 0.0`，
+取错列时两格不可能同时绿）。
+
+顺带一条真读数，值得记在 M5 旁边而不是埋在表里：三局真日志上这把尺子每轮读 `0.6`–`1.0`
+（`g00000300` 的均值 `0.9630`），而同一批轮的 `collapse_round` 只读 `0.013`–`0.026`。逐字复用的
+片段到处都是，整体 n-gram 相似度却很低——这正是 plan §8 同时放两把尺子的理由，也说明为什么"只出数"
+的那一把不能被删：删掉它就只剩一把量不到复读的尺子。
+
+6 具变异、20:53–21:00Z 全程离线（基线先绿：866 passed，每具跑完按 sha256 还原并核对，
+`fc5f05c887fe`），预注册 6/6 CAUGHT、兑现 6/6：M1 把地板退回"只挡全空"（CAUGHT，2 个证人）、
+M2 把分母退回条目数（CAUGHT，唯一证人就是量稀释那一条）、M3 让地板不筛空——三把尺子一起塌
+（CAUGHT，6 个证人，`#95`、`#103`、`#104` 三代用例同时红，这就是"地板只写一处"的担保形状）、
+M4 每轮读数不接 `None`（CAUGHT，10 条红，而且它不是断言是崩溃：崩在 `round_readings` 里那格取 `None` 的除法
+抛 `TypeError: type NoneType doesn't define __round__`，21:05:55Z 单独复跑现读）、M5 取错列
+（**`#102` 的 MISSED 在这里翻过来**，CAUGHT，两个读者各自红一次）、M6 那一格整个不发（CAUGHT，
+3 个证人，其中行号闸门是 `#77` 点过名的假证人，另两条是真正的读者）。
+
+M4 那 10 条红里有一条脚本没报出名字，值得单独记：`test_a_clean_log_reports_no_torn_tail`。电池抓
+证人用的是 `^FAILED (\S+)$`，而 pytest 把过长的那行摘要截成了 `… - Ty...`，尾巴一接，`\S+$` 就匹配
+不上，名字被静默丢掉。也就是说**电池打印的证人名册是"被抓到的那些"，不是"红了的那些"**——计数
+（`10 failed`）才是分母。这只眼睛是 `#79` 那类"字节相同≠执行的是磁盘上的代码"的姊妹：一个只影响
+读侧报告的缺陷，不影响判定（那 10 条红照样让 M4 判 CAUGHT），但会让人以为证人比实际少。修法记在
+`#106`（电池脚本在 /tmp，不是产物）：正则换成 `^FAILED (\S+?)(?: - .*)?$`，并把"N failed"计数与
+名册长度并列打印，不等就点名。这一条改法已在那行真实输出上验过（21:08:42Z）：旧式 0 命中，新式抓到
+`test_a_clean_log_reports_no_torn_tail`，未截断的行照样一次到位。
+
+牙口两条是干净失败（20:46:30Z）：`assert 0.0 is None` 和 `[0.2222, 0.0] == [0.2222, None]`。
+`docs/metrics.md` 的 M5 那一节跟着改了口径：以前写"两条措辞尺子取均值"，现在写三把并把
+`dup_exact6_rate` 点了名——`#102`、`#103` 两节限界里引的那句"两条措辞尺子取均值"是 20:08:45Z
+的文档现读，留作历史，不回头改。
+
+一处限界：同一把"分母取条目数还是开口人数"的尺子还有一格没抬。`template_top1_share` 的分母是
+`len(r)`，也就是本轮的**条目数**，所以一轮里两个人念同一句、七个人空手时它读 `2/9`；这一格喂给
+C4 黑名单的不是它（黑名单直接拿 `template_top_fragments` 的片段），它只是给人看的比例，所以危害
+比 `dup_exact6_rate` 小一档。要不要把它一起抬到"开口人数"，是一个会改动已发布读数的决定（`#66`
+那轮就是按"占本轮份数"钉的），先记在这里，交给 `#105`。
+
+#### 同一行里不许有两个分母：`#105`
+
+`#104` 收尾时那句"还有一格没抬"量的就是这里。这一格比前三把尺子安静：三局真日志上它几乎**一个数字都
+没动**（21:11:50Z 现读，见下），所以它不会被任何一次报告推翻——但它坏的方式和前三把一模一样，而且它
+坏在**同一行内部**。
+
+21:12:57Z 现测（改动前）三行读数：
+
+      夹具（同一批句子）                      n   template_top1_share   同一行的 dup_exact6_rate
+      三句复读 + 六张空手                     9   0.3333                1.0
+      同样三句，没有空手                      3   1.0                   1.0
+      两份逐字相同的发言                      2   0.0（文本那一格 "")    1.0
+
+第一行与第二行是**同一批开口的人、同一句模板**，比例却差三倍：分母一个是本轮条目数、一个是本轮开口
+人数。而 `dup_exact6_rate`（`#104` 抬过的那一把）在两行里都读 `1.0`——所以这不是"两种都合理的口径"，
+是 `#102` 那个形状搬进了一行之内：同一个量在同一个出口有两个分母，人拿其中一个去解释另一个。第三行更要
+紧：只有两个人开口的轮，`min_count` 是 3，按定义不可能有候选，可它交回的仍是 `0.0` 加空文本，于是同一
+行里同时写着"开口的人全在复读"和"本轮没有模板"。
+
+地板搬到一处这件事，第四次兑现的还是 `comparable_speeches`（`src/wolfengine/metrics.py:63`），但这把
+尺子的门不是 2 而是 3：它数的就是"几个人共享那一句"，两份发言凑不出一个模板。算术从 `round_readings`
+里搬出来住进 `src/wolfengine/metrics.py:159` 的 `template_top_share`，两格（文本与比例）**一起**缺席，
+不再一个说"没有"一个说"没测"。反向也钉住了：三个人以上开口、确实没有共享片段的一轮仍读 `""` 加 `0.0`
+——`#66` 那句"None 会被均值吞掉"照旧成立，把"没测到"和"测出来干净"混成一个数是这一族从一开始就在拒的
+东西，矫枉不必过正。
+
+还有一条是这一族以前没碰过的：这把尺子的地板与 C4 黑名单的地板必须是同一个数。C4 拿的是
+`template_top_fragments` 的输出（`src/wolfengine/persona.py:158` 那条链，账在
+`tests/test_anti_repeat.py`），读数是 `template_top_share` 算的；两者各有默认值的那一天起，报告就在
+解释一份和它不同源的提示词。所以 `template_top_share` 把它的 `min_len` 与 `min_count` 原样传给挖片段
+的函数，另有一条守卫用例专门盯两个签名里的默认值。
+
+读者这一轮有三个：`test_the_template_share_divides_by_the_seats_that_spoke`（稀释，改动前红在
+`assert 0.3333 == 1.0`，21:14:25Z）、`test_a_round_without_three_microphones_gives_no_template_reading`
+（地板，改动前红在 `('', 0.0) == (None, None)`，21:14:13Z，同一行末尾还反钉了 0.0 那一档）、
+`test_the_template_share_and_the_c4_miner_share_one_floor`（默认值同源）。`tests/test_m3_gate.py` 因此
+43 → 46 条，整套 866 → 869 个用例。
+
+真日志那一头，这次的账要如实说清楚（21:11:50Z 现读，改动前后的每轮读数）：
+
+      局            发言轮   条目数≠开口人数的轮        template_top1_share 每轮（改前 → 改后）
+      g00000300       3     0                          0.3333 / 0.0 / 0.6   一字没动
+      g00000301       3     1（day-1 PK：2 条 1 人）    0.3333 / 0.0 / 0.0 → 0.3333 / None / 0.0
+      g00000302       3     0                          0.3333 / 0.4286 / 0.0   一字没动
+
+九个发言轮里只有一轮条目与开口不等，而那一轮本来就没有 ≥3 的候选，所以稀释那半**在今天的真数据上买不到
+新读数**——它买到的是"同一行不再有两个分母"。地板那半只动了一格：`g00000301` 的 PK 轮以前报"本轮没有
+模板"，现在报"这一轮量不了模板"。前三轮（`#95`、`#103`、`#104`）都能拿真日志指出一个被挪动的均值，这一
+轮不能；它的依据是形状，不是数量级。
+
+7 具变异、21:20:46Z–21:29:19Z 全程离线（基线先绿：869 passed，每具跑完按 sha256 还原并核对，
+`837a0653d91e`），预注册与兑现逐具对账一致：M1 分母退回条目数（CAUGHT，1 个证人，就是量稀释那条）、
+M2 地板退回"只挡全空"（CAUGHT，1 个）、M3 地板错用另两把尺子的 2（CAUGHT，1 个）、M4 反向过度修正、
+"没有模板"也发 `None`（CAUGHT，2 个，第二条正是 `#66` 那一轮的用例——它替旧口径守住了不该改的部分）、
+M5 `share` 的默认 min_count 与 miner 分家（CAUGHT，3 个）、M6 两格接反（CAUGHT，3 个）、
+M7 把不筛空的列表交给 miner（**预注册 MISSED、兑现 MISSED**：空串产生不出任何 6 字窗口，也含不住
+非空片段，所以这一具按构造是等价变异，不是漏网）。这一轮的脚本用了 `#106` 修好的证人正则，七具里
+"N failed" 与名册长度每具都相等（1/1、1/1、1/1、2/2、3/3、3/3、0/0），旧式正则在这七具上没有再吞名字。
+
+一处限界，交给下一轮：这一行里仍然只有 `n` 这一格是条目数。`#105` 之后，一张 `n=9` 配上
+`template_top1_share=1.0` 的行讲的是"九个人里三个开口、那三个全在复读"，但行里没有哪一格写着"三个"——
+读表的人要自己想得出除法。把它补成一格（或者给 `n` 换个不撒谎的名字），是 `#107`。
+
+#### 一行既然有两个分母，就两个都印出来：`#107`
+
+`#105` 收尾那句"行里没有哪一格写着三个"量的就是这里。这一轮没有换掉任何一个读数，也没有推翻任何一句
+判据——它补的是行里缺的那两格规模。
+
+`round_readings`（`src/wolfengine/metrics.py:942`）以前只交回一格 `n`，那是本轮的**条目数**；三把措辞
+尺子的分母却是**开口人数**（`comparable_speeches` 数出来的，`#95`/`#103`/`#104`/`#105` 四轮抬的同一道
+地板）。两个分母都按设计成立：`passivity_rate` 除的就是条目数，沉默正是它要量的东西，一个 turn 也不能
+少算——所以这不是 `#102` 那种"同一根尺子两处算"，而是一行里两个都真的分母只印了一个。后果落在那四种
+缺席上：改动前 21:38:12Z 现读真日志 `g00000301` 的 day-1 PK 那一行，面上只有条目 2、三条措辞尺子全
+`None` 加 `passivity_rate` 那一格的 0.5，读者看不出这个 2 是"两个人都说了话"还是"一个人说话一个人空手"
+——前者是量不出，后者是没得量，行里没有一个格子替 `#95`/`#103` 那两轮的决定说话。现在多一格 `n_spoken`，
+同一行在干净树上重读（22:01:48Z）是条目 2、开口 1：缺席从此有出处，而那个 0.5 一个字没变。
+
+另一格在局这一层：`passivity_pooled` 是这一族里唯一一个没有分母陪着印出来的比例（21:38:12Z 现读：真日志
+`g00000301` 那一局印 0.1111，旁边就是视图自己的 `gate` 那句 `<0.4`，而 18 这个数只在函数里待过一秒）。
+`#102` 挣来的决定是"头条按次合并"，
+`pooled_passivity` 因此本来就连分母一起算好了（三局合起来 60 个 turn，22:02:01Z 现读逐局 21/18/21、合并
+`passivity_pooled` 0.0333），只是出口把它当第二个返回值扔给了
+`_`。2/18 与 20/180 是同一个读数，而阈值只比大小——现在它叫 `n_turns`，与 `n_rounds` 并排。
+
+读者两条：`test_the_row_prints_both_of_its_denominators`（改动前 21:39:02Z 红在 `KeyError: 'n_spoken'`，
+钉的是稀释轮 9/3、单话筒轮 2/1、全空轮 9/0，并且**印出来的那格必须就是缺席服从的那道地板**——不然它只是
+一格好看的装饰）、`test_the_pooled_headline_prints_its_own_denominator`（改动前 21:43:11Z 红在
+`KeyError: 'n_turns'`，钉 `n_turns` 等于逐轮 `n` 之和、也等于头条真正除的那个数）。
+`test_m3_gate` 那个文件那一次从 46 涨到 48，整套从 869 涨到 871。
+
+牙口是 5 具变异，21:47:56Z 从基线起全程离线（基线 871 passed、`metrics.py` sha `92cbc9a3d485`，每具跑完
+按 sha256 还原并核对）：M1 `n_spoken` 退回条目数 → CAUGHT，2 证人（两条新用例同时红，21:49:39Z）；
+M2 `n_spoken` 改成数空手 → CAUGHT，1 证人；M3 整格删掉、回到改动前 → CAUGHT，3 红里两条是 `KeyError`，
+第三条是行号闸门被这次删行顶偏——它读的是行数不是行为（`#77` 那只眼睛），所以不算这格分母的读者；
+M4 `n_turns` 印成轮数 → CAUGHT，1 证人；M5 `n_turns` 取成开口人数 → CAUGHT，1 证人，红在第二条用例里
+那句"两格不许相等"——那句断言就是为这一具加的。M4/M5 的落地时间是 21:55:11Z 与 21:57:58Z，收尾再跑一次
+无变异：871 passed。
+
+第一版电池跑到 M4 时自己停了，这件事值得单独记：锚点 `"n_turns": n_turns,` 在 `metrics.py` 里出现两次
+（M3 压力视图与 M5 视图各一处），脚本开头那道"锚点必须唯一"的断言因此拒绝落地。它救的不是文件而是**归因**——
+`replace(...,1)` 会把变异打到前一个视图上，那一具照样会红、照样印得出名册，而名册里每一条都在指认别处的代码。
+补跑把锚点扩成两行，并另加一条哨兵断言钉"短锚仍然出现两次"：这个数哪天变了，说明视图形状动过，脚本的前提作废。
+
+这一轮还撞见 `#77` 记过的那只眼睛第二次没闭上：`metrics.py` 一天里被插了两回，第二次行号闸门报了 3 处
+漂移、放过了第 4 处——`truncated_call` 那个号已经偏了 3 行，闸门照样绿（21:44:40Z 我按名字逐条核才发现）。
+它的判据是"那一行出现了句子旁边那批 token 里的任意一个"，而 token 是**整段**取的、`None` 与 `batch`
+这类弱词在邻近几行到处都是，于是错号能靠邻居蒙过去。`#108` 这一节记的是把这只眼睛闭上的两半：取词收进
+引用自己的那句话，以及落在注释行上的号只认"写成名字"的证据。本轮动 `metrics.py` 之前，先按名字核过自己
+动到的那 6 个号。
+
+这一格在今天的真数据上换不来任何新读数，这一点要和 `#105` 一样写清楚：三局九个发言轮里两格只有一轮分家
+（22:01:48Z 干净树重读），
+而 20 局替身桌的 62 个发言轮里两格**处处相等**（21:42:12Z 现读，空手人数分布只有 0 一个档——合成替身每次都
+交回一句非空的话）。所以它的牙只能长在构造的夹具上，真日志能给的只有"那一轮的缺席从此有解释了"。
+
+#### 名字要写在被指的那一行上：把行号闸门的取词收进句子，`#108`
+
+`#77` 那只眼睛这轮闭上了。旧判据是"那一行出现了句子旁边那批 token 里的任意一个"，而 token 取自**整段**
+（±2 行）——`#72` 把窗口收到整行，取词范围却没跟着收，于是"这句话旁边"实际还是"这段话里"。两半各自
+先有红的探针（22:21:57Z 现读）。
+
+**第一半：取词收进引用自己的那句话**（以空行和句末标点为界，Markdown 的硬换行仍然接成一句）。语料的账
+按名册说（22:10:17Z）：107 处 `文件:行号` 引用在旧判据下全绿，收紧后红 9 处。其中 2 处是号本身错了：
+一处写着 `metrics.py` 的第 487 行，而 `_hollow_files` 的定义在 507 行（487 是一句 `elif usable and not
+decisive:`，靠段里的"不是局的文件"这几个字蒙绿的）；另一处把 note 写在 751，而 `note =` 起在 750。剩下
+7 处号没错、句子里没写名字，改的是句子：补上 `endswith`、`if as_seat is not None:`、`except LogDamage`、
+`c_belief`、`winner=winner`、`m3_gate.md`、`round_mean`。
+
+**第二半：落在注释行上的号只认"写成名字"的证据**（反引号里的内容、引号里的字面量），散文词不算。这一半
+是第一半装完之后仍然存在的洞，22:17:28Z 逐 token 核出来的：README 指 `DECISIVE` 的那个号写着第 251 行，
+那是它**上面**那行注释（定义在 253），而 251 里正好有 "a batch of outages"，句子里又写着"batch 的分母"，
+于是错号靠 `batch` 蒙绿——收紧到句子也救不了，因为那个词就在句子里。范围量在 22:18:41Z：107 处里落在注释
+行上一共 4 处，3 处反引号里就写着那行出现的名字（`c_belief`、`as_of`、`reuse_ratio: null`），只有
+`DECISIVE` 这处没有。所以这条规则的代价实测为零，而它逮到的正是剩下那一处；号已改成 253。
+
+读者三条：邻居句的名字不算证据（`test_a_name_from_the_neighbouring_sentence_is_not_evidence_for_this_pointer`）、
+句里的字面量算证据（`test_a_literal_named_in_the_same_sentence_is_evidence_too`）、注释行上的号要有名字
+（`test_a_pointer_at_a_comment_line_needs_a_name_written_on_that_line`）。`tests/test_doc_citations.py`
+22 → 25 条。
+
+**电池**（22:35:16Z 起，改完 README 重跑一遍，跑的都是整套测试）。基线：整套 874 个用例
+0 红，被改文件 sha 前缀 a57eff8f3507。三具变异各只改一处，锚点先以 `count() == 1` 证唯一，每具跑完立刻
+还原并按 sha 比对；预注册写死"每具恰好 1 条证人、且是本闸门自己的新用例"：
+
+- M-A 把取词退回整段 → 22:36:11Z 红 1，证人是邻居句那条。
+- M-B 把引号字面量从证据里去掉 → 22:37:06Z 红 1，证人字面量那条。
+- M-C 把注释行那半退回"任意 ASCII 词" → 22:38:01Z 红 1，证人注释行那条。
+- 收尾再跑一次无变异：22:39:25Z 整套 874 个 0 红。
+
+三具都符合预注册，而读全语料的那条（
+`test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_beside_it`）三具都不红——
+这正是 22:15:16Z 与 22:18:41Z 两次量数（"只靠字面量站着的" 0 处、"注释行上没名字的" 0 处）预告的结果：
+新规则在真语料上不换来新读数，只把 251 那一处已经错着的号咬住。
+
+第一版电池（22:16:09Z）有两处偏差，都是脚本自己的错，记在这儿免得再犯：
+
+- 它的 M-A 把两条规则混进一具（既退回整段取词、又去掉字面量），跑出来 2 个证人，对不上预注册的 1 个。
+  混了两条规则的变异等于没预注册——分不清是哪一条把它咬红的，拆成一具一条才有上面那三行。
+- 它给出过一个假证人 `test_a_finished_batch_prints_its_line_and_exits_0`：那一具跑了 98.72s，而另两具
+  53.01s / 80.91s；单独重跑全绿，而红的时候是 22:20:53Z 我在电池期间并发跑探针。桩端点的计时用例在负载下
+  会红，而电池跑的就是整套测试。第二版起，电池跑期间不再并发任何东西。
+
+#### 弃票率的分母从此在自己那一行上：`m8_strategy` 补两格，`#109`
+
+`abstention_rate` 一直是 (问到的票数 − 点了名的票数) / 问到的票数，而那两个数过去只活在
+`m8_strategy_proxies` 的函数体里。同族的前一轮是 `#107`（一行有两个分母就都印出来）、再前面是
+`#105`（口径改了而读数不变，没人会发现），但这一格更容易被误读：0.28 既可以是一桌 25 张票里弃 7 张，
+也可以是一桌 250 张里弃 70 张——前者是"有人不肯投"，后者只是"桌子更大"。现在 `n_ballots_asked` 与
+`n_ballots_cast` 跟着比率一起进 audit JSON，口径与逐份读数写在 `docs/metrics.md` 的 M8 那一节。
+
+钉的不是"字段在"，而是"由那一行自己就能复原出那个率"，另加一条不对称：比率的分母数**所有**投票波，
+而逐轮那两串（`ballot_mandate` 与熵）只数落了结算记录的波。真数据的账（22:47:37Z 现读 14 份日志：
+真端点三局 + 20260920 那三份 + 本轮 `--mock` 八局）：两条分母各自都能由独立的数法复原，14 份全一致；
+把每次结算的 tally 值加起来等于 `n_ballots_cast`，也是 14 份全一致。而"asked 恰好等于有结算那几波的
+票数"在 14 份里全部成立——**今天没有一份日志留有"投了票却没落 `vote_result`"的尾波**，所以那条不对称
+（`test_a_wave_that_never_settled_is_in_the_rate_and_out_of_the_per_wave_lists`）的牙只能长在构造的波上，
+与 `#105`、`#108` 同一形状：新判据在真日志上换不来新读数，它买的是"这一格从此可以被读的人自己复算"。
+
+电池（22:49:11Z 起，三具都改 `metrics.py` 里的一行、不换行数，免得把文档里指向该文件的号顶偏）：
+基线整套 876 个用例 0 红，sha 前缀 aded7a6bdee5。N1 把 asked 写成轮数 → 22:50:06Z 红 2；
+N2 把 asked 退回"只数有结算的波" → 22:51:05Z **只红 1**，证人正是那条不对称用例——这一具是两条新用例的
+分水岭：另一条的夹具三轮全有结算，两串分母在那儿恰好相等，它必须活着；N3 把 cast 写成 asked
+（等于宣称零弃票）→ 22:52:22Z 红 2。收尾无变异 22:53:25Z 又是 876 个 0 红。三条都符合预注册。
+
+#### 弃票有两个写者，第二个没有读者：`vote_result.abstainers` 删掉，`#110`
+
+每一张弃票在票面上就写着 `target: null`，而 `phases._publish` 另外把 `abstainers=list(res.abstainers)`
+抄进结算记录——同一件事两份实现。两份今天说的是同一件事，所以它一直没被抓到：把 14 份日志的 43 次结算
+逐轮摊开，用票面复原出的弃票**名单**（不只张数）与那份字段名单比，
+43/43 完全相同（23:08:28Z 现读；张数口径 22:57:52Z、23:08:15Z 两次都是 14/14 一致）。所以删它不需要
+先等到哪份日志出错；需要的是确认没有人在读它，而 grep 给出的答案是零（22:57:35Z 与改完后 23:07:40Z 各
+一次）：`src/`、`scripts/`、`tests/`、`docs/`、`README.md` 里剩下的 `abstainers` 只有 `rules.VoteResult`
+那个字段——它当天由 `phases.py` 里的一句拼接当场算成人能读的"弃票 N 人"，那句有读者（`test_rules.py` 钉的是
+`VoteResult` 本身，不是事件）。`#113` 把这一路拆开了：名单仍只在票面上，写进结算记录的是**张数** `abstained`
+（`phases.py:296`），句子改由 `compress.py:141` 的 `_vote_summary` 拼——读者没变少，只是"同一件事两份实现"少了一份。两份里的哪一份该活下来，判据不是"谁先写的"，是"谁有读者"。
+
+已有的日志不受影响：那一格还在旧文件里躺着，而读的人一个也没少（事件流是 append-only 的，这次改动
+不回改任何已落盘的日志）。删的是抄出来的那一份，同一条处理在**同一张**结算记录上早就走过一次：
+当时钉"弃票 N 人"那句话由 `tally` 现算、不另存文本的那条用例，`#113` 把它拆成了三条（名字见
+〈投票结算的人话有两个写者〉）。新的结算记录不再写弃票名单。钉法是一条用例而不是电池：
+`test_the_settlement_keeps_no_second_copy_of_the_abstainers`
+（`tests/test_vote_wave.py` 现 6 条）三句连在一起才算数——事件里没有那个键、票面**真的**写着 3/5/9 三个名字、
+"弃票3人"照旧（那一句当天从事件的 `summary` 里读，`#113` 起从 `compress.render_line` 里读，钉的还是同一句话）。
+只有第一句会被一张没人弃票的桌满足，第二、三句就是它的反证；这一具刀是
+"把那个 kwarg 加回去"，证人正是这条用例（改之前看着它红：`e20 又把弃票名单抄进结算记录`），所以不必再跑
+一整套变异。改完跑整套 877 个用例 0 红（23:08:35Z），这一节写完又跑了一次仍是 877（23:14:36Z）——README
+自己就是测试输入，所以引用改完必须再来一遍。
+
+这一片顺带把两处文档账清了，两处都是 `#108` 那条教训现世的：删掉那一行让 `phases.py` 净长三行，指向
+PK 旗标的两个 README 号因此从 301 漂了，闸门建议改成 298——而 298 行是当时那句拼接的 `def`，真正的
+`elif pending_pk:` 在 304 行，**按名字 grep 定位、没跟着建议号走**。另一处是计数闸门把 `#73` 那天的历史条数顶成了今天的数：
+`tests/test_vote_wave.py` 添了一条、当天数到五条（今天现 6 条：`#113` 又添了一条），于是把 `#73` 那四个数改写成汉字（四条、四条、二条、二条）并在旁边
+点名"这是历史读数、现行条数归闸门核"，与〈那道行号闸门收得比它自己写的还松：`#72`〉末尾那句"别拿这个数
+当今天的账"同一口径；没有把 791 那格历史总数改成 792，也没有为了迎合闸门把新用例挪去别的文件。
+
+#### 死因的人话有两个写者：`cause_zh` 删掉，`#111`
+
+`phases.py` 的三处 `t.say(Kind.DEATH, ...)` 每写完 `cause` 都顺手再抄一份 `cause_zh=CAUSE_ZH.get(...)`，
+而 `events.py:77` 声明的形状里 `DEATH` 只有 `seat` 与 `cause` 两个键——多出来那一份不在任何一处契约上。
+判据不是"谁先写的"，是"`cause` 是游戏事实、译文是散文"：`compress.py` 里 `VERDICT_ZH` 上面那两行注释早就
+写过同一个道理（查验结果作为枚举入库，翻译归渲染侧），死因只是没照着办。`#110` 删的是没有读者的第二份事实，
+这一片删的是没有契约的第二种文体。
+
+它一直没被抓到，因为两份今天说的是同一件事：6 份日志（`data/` 里 20260920 的三份 + 真端点三局）的 37 条
+DEATH 逐条比 `cause_zh == CAUSE_ZH[cause]`，37/37 相同、且没有一条死法在表外（23:47:12Z 现读）。要看分岔
+得造第五种死法，而"把这句死法说成人话"的地方有四处，回退值各不相同：两处去读那个字段（`render_html._axis`、
+`assemble._status_card`），两处根本不读、自己现算（`compress.render_line`、`compress.day_fold_lines`）。
+把一条 `cause="old_witch_curse"` 的死亡递给改前的四个出口（23:47:50Z 现读，两列分别是字段在和字段缺失）：
+
+| 读者 | 字段在（写手给不出译文时抄的是枚举原文） | 字段缺失（也就是声明里那个形状） |
+|---|---|---|
+| `compress.render_line` 时间线 | 出局（死亡） | 出局（死亡） |
+| `compress.day_fold_lines` 当日摘要 | 出局：5号。 | 出局：5号。 |
+| `render_html._axis` 出局顺序 | `5号 old_witch_curse` | `5号 `（后面什么都没有） |
+| `assemble._status_card` 进提示词的局况 | `5号(第2天old_witch_curse)` | 同左 |
+
+改后四格在两列下同为"死亡"（23:47:46Z，同一条命令、只换 `sys.path`）。这一片唯一的可见故障在右列第三格：
+**复盘 HTML 的出局顺序轴把死因整个丢掉，印成 `5号 ` 后面一片空白**；而状态卡那一格更贵——英文枚举原文进了
+中文提示词，模型被要求把它当中文读，前者是给人看的一格漏字，后者会写进下一句话的分布里。
+
+钉法两条，另加一处要翻的旧账。`test_the_death_is_stored_as_an_enum_not_as_a_chinese_sentence`
+（`tests/test_golden_game.py` 现 43 条）先要求这一桌 5 条死亡一条不少、再逐条断言 payload 里没有 `cause_zh`，
+最后仍然断言"被狼刀"出现在渲染出的一行里——删的是存的那一份，不是这句人话。
+`test_one_death_says_the_same_sentence_to_every_reader_of_it`（`tests/test_wiring.py` 现 61 条、跑起来 82 个用例）
+拿表外死法当压力测试：先从时间线里正则抠出那句死法，再要求另外三个出口都含它，并单独断言枚举原文没进状态卡。
+旧日志不受影响：它们带着 `cause`，而读的人现在统一只读 `cause`。测试这边翻的旧账是——`test_golden_game.py`
+里整条 payload 的钉值原本赫然写着 `"cause_zh": "被狼刀"`，也就是**有一条用例在替这份双写作证**，先改它才动得了。
+RED 23:35:10Z 与 23:36:31Z 各一次（三条红：两条新用例 + 那个钉值），改完全套 879 个用例 0 红（23:43:58Z）；
+`day_fold_lines` 那一格写完就是绿的，所以按老规矩变异自证：把本地的 `CAUSE_ZH.get(..., '')` 塞回去，
+23:43:47Z 立刻红，`cmp` 证明还原后字节相同。
+
+这一片最值钱的是前半段量错的那件事，记下来给后面同类的字段审计用：**行为探测的出口集合会偷偷定义"读者集合"**。
+我拿一份日志驱动所有离线出口去比对，探测报"这个字段没人读"，而 `batch.py:349` 就在读 `degraded_threshold`。
+三个原因叠在一起：`compare` 只认带 `run_manifest.json` 的真批次目录，缺它 CLI 直接 rc 2 报"不是 wolf batch
+产出的目录"，批次侧的读法从单份日志出发根本走不到；提示词装配链（`info.py`、`actors.py`）和引擎机制（幂等守卫、
+`legality.py`）不是"给人看的出口"，探测不会替它们说话；而 `gate` 的产物 `comparison.md` 必须在 CLI 跑完之后
+重读一次，否则读到的是上一轮留在原地的文件。所以读者名单只能来自 grep 符号、装配路径、引擎机制三份并集，
+探测脚本负责回答的是"删掉它哪个出口的输出会变"，不是"谁在读"。
+
+#### 投票结算的人话有两个写者：`summary` 删掉，`#113`
+
+`#111` 那条"读者名单只能来自三份并集"的教训留下的下一步是**把每个事件的 payload 键摊出来数一遍**，
+这一格就是这么撞出来的：`vote_result` 里同时躺着 `{"tally", "exiled", "abstainers"|"—", "summary"}`——
+前三样是事实，第四样是这些事实的**中文说法**，而说法在 `compress._vote_summary` 里还有第二份实现。
+
+量出来的数（`data/**/*.jsonl`，8 份有结算的日志 / 11 份日志，30 次结算，21 句不同的 `summary`；
+两套键形按 20 与 10 分）：**两份实现从来没打过照面**。`render_line` 写的是 `p.get('summary') or
+_vote_summary(p)`，凡是落了 `summary` 的记录就走前者，于是那份派生实现在这 30 次里一次都没被读到——
+而它拼出来的句子和存进去的那句**在 30/30 上都不一样**（00:03:32Z）：它只拼"票型：…"，既不带弃票张数，
+也不带"谁出局/平票/先不定人"那半句。空票型那一支更糟：旧的派生写"无人被投票出局。"，而发射侧写
+"全员弃票，无人出局。"。这就是 `#110` 那一族的形状——两份实现对同一件事各说一遍，日志今天只念其中一份，
+另一份是等着出错的那一份。
+
+**把笔从 `phases` 手里拿走不是免费的**：`summary` 是模型读到的那一句话（编年史进 prompt），所以换作者
+必须逐字不变，否则这就是一次处理变更。因此改法是"删存的那一份 + 让新的那一份会拼全部的四种说法"：
+发射侧只写 `tally` / `exiled` / `abstained` / `pending_pk`（`src/wolfengine/events.py:76` 的形状表跟着改），
+`compress._vote_summary` 成为那句话唯一的作者，旧日志仍照抄自己存的那句（`p.get('summary') or …` 留着，
+注释点名它是 `#113` 之前的写法）。`abstained` 存**张数**而不是名单，不是把 `#110` 删掉的东西搬回来：
+`rules.tally_votes` 有个兜底分支（投给不在场的人、投给自己、空票都算弃票），所以"这张桌有几个人没出手"
+和"票面上有几张空票"是两个谓据，前者只有结算这一处能回答；30 次里两者每次都相等，因为兜底从没触发过
+（00:31:11Z 按"上一次结算到这一次结算之间"配对复算，弃票名单 30/30 与票面一致）。
+
+钉法三条（`tests/test_wiring.py`）+ 一条形状（`tests/test_vote_wave.py` ⑤）：
+`test_the_settlement_sentence_has_one_author_and_four_shapes` 四种结局各钉一句（出局 / 平票 / 先不定人 /
+全员弃票），其中出局那一支比的是**整句相等**而不是 `endswith`；
+`test_an_unknown_abstention_count_is_not_rendered_as_zero` 钉住"`abstained` 缺失时整句不写弃票，而不是
+写 弃票0人"（0 是一个主张，不是一张空白）；`test_every_real_settlement_renders_the_very_sentence_it_was_written_with`
+把 30 句真话里的 29 句逐字回放一遍（那一条排除的行见下面的限界）——这是"换作者而模型读到的字不变"
+这句话唯一的证法。
+`test_the_settlement_stores_facts_and_leaves_the_sentence_to_the_renderer` 钉 payload 的键集合恰好是那四个。
+
+**30/30 那句红过一次**：第一遍普查把 `(day, phase)` 当成波次的键，同一天的两波票混进同一格，量出
+17/30 一致——错的不是日志，是我的配对，重跑按"上一次结算到这一次结算之间"归集才对上
+（00:30:46Z→00:31:11Z）。写在这里是因为这类错只会红在**报告里**，不会红在用例里。
+
+四具手术刀（`/tmp/mut113.py`，基线 00:32:48Z `red=[]`，每具跑完 `sha256` 比回原文件，各自一次性
+`PYTHONPYCACHEPREFIX`）：
+
+| 具 | 改动 | 红了谁 |
+|---|---|---|
+| N1 | `_vote_summary` 不再读 `pending_pk`，一律"平票，无人出局。" | CAUGHT 形状钉 + 29 句回放 + `test_judge_wording` ① |
+| N2 | `_vote_summary` 丢掉弃票那一子句 | CAUGHT 形状钉 + 29 句回放 + `test_vote_wave` ④⑤（① 不红：它钉的是"不许说出局"，与弃票子句同色） |
+| N3 | 发射侧把 `summary` 再写一份，**内容就是渲染器会拼的那句**（逐字相同的第二写者） | CAUGHT 只有 ⑤（键集合） |
+| N4 | 发射侧丢掉 `abstained=` | CAUGHT ④⑤ |
+
+N3 是这一片最想要的证据：**一份字节相同的第二实现，行为探测全瞎**——渲染出来的句子一模一样，30 句回放
+一模一样，只有"payload 的键恰好是这四个"这一条结构断言抓得到它。这也解释了为什么"缺键不许写成 0"
+那条用例（`test_an_unknown_abstention_count_is_not_rendered_as_zero`）在 N2 下不红：N2 无条件删子句，
+缺键那条路本来就不写它，两者在这条用例的观察面上同色——它钉的是"缺键不许写成 0"，不是"子句不许丢"。
+N3、N4 各还带出一条 `test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_beside_it`
+的红，那是插删行数把 README 的号顶偏（`#77` 记过的假证人），**不算证人**。
+
+两处限界如实写下：`全员弃票，无人出局。` 那一支在真日志里**没有证人**（30 次的 `tally` 全非空），它只有
+形状钉那一条用例撑着；`20260920T184536Z_g00000007.jsonl` 的 seq 94 那一行**故意排除**在回放之外——它写于
+`#87` 之前，那时"这是不是要复投的平局"根本不在 payload 里，而它存的"平票，无人出局。"和同一份日志紧接着
+发生的 PK 复投相反（`tests/fixtures/vote_settlements.json` 里标了 `prefixed_prose`，那条的 `pending_pk`
+是从波次结构推的，不是从那句话读的）。这份夹具为什么要入库、为什么不是 `.jsonl`，`#91` 那条已经答过：
+`data/` 是 gitignored，`.jsonl` 会在 clone 之后凭空消失，所以它以 `.json` 的形式 checked-in。
+
+RED 00:14:28Z（三条新用例先红，红的都是"句子少了一半"那一类）。改完全套 00:19:19Z：878 passed、
+4 failed（收集 882 个用例，`#111` 那天的 879 加这轮的三条），那 4 处全是文档闸门——用例名一条、条数与
+收集数各一条、行号一条，因为删掉一条用例、添上三条，README 里点它的地方就同时烂了。本节定稿后复跑：
+00:40:10Z 起的一跑 66.63s，882 passed、0 红，文档闸门（`test_doc_citations.py`，25 条）在那一跑里跟着
+走了一遍——README 自己就是 `test_doc_citations.py` 和 `test_no_secrets.py` 两个用例文件的输入，所以
+"账清完了"这句话只能是跑出来的。
+
+#### 形状表说的是它自己的谎：`#114`
+
+`events.Kind` 的 docstring 早就写着"payload 形状就地记在这张表里、不记在设计文档里，因为形状和代码
+漂移就是上面那个分裂大脑换顶帽子"。这句话到 `#114` 为止没有任何东西在执行。而漂移不是假设：这个仓库
+删掉的三个双写者——`vote_result.summary`、`vote_result.abstainers`、`death.cause_zh`——**全都是**形状表
+从没点过名的键。一支与 `act` 逐字节相同的第二笔抄写对任何行为探针都是隐形的（`#113` 的 N3 那一格就是
+这个形状：四把刀里只有"键集合"那把看见它），能拦住这一类的只有结构断言。
+
+量的过程先量错了一次。00:47:40Z 第一版普查脚本把键名正则锚在行尾（`(\{.*\})\s*$`），于是 `vote`、
+`notice`、`game_over` 三行——声明写在 `}` 后面还有尾巴话的三行——被读成"这张表没声明任何东西"，脚本
+报出四格"未声明的 `game_over` 键"。**那张表本来是对的，是我读错了**：照着这份输出补表就会把三行历史
+改成三行假话。改成整行扫描以后（00:47:45Z，11 份日志、14 个 kind）真正的漂移是这几格：作者侧五个 kind
+（`speech`、`vote`、`night_action`、`wolf_chat`、`last_words`）落盘的 `evidence`/`belief`/`meta`/`_idem`
+一个都不在表上，`vote` 连 `text`、`act` 都没写，`night_action` 连它真正的主键 `act` 都没写。
+
+`night_action` 那三个键要先分清楚，别把不是病的格子砍了：`action` 是**法官问的是哪一格**（女巫那一格
+叫 `save_or_poison`），`act` 是**她答的是什么**，74 格里 53 格相同、女巫那 21 格不同——两个都有读者，
+留着。`potion` 才是那一笔重复：真日志上存着的 7 格 `potion`，7/7 与 `act` 逐字节相同（00:48:53Z 逐行
+打的），而它按定义不可能和 `act` 不同——`legality.py:101` 就是拿这条不一致判 strict 退回答复的。所以
+落盘那一份是"校验之后必然相等"的复制品，零个第二个读者（`metrics.py` 数的是 `act`，渲染链不读它）。
+
+处理是把笔收回来、把证据留在原地：`legality` 那道自洽检查照旧（`schema.Action.potion` 还是模型答复上的
+字段，`potion_act_mismatch`/`potion_unavailable` 照退），但 `agent.py:357` 起那两行写入被两行注释顶替，
+行数一根没动——被校验过、不可能再和 `act` 不同的东西不必再抄一遍。被退回的那份原文一直都在 `attempts`
+里，`#114` 起这才是"模型自相矛盾"的唯一证物，
+`test_a_self_inconsistent_potion_is_kept_as_the_refused_answer_not_as_a_fact` 把那一整串 JSON 逐字钉住。
+表这边把五个 kind 的作者侧键点名（`events.py:70` 起那五行，`evidence`/`belief`/`meta`/`_idem` 全写出来）。
+
+闸门新文件 `tests/test_payload_shape.py`（现 7 条：`#114` 那 4 条之后 `#115` 又添 2 条、`#119` 再添 1 条），语料是**当前
+代码写出来的一整局**（复用 `test_golden_game.play_authored`，从盘上读回来），不是旧日志：历史里
+`summary` 那三格是合法存在过的，拿它当反例会让闸门永远红、然后永远被人跳过。那四条的分工是
+"落盘的键都得在表上"、"表上的键都得有人写"、"语料不能空"（13/14 个 kind 在这一局里出现过，缺的那个
+点名缺）、"`potion` 不许回来"。`compaction` 需要把 B 区预算拧瘪才发得出来，就让它落在唯一有那套设定的
+地方：`tests/test_live_path.py` 的折叠标记用例现在调同一个谓词 `undeclared_keys`，一条尺子两个语料。
+
+顺带捡到 `#113` 的第一次落盘证人：`abstained` 与 `pending_pk` 在 00:43:30Z 的普查里是"声明了、还没有一份
+真日志写过它们"（`#113` 之后没再跑过局），00:49:48Z 这一局 mock 落盘的就是形状表那四个键，一个不多一个
+不少。
+
+| 刀 | 砍在哪 | 结果 |
+|---|---|---|
+| M1 | 把 `agent.py:357` 的两行注释换回 `legality` 之后的那份 `action.potion` 抄写 | CAUGHT：`test_the_table_names_every_key_that_lands_on_disk`、`test_the_chosen_act_is_the_only_record_of_which_potion_was_spent`、`test_a_self_inconsistent_potion_is_kept_as_the_refused_answer_not_as_a_fact`、`test_the_save_is_recorded_as_a_potion_not_as_a_resurrection`（金样本那格也读这一列） |
+| M2 | 作者侧冒出一个表上没有的新键 | CAUGHT：只有形状闸门红 |
+| M3 | 表上少写一个真在落盘的键（`_idem`） | CAUGHT：只有形状闸门红 |
+| M4 | 表上多写一个没人产的键 | CAUGHT：只有反向那条红——它专治这个方向 |
+
+00:57:02Z→00:57:17Z 四具全 CAUGHT，每具一把 pycache 前缀、还原按 sha256 复核；`git diff --numstat` 是
+`2 2`（`agent.py`）与 `8 8`（`events.py`），行数一根没动，所以 README 里 `events.py` 的 5 处和 `agent.py`
+的 2 处行号引用不需要搬家。限界两条：反向闸门只看得见那一局写过的键，`compaction` 那格没人检查"声明了
+却没写"；`_idem` 与 `meta` 只是被点名，它们各自的语义由 `test_prefix_stability.py` 与 `#67` 那一片管。
+
+RED 00:52:13Z（两条先红，红的正是"表漏了五行"与"mock 局写出两格 potion"）。另两条要诚实分开：反向那条
+（"表上不许有没人写的键"）落笔时表已经补全，它**当场是绿的**，它的证词只有 M4 那一具刀给得出；夜里那条
+`attempts` 用例是删除之后的取证，不是行为规格。收集数从 882 涨到 887 是新增的 4 条加夜里那 1 条。
+验证的次序：RED 00:52:13Z 两条先红 → 全套 00:57:24Z（887、0 红）→ 文档两页单独 01:01:41Z（35 passed）→
+全套 01:03:28Z（67.62s、887、0 红）→ 补上 `COMPACTION` 那一格之后再单跑两页 01:07:17Z（35 passed）。
+README 自己就是 `test_doc_citations.py` 与 `test_no_secrets.py` 的输入，所以本节再动一笔就得把这两页重跑一次。
+
+普查剩下的那一格（`COMPACTION` 的 `window` 与 `folded_days` 有没有第二个读者）量下来**不是病**，理由是
+两格各自的答案不同：`agent.py:342` 写下的 `folded_days` 与同一格里的 `summary` 确实是"同一件事的两份
+说法"——`tests/test_live_path.py` 那条交叉校验就是拿正则从 `summary` 里抠出天数再对列表——但那一份是
+**可查询的投影**，另一份是**模型真看到的字节**，`#111`/`#113` 删的是"散文抄结构"的方向，这里方向反过来：
+`compress.py:94` 渲染读的是 `summary`，没人想再解析一遍散文去数天。`window` 在**产品链上零读者**——只有
+`tests/test_live_path.py` 那两条用例读它（`>= 4` 与"它是整数"）——但它不是第二支笔：盘上再没有第二个地方
+存着这个数（`request`/`meta` 都不带），删掉就没人知道那一刻热窗口有几天。这一格当时的结论是"不动"——
+`#114` 只收双写、不添读者，所以它问的那个问题（有没有第二个写者）确实答完了；写在这里是为了下次不必
+再量一遍。零读者那一半留给下一节。
+
+#### 形状表的另一半：每一格都得有人读（`#115`）
+
+上一节结尾那格"不动"到这一节为止仍然不是双写者缺陷——`window` 与 `folded_days` 全仓库只有一个写点
+（`agent.py:342`）。不对的是它另一层意思：形状表承诺的是"这一格里有这些键"，而"有键没人读"是同一族
+缺陷的另一半（`#88` 的字段只活在返回值里、`#101` 的 `hollow.paths` 只活在文档里）。零读者的落盘键不会
+自己烂成假话，它会一直是一句"作者记得写过"。
+
+量的过程这一轮先错了两次，两次都是把"没人读"说得太容易：
+
+* 01:11:46Z 第一版普查脚本的下标正则写成 `\[\s*"window\s*\]`——收尾引号漏在字符类外面，于是"扫遍所有
+  `["k"]`"那半边整轮匹配 0 个，只剩 `.get("k")` 那半边在干活。它报"连测试都没人读 `window`"，而那句
+  测试读它是我前一天亲手写进本节的。**假阴性不是少报，是把已经点名的证人抹掉。**
+* 引号修好以后（01:12:56Z→01:14:46Z）朝反方向错：`_night_text` 的 docstring 里有一句 `payload["action"]`，
+  方括号、键名、字面量全对，于是 `action` 被记上一个读者。那不是一句代码。
+* 第三条不进代码：这轮我给自己配的两处"MISS 控制点"是凭记忆写的，不是读来的，删掉不给任何结论用——
+  只有真看过的那几行才有资格当对照。
+
+判据最后换成 AST：`test_payload_shape.py:134` 的 `src_load_sites` 只认 `ast.Load` 位置上的下标和
+`.get`/`.pop`，写侧（`payload[k] = …`、字典字面量的键）与 docstring 都进不来。01:14:53Z 量出
+`night_action.action` 在 src 里 0 个读点；01:15:55Z 量出 `window` 与 `folded_days` 同样 0——三局真日志
+分别折到了 9 条、7 条、9→15 条逐字窗口，产物链上没有任何一句话说得出这件事，`audit` 那块只数标记的
+**个数**。
+
+处理是**只往读侧补**，写侧一支笔都没动：
+
+| 落点 | 干什么 | 为什么这一半便宜 |
+|---|---|---|
+| `metrics.py:1462` `last_fold_state` | 取**文件顺序里最后一格** `Kind.COMPACTION`，把 `window`/`folded_days` 抄出来 | 抄，不重算：窗口是 `plan_fold` 在发那一刻定的，`shrink` 还会逐 prompt 折半，离线重算就是第二支笔写另一个数 |
+| `cli.py:375` `compactions.last_fold` | 那一块里唯一读**标记 payload** 的格子 | 零新事件、零 seq 挪动、零金样本重钉、零模型输入变化——这是它和 `#88`（平安夜要留痕就得发公告、加事件、重钉样本）的分别 |
+
+真日志上这一格现在印得出来（01:28:58Z，`wolf audit`）：`g00000300` 是 `{"seq": 55, "window": 9,
+"folded_days": [1]}`，`g00000301` 是 seq 66 / 窗口 7，`g00000302` 有两格标记（seq 55 窗口 9、seq 87
+窗口 15），印的是后写入那一格：15 条逐字、折掉第 1、2 天。
+
+闸门从 4 条长到 6 条。`test_every_declared_key_is_read_by_somebody_or_named_here` 要
+`unread == set(UNREAD)`，**两个方向都钉**：冒出第四个没人读的键红，给 `action` 接上读者却还把它挂在
+豁免表上也红。豁免必须带理由（`assert all(reason.strip() …)`），不然它只是表上的另一个键。
+`test_the_reader_gate_sees_code_that_a_grep_misses_and_refuses_prose_that_a_grep_invents` 是上面那两次
+读错的取证：`summary` 必须量得出 `compress.py` 的读者（单引号、还在 f-string 里，双引号 grep 量不到），
+`action` 必须量出 0。`UNREAD` 现在只剩一个名字，理由写全了——`action` 是**法官问的那一格**，与 `act`
+（她答的）不是一件事，`#114` 因此两格都留，但它确实没人读：唯一的读点在 `tests/test_golden_game.py:337`，
+测试拿它挑狼人那一格，不是产物。
+
+| 刀 | 砍在哪 | 结果 |
+|---|---|---|
+| M1 | audit 里删掉 `last_fold` 那一格（读者消失） | CAUGHT：`test_audit_reads_the_fold_rounds_out_of_the_requests_it_writes_them_into`、`test_no_named_helper_in_the_engine_is_left_without_a_reader`——**读者闸门自己没红** |
+| M2 | `last = marks[-1]` 改成 `marks[0]`（取第一格） | CAUGHT：运行集三页里只有 audit 那条红 |
+| M3 | 挑错事件种类（`VOTE_RESULT` 而不是 `COMPACTION`） | CAUGHT：同上，也只有 audit 那条 |
+| M4 | 闸门的键全集塌成 `set()`（空语料假绿） | CAUGHT：只有双向那条红 |
+| M5 | 把"这个字符串在文件里出现过"当成读者（我这轮真的这样被骗过一次） | CAUGHT：双向那条 + 控制那条一起红 |
+
+01:25:58Z→01:26:27Z 五具全 CAUGHT，每具一把 pycache 前缀、还原按 sha256 复核；01:29:17Z→01:29:47Z 为了
+把证人名册原样落进文档又跑了一遍，五具的名单一字未变。`#77` 那条老规矩照办：行号闸门不进电池的运行集，
+运行集是形状、CLI、接线三页。
+
+限界三条，按 M1 那条最疼的顺序写：
+
+1. 闸门数的是**字面量键在 src 里的 Load 点**，不看那个字典是不是 payload。一个同名的别的字典能把
+   "零读者"洗成"有读者"。0 结果安全，非 0 结果不安全：01:34:07Z 的普查是 25 个声明键里 24 个有读点、
+   只有 `action` 是那个 0，而"有读点"这一步它不检查落点是不是同一个字典。本轮这两个新落点我逐个点开过：
+   `metrics.py:1478` 取的是 `window`，`metrics.py:1479` 取的是 `folded_days`。老读者 `summary` 落在
+   `compress.py:94`，也点开过。
+2. 闸门证明"这个键被下标读过"，不证明**那条读法可达**。M1 就是证据：把唯一的读者整格删掉，红的是 audit
+   用例和 `#81` 那道死函数守卫，读者闸门仍然绿——它看的是 `last_fold_state` 里那两个 `.get`，而它们一行
+   没动。这一格由 `#81` 补，不由它补。
+3. 豁免表"已有人读却还挂着"的那一半只在漂移**真的发生**那一刻才有证词。要是永远没人给 `action` 接读者，
+   它就是一条永真的登记，逼它写理由是这条登记不烂掉的唯一约束。
+
+RED 01:19:55Z（两条先红：读者闸门报的就是 `['action', 'folded_days', 'window']` 这三格，另一条是 audit
+那一格还不存在）。GREEN 01:22:12Z（形状、CLI、直播三页 98 passed）。全套 01:23:43Z：888 passed、1 failed，
+唯一那格红是文档闸门逮住上面那句"现 4 条"没跟着长——它该干的活。次序：普查 01:11:46Z→01:15:55Z（三次脚本、
+一次换判据，中间读数都在上文）→ RED → GREEN → 全套 → 电池 01:25:58Z→01:26:27Z（重跑 01:29:17Z→01:29:47Z）
+→ 真日志 audit 01:28:58Z → 夹具 `_idem` 改成生产形状后 `tests/test_cli.py` 01:32:59Z（66 passed）→
+文档两页 01:38:31Z 与 01:40:49Z（各 35 passed）→ 全套 01:39:28Z（56.45s）与 01:41:45Z（54.72s），两次都是
+889 passed、0 红（上一节那个 887 加上本节两条新用例）。规矩沿用上一节末尾那条：README 是这两页的输入，
+本节之后再多一笔就得再跑一次。
+
+#### 端点断了 45 秒一次，但它一次也没说"断"：`#116`
+
+这批离线加固跑到 01:44:20Z 时真端点仍然在黑洞里（TCP SYN 无应答，不是 `ConnectError` 那种立刻被拒），
+于是第一次拿**产品**去撞那一支形状。撞出来的是：一局打了 585s 走到第 2 天，13 个回合**全部**记成
+`timeout_after_45s`、`fallback: 1`、`result.ok: true`，43 行日志里 13 条带 `request` 的记录而 `response`
+全空，audit 那侧 `prefix_cache.calls=0`、`m7_cost.n_calls=0`、`degraded_game: null`。按这个速度整局要
+~37 分钟——而它是一段都不必打的。
+
+`test_transport.py:77` 那条 `test_an_unreachable_endpoint_is_the_endpoints_fault_not_the_models` 早就承诺过
+这一支（"没有回答回来 ⇒ 端点不健康 ⇒ abort"），它量不到是因为夹具没有连接可超时：
+`httpx.MockTransport` 根本不建连（同一件事在 `test_loopback_endpoint.py` 的开头写过一遍，那次是为了
+收尾的 `RuntimeError`）。真因是一串算术，四格各自都对：
+
+| 号 | 那一格在做什么 | 数值 |
+|---|---|---|
+| `agent.py:302` | 席位 deadline 取 `actor.timeout_for(ctx.phase)` | 冷启动 45s |
+| `llm.py:146` | 交给 transport 的 `timeout_s = self.latency.timeout_for(...)` | 同一个 45s |
+| `transport.py` 改前 | `timeout=timeout_s`：裸 float 被 httpx 摊给 connect/read/write/pool 四格 | connect 也是 45s |
+| `agent.py:306` | `asyncio.wait_for` 与 httpx 的 connect 超时同时响 | 抢先进 `except` 的是前者 |
+
+于是 `is_upstream_error` 那条分类**到不了**：`EndpointUnavailable`（`llm.py:178`）与
+`aborted_endpoint`（`game.py:214`）在这形状下不可达，`max_retries_total` 那一整格预算也没人花。
+`transport.py:139` 那句 "the alternative is a full transcript" 写的正是这一具，而它在修之前只是一句
+注释，不是被量过的行为。
+
+一刀：`transport.py:127` 发出 `httpx.Timeout(timeout_s, connect=self.cfg.connect_timeout_s)`，新字段
+`config.py:117` 出厂 5.0。否掉的两条备选留在账上：抬 `llm_timeout_floor_s` 等于把 plan §6 的 3×median
+语义换成"够容纳三次建连"，而且 abort 要等到 ~139.5s；让 transport 自己算上限，就是把
+`max_retries_per_call`（`llm.py:150`）那格重试预算抄成第二支笔。
+
+三条新用例（`tests/test_transport.py` 现 16 条）：
+
+* `test_transport.py:195` 的 `test_the_connect_phase_gets_its_own_bound_below_the_seat_deadline` 钉**接线**。
+  看得见它的地方只有一处：`request.extensions["timeout"]`，httpx 收到 `timeout=` 之后真正交给 transport
+  的那个对象，长这样 `{'connect': 7.5, 'read': 45.0, 'write': 45.0, 'pool': 45.0}`。7.5 是故意挑的——
+  它既不是 45 的因数，也不是任何一个"忘了改"能碰巧写出来的数。
+* `test_transport.py:219` 的 `test_the_default_numbers_let_the_endpoints_verdict_win_the_race` 钉**够不够开**：
+  出厂值下端点判决的最坏时刻 `3×5.0 + (1.5 + 3) = 19.5s` 必须小于席位 deadline 45s。两个数分别从 `Config`
+  和 `LLM.__init__` 的签名上读（`inspect.signature`），因为漂移会来自两侧，而退避常数根本不在 `Config` 里。
+* `test_transport.py:244` 的 `test_the_read_budget_is_unchanged_by_the_connect_bound` 是反方向：把 read 也
+  一起收紧就重新把"模型在思考"归类成了"这一回合超时"，那是上面 `test_a_stalled_read_stays_one_turns_problem`
+  守着的另一半。
+
+RED 分两阶段，因为只量一次会糊掉真正那格：02:03:49Z 三具全红，但红的理由是
+`TypeError: unexpected keyword argument`（字段还不存在），那不是缺陷本体；只加 `config.py:117` 那一行、
+不动 `transport.py`，02:04:08Z 再量才拿到 `{'connect': 45.0, ...}`——这一格才是这台端点上真正发生的事。
+GREEN 02:04:27Z（传输、批次两页 83 passed）。修完在**同一台死端点**上重跑：02:10:43Z→02:11:04Z，
+`aborted_endpoint`、19.5s、`fallback=0`、rc=1、14 行 13 个事件，其中 seq 12 那一格 `phase` 记着
+"端点不可用：ConnectTimeout"、`result.ok: false`。02:04:45Z 那一次同形状的读数是 19.6s，但它走的是
+`| tail -8`，所以那一跑只作证**时长**，`rc` 只有 02:10:43Z 这一跑量过（管道会把 `rc` 换成 `tail` 的码，
+第一次就把这个坑踩了一遍）。
+
+| 刀 | 砍在哪 | 结果（实际红，02:09:40Z→02:10:31Z 与预注册第一遍 02:08:16Z→02:09:07Z 逐字相同） |
+|---|---|---|
+| M1 | 退回裸 `timeout=timeout_s`（今天上线的那一版） | CAUGHT：接线、read 两条 + `test_batch_paired.py` 那条字段读者守卫 |
+| M2 | 出厂值从 5.0 抬到 60.0 | CAUGHT：只有"够不够开"那条 |
+| M3 | 四个阶段一起收成 `httpx.Timeout(self.cfg.connect_timeout_s)` | CAUGHT：接线、read 两条 |
+| M4 | 字段留着，读取点改写成 `getattr(cfg, "connect_timeout_s", …)` | CAUGHT：只有读者守卫那条 |
+
+两具的预注册期望在第一遍就被量歪了，两处都能从读过的代码里先验推出来（`_reads_attribute`，
+`test_batch_paired.py:67` 只认 AST 上的属性访问），所以改的是期望而不是结果：M1 多一个证人——把 `transport.py`
+那一行退回去，同时也就删掉了 src 里唯一那次 `cfg.connect_timeout_s` 属性访问，字段当场变成"有 hash 没读者"
+的标签；M4 少两个证人——`getattr` 在字段存在时返回**同一个数**，接线与 read 两条是等价变异，它们不可能红，
+而这一具本来就是照着 `#76`/`#85` 那一族设计的。
+
+代价要说清楚，这一刀动的是 `config_hash`：`fb3e99579b7e` → `c63e21dfcc5a`（02:12:47Z 实测，把新键从
+`to_dict()` 里去掉再按同一配方算回来，得到的正好是 2026-09-24 那三局真日志身上那个号——也就是说前面这
+一整批离线加固**一次都没**动过 hash，动它的是这一格）。不重钉金样本：全仓库 `tests/` 里没有任何一处钉过
+12 位十六进制的 hash 字面量（只有伪造用的 `0123456789ab`），比号的两处也都不问"和今天的出厂值相同吗"——
+`batch.py:583` 拿日志对的是同一批的 manifest，`cli.py:584` 只是把松散日志按 hash 分组。所以这一格的后果
+是"旧日志从此与新配置不同号"，那是它的本意，不是一笔要平的账。
+
+限界三条：
+
+1. `request.extensions["timeout"]` 证的是**发出去的那个对象长什么样**，不证"httpx 真的会在第 5 秒放弃
+   connect"——后者只有真 socket 量得到。测试里不复制黑洞：拿"listen 但不 accept、把 accept 队列填满"
+   造 SYN 丢失是跨内核不稳的写法（Linux 可能回 RST，那就成了 `ConnectError` 那一支），而这一支眼下有一台
+   真的在（02:04:45Z、02:10:43Z 两次）。
+2. 闸门钉的是出厂值，`--set A.connect_timeout_s=60` 这一臂能把 race 原样装回去，眼下没人拦：新字段进了
+   `axis_fields`（它是被真代码读的轴，按 `#76` 的判据就该进），而"够不够开"那条读的是 `Config()`。
+   真要拦得在开局处校验两模块的乘积，那是另一刀的账。
+3. 修好之后黑洞那一支在产物里只留**一条** seq 12（首回合就 abort，没有第二回合），而 `timeout_after_45s`
+   这个字符串在新形状下仍然会出现在"连得上但慢"那一支上——那一支的计数没人读（`m7_cost.n_calls=0`、
+   `prefix_cache.calls=0` 对着一局有 13 次调用的日志，见 `#117`）。
+
+次序：撞上去 01:44:20Z → 四格因果链读数 01:59:11Z~02:00:18Z → RED 两阶段 02:03:49Z/02:04:08Z →
+GREEN 02:04:27Z → 死端点重跑 02:04:45Z → 全套 02:05:22Z→02:06:18Z（55.02s，891 passed、1 failed，唯一
+那格红是行号闸门逮住 `config.py` 插 5 行把下游两处号顶后 5 行——取价那一格 `max_tokens_speech` 现在在
+`config.py:196`、全局预算 `max_game_completion_tokens` 在 `config.py:119`，文档里已跟着改成这两个号）
+→ 文档两页 02:06:58Z（35 passed）→ 电池两遍（第一遍 2/4 且两具的偏离都进了
+上文，第二遍 4/4）→ 带 rc 的重跑 02:10:43Z → hash 半径 02:12:47Z → 本节这一笔落笔后再跑：文档两页
+02:16:19Z（35 passed）、全套 02:17:58Z→02:18:54Z（54.85s、892 passed、0 红；892 = 上一节的 889 加本节
+三条新用例，而那一跑在〈端点说不的时候〉的交叉补充与末尾清单那一笔 ✅ 之后，所以它是这两笔的证人）。
+
+### 闸门给一张模型从没答过的桌发了"不消极"合格证
+
+端点断到底的那一批（`/tmp/down116/20260925T014420Z_g00000001.jsonl`，26 次调用 26 次超时）读出来是
+`passivity_rate = 0.3333（需 < 0.05）达标`。主判据在这里量的不是模型，是引擎：兜底发言落盘的 `text`
+是空串、`act` 是法官指派的那个动作，而 `passivity_rate` 只把 `act in (listen, align)` 记成消极——于是
+九张空嘴里凡是摊到攻击性动作的那几张，被记成了**主动发言**。一张模型一次也没答过的桌子，拿到了
+"这批模型不消极"的合格证。
+
+机制不在阈值上，所以修的地方也不是阈值。加了一只谓词 `answered_by_engine`（读 `payload.meta.rung`
+== -1：那是 `agent.take_turn` 在"连提案都没有"时自己写的那一格），主判据的分母里一张模型嘴都没有时，
+`passivity_rate` 走**现成的** `ok=None → NOT_EVALUABLE` 那条路：数照印（藏起来就等于让人以为闸门没算
+过），但它不再是一次读数。不新增阈值、不动五条判据里任何一条的算术、不发新事件、不改 `config_hash`。
+另加一行始终可见的组成：`代打 N/M 轮发言、X/Y 次调用`，与 `#92` 的截断那一格同形——一只谓词、一处
+算术、一行渲染。干净批次也要印这一行，"量过了、是 0"和"没量"是两个意思（`#99`）。三局真数据
+（`data/real-20260924/`）重跑闸门后与改动前逐字节相同，只多了这一行：`代打 0/60`。
+
+`fallback` 不是这个问题，这一点我搞错了两次，都记在这里。第一次是把 `rung == -1` 和 `fallback == 1`
+当成同一件事：按 `payload.meta` 数整盘（8 份日志、485 条带 meta 的记录，2026-09-25 02:45Z），
+`fallback=1` 只有 3 条且全在 `night_action` 上，`speech` 上一条也没有，而 `rung == -1` 有 314 条。
+第二次更糟：我在谓词的 docstring 里写了"两种形状在真桌上同时存在（`data/real-20260924/` 02:28Z
+普查）：话留着、只是 act 标签被改的轮次是 `rung=1, fallback=1`"，而 02:28Z 那次普查是坏的——它的
+守卫跳过了没有 `kind` 的记录，配平它的后半脚本从未成功跑过。上面那三个数才是重跑得到的，唯一的
+`rung=1, fallback=1` 是一条 `night_action`，`text` 是空的，撑不起"话留着"那半句。谓词的结论没变，
+变的是它不许再挂一个没跑过的出处。还有一次是路径：同一份普查我先按记录根的 `meta` 取，八份全报 0，
+与闸门自己印的 `不计：9/9` 对不上才发现键住在 `payload.meta`——如果那一行没人印出来，这条错就进文档了。
+
+**这一刀没有切到的地方**：只有当主判据的分母里**一张模型嘴都没有**时才拒绝。半死的批次（18 轮里 9 轮
+代打）仍然把代打轮混在同一个 `n` 里算，仍然可能印 PASS——新印的那一行让它看得见（`代打 9/18`），但
+拒绝需要一个新阈值，而五条判据是预注册的，加阈值是处理变更，不在这一刀里。
+
+变异电池 7 具（`/tmp/mut117_defs.py`，每具跑整套、逐具按字节还原，02:42–02:56Z）：
+
+| 刀 | 结果 | 红用例 |
+| --- | --- | --- |
+| K1 谓词恒 False | 击杀（5 红） | `test_a_batch_the_engine_answered_for_cannot_be_certified_not_passive`、`test_the_gate_prints_who_wrote_the_answers_it_is_scoring`、`test_no_engine_function_declares_a_parameter_nobody_reads`、`test_batch_paired` 那两条 |
+| K2 谓词改读 `fallback == 1` | 击杀（2 红） | `test_a_real_clock_gives_latency_a_reading_without_certifying_the_arm`、`test_each_arm_gets_its_own_gate_verdict_rather_than_one_shared_answer` |
+| K3 只要有轮次就拒（去掉 `== n_turns` 那半条件） | 击杀（8 红） | 含 `test_the_gate_returns_a_verdict_for_every_pre_registered_criterion` 与 `test_a_measured_failure_is_not_hidden_behind_a_missing_reading` |
+| K4 把拒绝写成 `ok=False`（"没测到"混成"不合格"） | 击杀（4 红） | `test_a_batch_the_engine_answered_for_cannot_be_certified_not_passive` 与 `test_relabelling_a_mock_batch_cannot_turn_the_m3_gate_green` 等 |
+| K5 删掉 refusal 文案、只留 `ok=None` | 击杀（2 红） | `test_a_batch_the_engine_answered_for_cannot_be_certified_not_passive`（`"引擎" in note`） |
+| K6 渲染器不认 refusal，把"不计"印成"无读数" | **第一遍存活** → 补 `test_a_refused_criterion_is_not_printed_as_a_missing_reading` 后击杀 |
+| K7 次分母抄主分母（`n_engine_calls = n_engine_turns`） | **第一遍存活** → 补 `test_the_engine_share_counts_calls_separately_from_turns` 后击杀 |
+
+两处预期落空，各记一句。K2 我押它活，理由是"没有任何闸门用例造过 `rung>=0 且 fallback=1` 的发言"——
+这句是对的，但方向反了：真桌上 `rung=-1` 与 `fallback=1` 几乎不相交（314 对 3），所以读错键会翻掉
+**替身桌那两条**，而它们一直在。押错的方向是安全的那一边。K6/K7 是真缺口：判层拒了、渲染层没人问，
+次分母印了、没人核它是"次"的——两个分母在旧夹具里恰好相等（18 与 18），所以第一遍的夹具量不出差别，
+补的那两条各塞进一张引擎代投的票才把 20/10 与 18/9 分开。
+### 一个键落了两份盘，今天起有人对账
+
+`fallback` 在日志里有两个位置：`payload.meta.fallback`（法官那一侧的记账，M3 的 fallback 率读它）和
+`result.fallback`（这次调用的结果快照，直播与复盘 HTML 的〔引擎代打〕标记读它）。两支笔、四个读点
+（03:18:52Z 用测试里那把 AST 尺数 `fallback` 的 Load 点：直播 1、`metrics` 2、复盘 HTML 1；那个数不含
+本次新加的一格，它自己又添两处），而 2026-09-25 之前没有任何一处问过它们说的是不是同一件事。形状和
+`vote_result.summary` 那一族一样——
+**双写本身不是 bug，没人对账才是**：那三例双写（`summary`、`abstainers`、`cause_zh`）是删掉了一份才收的，
+这一格删不掉，因为两份各有读者、而且删任何一份都会挪动已经落盘的字节格式。
+
+03:04:01Z 扫了语料（`data/**/*.jsonl` 11 份、464 条带 `payload.meta` 的决策记录，读的是
+`rec["payload"]["meta"]["fallback"]` 与 `rec["result"]["fallback"]` 两处）：两键每条都在，且逐条相等。
+"目前没坏"这句现在有一个地方能读——`audit` 多一格 `fallback_copy_check`，`n_compared` 是比过的条数、
+`divergent` 是不一致的条数。算术在 `metrics.fallback_copy_check` 一处，CLI 只负责印。
+
+> 复现：`.venv/bin/wolf audit data/real-20260924/20260924T153245Z_g00000300.jsonl | jq -c '.fallback_copy_check'`
+> 实跑 03:12:35Z 印 `{"n_compared":57,"divergent":0}`；同一次 03:11:58Z 三局真数据是 57 / 58 / 58 条、
+> `divergent` 全 0。端点断掉那一局是 26 条比过、0 条不一致，而**这 26 条里有 24 条两份都是 1**——
+> 所以那个 0 不是"两边都写 0、当然相等"蒙出来的。
+
+两处限界写在结论旁边，不留到下一轮才发现：
+
+1. **缺任何一份拷贝的记录不进分母**。所以 `n_compared` 小于决策记录数时，这一格说的是"没看过"，不是
+   "没坏"——钉它的用例是少一份拷贝要看见分母跟着掉，而不是看见 `divergent` 变红。
+2. **它只保证两份一致，不保证那一份是对的**。写侧若哪天把同一个错误写两遍，这一格仍然绿。唯一的解法是把
+   两份合并成一份，那是处理变更（要改落盘格式、要重钉金样本），不在这一格里做。
+
+这一格自己也被具检查过（`/tmp/mut119.py`，03:15:14–03:16:31Z；两个 stage 的基准都是 0 红才开的电池，
+三具都在快的那组红，两具刀所在文件每一轮都按字节还原）：
+
+| 刀 | 结果 | 证人 |
+| --- | --- | --- |
+| N1 比对还在做、判决永远加 0 | CAUGHT，1 红 | `tests/test_payload_shape.py` 那条用例的第 2 段（"坏一处要点得出来"） |
+| N2 只有两份都缺才跳过 | CAUGHT，1 红 | 同一条用例的第 3 段——红在那次调用上（读到缺的那一份就 `KeyError`），不是第 3 段那条断言。这仍然是红，但形状要说清：它证明的是"这一刀会被看见"，不是"分母算错了会被比较" |
+| N3 CLI 不再印这一格 | CAUGHT，2 红 | `test_audit_counts_match_the_log_it_was_handed`、`test_audit_prints_metrics_and_nothing_else` |
+
+一处工具缺陷也记在这儿：脚本拿裸用例名去对 `文件::用例` 形式的名册，所以"超预期/缺席"那一栏两边都非空。
+判定没受影响（红名单是我逐条读出来的，且与预注册一致），但下一份 harness 要先归一化名字再比。
+
+### 臂级的那一笔账：批次报告也会说"比过 N 条、几条对不上"
+
+`#119` 给了一份日志里的对账，`#120` 给一臂的：`batch.fallback_copies_by_arm` 逐局调用
+`metrics.fallback_copy_check` 再归约，`compare` 把它落成 `comparison.md` 的一节，和〈末行截断〉同一族
+（只点名、不剔除）。算术仍然只有一只手，批次侧不许再数一遍；键名原样搬，批次侧只多两格 `n`（按
+**文件**计）与 `files`，`divergent` 按**条**计——"一份文件漂了两条"和"两局各漂一条"在报告里要点名成
+不同的东西。
+
+为什么单局对账不够：`audit` 一次只看一个文件，而"这一臂漂了几条"是关于臂的问题，40 局里漂一条要翻
+40 次才知道。为什么干净那一臂也要印：`0 条对不上` 只有和"比过 N 条"同一行才是读数——单看那个 0，它
+与"没人比过"在纸面上完全一样，而后者正是 `#119` 之前所有批次的状态。
+
+离线取证（`--mock` 批，永不碰端点；2026-09-25T03:34:38Z）：`wolf batch --configs A,B --mock --games 2
+--seed0 4242 --out /tmp/f120 --set B.temperature=0.6`，把 `actor_kinds` 手工改成 `["llm"]`
+（`tests/test_batch_paired.py::_as_real_table` 那同一种伪造，为的是走通渲染而不是替模型说话），再
+`wolf compare /tmp/f120 --axis temperature`：
+
+- 干净那一次印 `- A：比过 115 条，0 条两份拷贝对不上`（B 同）。
+- 把 A 臂两份文件里 `seq` 最小那条的 `result.fallback` 翻掉之后，报告印
+  `- A：比过 115 条，2 条两份拷贝对不上（2 局）：20260925T033403Z_g00004242.jsonl、
+  20260925T033403Z_g00004243.jsonl`。
+
+两次的分母都是 115：找到不一致**不缩小分母**（`#56` 同一条规矩），那条记录既被比过也被点名。点名用
+文件名不用 `game_id`，理由与 `#54`/`#55` 一致——文件被人改过的时候，局号是它自己内部的标签。
+
+真端点上这一格还没有读数：臂级要批次，而 `data/real-20260924/` 那三局是 `wolf run` 出的**单局**，
+`compare` 只认带 `run_manifest.json` 的批次目录。它要等一次真批次，而端点仍不通（03:21:09Z TCP
+TimeoutError 5.01s、`WOLF_LLM_API_KEY` 未导出）。
+
+测试两只：`test_the_batch_side_names_files_whose_two_fallback_copies_disagree`（归约：文件数/条数分开、
+分母不许动、键名不许自己另起一套）、`test_the_batch_report_prints_the_reconciled_denominator_for_both_arms`
+（渲染：两臂各一行、干净那行也得有分母）。五具变异 `/tmp/mut120.py`（刀前整套 899 条全绿、刀后整套
+899 条全绿，每具还原后校验 sha256 与 `import wolfengine.batch`；每次子进程一个全新的
+`PYTHONPYCACHEPREFIX`，见 `#79`）：
+
+| 刀 | 结果 | 证人 |
+|---|---|---|
+| K1 不点名（`hit = []`） | CAUGHT，2 红 | 归约那一只 + 报告那一只，与预注册逐字一致 |
+| K2 干净臂闭嘴（只印有 `divergent` 的臂） | CAUGHT，1 红 | 报告那一只（`row_b` 那一行没了） |
+| K3 只印分子、不印分母（去掉"比过 N 条"） | CAUGHT，1 红 | 报告那一只（两行都少了分母） |
+| K4 把条数当局数归约 | CAUGHT，1 红 | 归约那一只，红在 `pick=1` 那一腿 |
+| K5 键名自己另起一套（`n_compared`→`n_checked`） | CAUGHT，**30 红** | 预期 2 红，多出的 28 条是连带 |
+
+K4 那一具是这一片里唯一需要**先改测试**才杀得掉的：只翻一条记录时"按文件归约"与"按条归约"给出同一个
+数，两份实现完全等价。补的那一腿是同一份文件里再翻一条（`_flip_fallback_copy(..., pick=1)`），于是
+`n == 1` 而 `divergent == 2`，两个数分开了才有证人——这一腿也是 `#106` 那条老话的又一次命中：等价变异
+不在预期里，就只能靠夹具的数量说话。
+
+K5 要按样子读：它确实被杀，但**不是一把能定位证人的刀**。键名一改，渲染器里 `d['n_compared']` 抛
+`KeyError`，于是每一个走 `compare` 渲染的用例都红——30 条里只有 2 条是我预注册的那两只。这一具证明的
+是"这个键名有读者"，不是"哪个断言在钉它"；要定位证人得改用只动归约、不动渲染的那一族刀（K1、K4）。
+
+### 读数也要有人能自动拿：`compare --json`
+
+`audit` 从第一天起就是"一局一个 JSON 对象"，`compare` 却只有一份 `comparison.md`：臂级那九格读数
+（M1 胜率、M3★ 判定、degraded、编号破损、末行截断、两份 `fallback` 拷贝对账、区域预算、前缀缓存、
+配对分母）全住在散文里，脚本要拿就得 grep 中文。`#120` 刚把"哪几个文件的 `fallback` 对不上"印进
+报告，而它的下一句话就是"那谁来自动查"。
+
+现在 `wolf compare <批次目录> --axis temperature --json` 另写一份**同基名**的 JSON：内容就是
+`compare()` 返回的那个字典，只挖掉 `markdown` 一格。两条理由各自钉在用例里——
+
+* 键集断言写的是 `set(js) == set(compare()) - {"markdown"}`，不是抄一份名单：以后往报告里加一格，
+  它自动进 JSON，不需要有人记得改第二处。把 `markdown` 也塞进去等于同一批读数落两个地方，改口的
+  时候只有一个是真的。
+* JSON 跟着 `-o` 走，不钉死在批次目录：一次比较要留档的人，两个产物分在两个目录里就一定会有一个
+  被忘掉；不敲 `--json` 时什么都不许多产。
+
+**为什么是文件而不是 stdout**（`audit` 走的是后者）：`audit` 一次一局，stdout 就是它的产物；
+`compare` 的 stdout 已经被 markdown 占了，再接一段 JSON 等于让 `wolf compare | jq` 拿到两条流。
+
+**拒绝的批次也落盘**，而里面**没有**那九格——`m1`/`torn`/`fallback_copies` 这些键根本不存在，不是
+被填成 `0` 或 `{}`。合成桌那一批留在 `stats` 键下的逐条率是另一件事：它有自己的用例钉着"不许抹掉"
+（mock 批的价值就是证明管线通），而 OK 那一批永远不带 `stats`，所以消费者不会在两个地方找同一份率。
+
+实跑（2026-09-25T03:55:02Z，`/tmp/f120` 那份伪造批次）：
+
+```bash
+.venv/bin/wolf compare /tmp/f120 --axis temperature --json | tail -2
+# JSON -> /tmp/f120/comparison.json
+# OK -> /tmp/f120/comparison.md
+```
+
+13 个键：`canary_note`、`degraded`、`fallback_copies`、`m1`、`m3_verdict`、`n_pairs`、`numbering`、
+`prefix_cache`、`region_budget`、`torn`、`utterance`、`verdict`、`win`。其中 `fallback_copies`
+原样搬出那两份对不上的文件名，而 `n_compared` 仍是 115——分母一个没动。
+
+四把刀的预检（`/tmp/mut121.py`，每把点名它期望弄红的那一条用例，跑完按字节还原）：
+
+| 刀 | 判定 |
+| --- | --- |
+| `markdown` 也进 JSON | 咬住（第一条） |
+| JSON 钉死在批次目录 | 咬住（第三条） |
+| 只在出结论时才落 JSON | 咬住（第二条**和**第三条：第三条走的也是合成桌拒绝，是我预注册时漏了它） |
+| 少带一格 `torn` | 咬住（第一条） |
+
+**这一片没有动的**：仓库里没有任何脚本消费 `comparison.json`——它是出口，不是消费方；而这一格里
+的臂级读数仍然全部来自伪造批次（同 `#120`），真端点上两臂的 JSON 至今没有产出过一次。
 
 ## 这个仓库现在能做什么、不能做什么
 
@@ -3228,8 +4685,8 @@ baseline（任何刀之前）`rc=0 red=[]`；`/tmp/mut90.py` 第二跑 `total=7 
   是那条字面量守卫唯一的证人。账见〈体检脚本自己抄了一份 usage 读法，于是一个 200 被说成端点故障：`#71`〉。
 - ✅ `phases.py` 里那串"这里曾经错过"的散文不再只有散文作证：12 处改动各配一具变异（`/tmp/mut73.py`），
   先焦点集后全量各复核一遍（14:29:09Z、14:31:39Z 基线 0 红），九个幸存者补成四个新测试文件
-  （`tests/test_vote_wave.py` 4 条、`tests/test_night_guards.py` 4 条、`tests/test_last_words.py` 2 条、
-  `tests/test_house_wired.py` 2 条），10 具有了具名证人、2 具披露（P1 是等价变异，P4 的读者本来就在
+  （当天是 `tests/test_vote_wave.py` 四条、`tests/test_night_guards.py` 四条、`tests/test_last_words.py` 二条、
+  `tests/test_house_wired.py` 二条——这四个数是历史读数，现行条数归计数闸门核），10 具有了具名证人、2 具披露（P1 是等价变异，P4 的读者本来就在
   焦点集外）。**这一片没改过一行产品代码**：幸存者没有一个意味着行为错。P6/P9 那两格要披露的是入口
   ——CLI 今天不接受房规参数，钉住的是"支路接好了线"。账见
   〈`phases.py` 的 docstring 写了七八句"这里曾经错过"，其中六句当时没有读者：`#73`〉。
@@ -3264,6 +4721,16 @@ baseline（任何刀之前）`rc=0 red=[]`；`/tmp/mut90.py` 第二跑 `total=7 
 - ✅ `wolf batch` / `wolf compare`（M7：配对 `deal_seed`、处理轴守卫、McNemar exact、per-utterance
   cluster bootstrap、首尾 canary）代码已落地并跑过，全套离线。协议与判据口径在
   [docs/comparison.md](docs/comparison.md)。
+- ✅ 闸门判定现在**一个臂也印**，而且印的时候知道自己看不清什么：单臂批次跑完会在批次目录里留下
+  `m3_gate.md`（与 `comparison.md` 同一段渲染，`#94`）；`wolf gate <目录>` 也能对**已经躺在盘上**的
+  日志出同一份判定，不重打牌（`#98`：`wolf run` 一局一局攒出来的真日志此前在任何地方都拿不到 verdict，
+  两张配置表混在一个目录里则拒判）；风格两把尺子在一轮没人说话时给 `None` 而不是
+  一个 0.0/1.0（`#95`：旧版全空的一轮在 `collapse_round` 上是假 FAIL、在 `opening_distinct_rate` 上
+  当场 `ZeroDivisionError`）；被自家 `max_tokens` 剪掉的回答逐臂报数（`#92`：真桌实测 120/173，
+  `day_vote` 最重），因为看不见天花板的人分不出塌缩的桌子和被剪的桌子。
+- ✅ 全局 token 天花板接到了真正在答题的那只 `LLM` 上（`#93`）：修前它挂在 `play()` 的本地变量上，
+  而两个出货入口都把 `actors` 交进来，于是真桌上 `spent()` 恒为 0、上限永远不会响（实测同一只桩、
+  上限 100：修前打完整局 Σ=2240 报 0，修后 920 处 `aborted_budget`）。
 - ✅ 反塌缩第 1 条（法官指派发言相）是**规则**，不是提示词里的一句建议：act 与指派不符按硬违规
   打回、重问一次（违规分类 `act_not_as_assigned`，口径见 [docs/metrics.md](docs/metrics.md) 的
   M3 一节）；重问后仍不遵守就发布模型的原话和它自选的 act，只记 `fallback=1`。这样
@@ -3281,12 +4748,35 @@ baseline（任何刀之前）`rc=0 red=[]`；`/tmp/mut90.py` 第二跑 `total=7 
   （门口 5 具 `/tmp/mut62.py` + 比较这一半 8 具 `/tmp/mut64.py` + 不许各自抄名单 4 具 `/tmp/mut65*.py`，
   后一族整套跑过）见〈一根不存在的处理轴〉，口径在
   [docs/comparison.md](docs/comparison.md)。
-- ⛔ 真端点的一局（M2 单座位、M3★ 反塌缩切片）还没跑过：需要 `WOLF_LLM_API_KEY`，而端点上
-  一次体检有 8 个延迟单元格是 520 上游错误。**M3 是这项产品的存在性闸门**（`passivity_rate
-  < 0.4` 是主判据），它不过，后面的批量对比没有意义。
+- ✅ 真端点的桌子**跑过并且活着出产物了**：2026-09-24 端点恢复后三局九座全 `LlmActor`（`data/`
+  整目录 gitignored，本机留存），三局都判 `wolf_win`（两局在第 3 天、第三局在第 4 天的夜里，没走到白天），
+  `actor_kinds=['llm']`、
+  `config_hash=fb3e99579b7e`（当时的出厂号，`#116` 之后是 `c63e21dfcc5a`），173 次带回答的调用、
+  `context_overflows=0`、`latency_p95_s=12.23`。
+  M3★ 的五条预注册判据在这三局上**全部达标**（`passivity_rate=0.0333`、`collapse_round=0.0191`、
+  `opening_distinct_rate=1.0` → 判定 `PASS`），反塌缩这道存在性闸门第一次有了真读数而不是推断。
+- ✅ 端点不通的时候**不会**产出一局假行为：黑洞形状（连得上端口、SYN 无人应答）下 `wolf run` 在
+  19.5s 内判 `aborted_endpoint`、`fallback=0`、rc=1（2026-09-25T02:10:43Z 真端点上量的，`#116`）；
+  被拒形状（401）一直是"一句读数 + rc 1"。修之前黑洞那一支是 45s 一个回合、`result.ok: true`
+  地照打，整局 ~37 分钟全是引擎兜底。
+- ⛔ 但**预注册那片 M3★ 切片还没有**：§十 写的是"一夜 + 一天发言，在两种前缀长度（~2k 与 ~5k）各跑
+  5 次"，而上面这三局是**整局**（3/3/4 天，闸门按 9 个发言轮、60 次公开发言量出来的），形状不对、
+  样本也不是那 10 次。所以
+  `PASS` 这一格现在的意思是"真端点上这五条量得出、且没有塌缩"，不是"M3★ 已按预注册口径通过"。
+  入口不缺（`run --dry-run --set regions.b2=` 零调用就能换表），缺的是一个口径：~5k 那一档在当前
+  几何下拧不出来，读数与外推见〈把前缀长度拧到两档：入口是真的，~5k 那一档不在当前几何里〉。
+- ⛔ 69.4% 的真回答被自家 `max_tokens` 切掉（`#92`），而天花板该抬到哪里**还没量过**：`latency_p95_s`
+  12.23 对着 `<20.0` 只剩 7.8 秒，抬预算就是把延迟推近那条线。这一格现在有读数、有判据、没有结论，
+  而且**外推不出来**——173 次真调用里两个解释变量不同步（每次都几乎打到顶），最小二乘给的是负斜率，
+  见〈六成九的真回答撞在自家 max_tokens 上，而闸门那一屏看不见这件事：`#92`〉末尾那两条 ④⑤；
+  要量得开一次只换上限的专门探针（`#112`）。
+- ⛔ plan §5 的前缀缓存经济性**在这台端点上没有可证的读法**：三局真桌 173 次调用的 `usage` 里
+  `cached_tokens` 出现 0 次（没有这个键，不是 0），读侧因此只能给 `null`。"为什么"要等 M0 重跑，
+  "有没有"已经是实测结论了——见〈§5 整段区域几何买的那笔折扣，在产物上没有一个读数：`#70`〉末尾那三段。
+  要打通它得先决定拿什么当证据，另立任务权衡（`#96`），不在离线加固这一批里顺手做。
 - ⛔ 对比链的**结论路径**一次真数据都没走过：上面那两条 `--mock` 命令产的是替身桌，按 plan
-  §十一 设计成必然被拒（`SYNTHETIC_TABLE`）；`data/` 不进版本库，所以那份批次也得自己重生成。
-  真桌的 `OK` 要等 M3 的切片过了再跑。
+  §十一 设计成必然被拒（`SYNTHETIC_TABLE`）；真桌那三局是 `wolf run` 出的**单局**，不是一批两臂，
+  所以 `compare` 的 McNemar / bootstrap 至今只在替身数据上走过。`data/` 不进版本库，批次也得自己重生成。
 - ⛔ 没有真人入座的界面。`Actor` 协议一期就预留了（`MockActor` / `LlmActor` 之外只需要再一个
   实现），但界面本身按计划后置。
 - ⛔ 女巫用药救下的那一夜在公开产物里**不留痕迹**：`rules.NightResult.peace`（平安夜）算出来之后

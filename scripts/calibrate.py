@@ -458,11 +458,14 @@ async def temp_diversity_scan(c: httpx.AsyncClient, cl: Client, quick: bool) -> 
                          f"all calls failed: status={first.get('status')} {redact(str(first.get('err'))[:140])}"})
             continue
         frags = template_top_fragments(speeches)
+        collapse, openings = collapse_round(speeches), opening_distinct_rate(speeches)
         rows.append({
             "temperature": temp,
             "n_speech": len(speeches),
-            "collapse_round": round(collapse_round(speeches), 3),
-            "opening_distinct_rate": round(opening_distinct_rate(speeches), 3),
+            # 一次成功的采样不是一次测量：两条尺子都要 ≥2 份发言才有可比对象，None 原样进表
+            # （`n_speech` 就在旁边那一格，读表的人看得到为什么这一格是空的）。
+            "collapse_round": None if collapse is None else round(collapse, 3),
+            "opening_distinct_rate": None if openings is None else round(openings, 3),
             "seat_mention_rate": round(sum(mentions_seat(s) for s in speeches) / len(speeches), 3),
             "top_fragment": frags[0][0] if frags else None,
             "top_fragment_freq": frags[0][1] if frags else 0,
@@ -599,6 +602,14 @@ def render_md(features, stream, ratio, tp, lat, temps, args, *, provenance: str 
         L.append(f"- **另有 {len(blind)} 处的值被 redact 抹去**：{'、'.join(blind[:10])}"
                  f"{'…' if len(blind) > 10 else ''}。这些格子是防护逻辑遮掉了结论，**不是**"
                  "端点没返回；要么把结论换成不含凭据键名的形式记录，要么在本节写明该结论不可得。\n")
+        # Same guard, later state: the bare `token` substring is gone, so a re-run is expected to
+        # read these cells back. "Expected" is a reading of the code above, not a measurement —
+        # this report is an offline re-render of an older sidecar, and saying otherwise would be
+        # exactly the "claim that lives only in prose" this repo keeps hunting.
+        L.append("  - 上面那句 remedy 的后半已经做了：`CRED_KEYS` 里不再有裸 `token`（就是它当年把 "
+                 "`has_cached_tokens`、`usage_keys_seen` 一起遮掉的），被遮的格子也由 `elided_paths` "
+                 "逐格报出来而不是静默消失。**下一次 M0 重跑预期能把这些格读回来**——这是从代码读出的"
+                 "预期，不是本次重跑实测（本报告是旧 sidecar 的离线重渲染）。\n")
     if failed:
         def cell(r: dict) -> str:
             # Upstream error bodies contain newlines and pipes; either one silently destroys

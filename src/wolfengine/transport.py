@@ -121,7 +121,11 @@ class HttpTransport:
             r = await self.client.post(f"{self.cfg.base_url}/chat/completions", json=body,
                                        headers={"Authorization": f"Bearer {key}",
                                                 "Content-Type": "application/json"},
-                                       timeout=timeout_s)
+                                       # Not a bare float: that would set connect == read == the
+                                       # seat deadline, and a host that swallows SYNs would then be
+                                       # classified by `agent._ask` as one slow turn, forever.
+                                       timeout=httpx.Timeout(timeout_s,
+                                                            connect=self.cfg.connect_timeout_s))
         except (httpx.ReadTimeout, httpx.WriteTimeout, httpx.PoolTimeout) as e:
             # Reached the model, it is answering too slowly. That is one turn's problem, and
             # the remedy already exists upstream: `agent._ask`'s per-seat deadline skips the

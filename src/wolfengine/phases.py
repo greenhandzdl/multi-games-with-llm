@@ -30,7 +30,6 @@ from . import rules
 from .actors import Actor
 from .agent import Agent, TurnOutcome
 from .belief import build_belief
-from .compress import CAUSE_ZH
 from .config import Config
 from .events import EventLog, Kind, PUBLIC, Visibility, seats
 from .persona import assign_speech_acts, repeat_fragments
@@ -115,7 +114,7 @@ async def run_night(t: Table) -> rules.NightResolution:
     rules.apply_night(t.state, res)
 
     for d in res.deaths:
-        t.say(Kind.DEATH, seat=d.seat, cause=d.cause, cause_zh=CAUSE_ZH.get(d.cause, d.cause))
+        t.say(Kind.DEATH, seat=d.seat, cause=d.cause)
     if res.seer_report is not None and t.state.seer_seat is not None:
         target, verdict = res.seer_report
         t.say(Kind.SEER_RESULT, visibility=seats(t.state.seer_seat), actor=t.state.seer_seat,
@@ -274,7 +273,7 @@ async def _ballots(t: Table, voters: list[int], pk_seats: tuple[int, ...],
 
 
 def _publish(t: Table, res: rules.VoteResult, *, pending_pk: bool = False) -> None:
-    """The tally, written once every ballot exists.
+    """The tally, written once every ballot exists — as facts, never as a sentence.
 
     The ballots themselves are already in the log — `agent.py` wrote each one as its turn
     closed, because that is the only record that carries the prompt, the rejected attempts
@@ -286,23 +285,15 @@ def _publish(t: Table, res: rules.VoteResult, *, pending_pk: bool = False) -> No
     `pending_pk` is why this takes a flag instead of re-deriving it from `res`: a tie that is
     about to be re-voted has no outcome yet, and `res` alone cannot tell that apart from the
     terminal one. Only the day's first ballot passes it — see `rules.will_pk`.
+
+    No `abstainers` roster here (who sat out is on each ballot), but the *count* is: it is what
+    this settlement decided, and `rules.tally_votes` folds an illegible ballot into the
+    abstainers as a backstop, so the settlement's count is not the same predicate as "ballots
+    with target=None" — the log agreed on all 30 real settlements because the backstop never
+    fired. `compress._vote_summary` is its only reader.
     """
-    t.say(Kind.VOTE_RESULT, summary=_tally_text(res, pending_pk=pending_pk),
-          tally={str(k): v for k, v in res.tally.items()}, exiled=res.out,
-          abstainers=list(res.abstainers))
-
-
-def _tally_text(res: rules.VoteResult, *, pending_pk: bool = False) -> str:
-    if not res.tally:
-        return "全员弃票，无人出局。"
-    bits = "、".join(f"{s}号{n}票" for s, n in sorted(res.tally.items()))
-    if res.out is not None:
-        who = f"{res.out}号被投票出局。"
-    elif pending_pk:
-        who = "票数并列，先不定人。"
-    else:
-        who = "平票，无人出局。"
-    return f"票型：{bits}。弃票{len(res.abstainers)}人。{who}"
+    t.say(Kind.VOTE_RESULT, tally={str(k): v for k, v in res.tally.items()},
+          exiled=res.out, abstained=len(res.abstainers), pending_pk=pending_pk)
 
 
 async def _exile(t: Table, seat: int | None) -> int | None:
@@ -310,7 +301,7 @@ async def _exile(t: Table, seat: int | None) -> int | None:
         return None
     t.state.seats[seat].alive = False
     t.state.deaths.append(Death(seat=seat, day=t.state.day, night=0, cause="exiled"))
-    t.say(Kind.DEATH, seat=seat, cause="exiled", cause_zh=CAUSE_ZH["exiled"])
+    t.say(Kind.DEATH, seat=seat, cause="exiled")
     if "shoot_on_death" in t.state.board.spec(t.state.role_of(seat)).abilities \
             and "exiled" in t.state.house.hunter_shoots_on:
         t.state.pending_shots.append(seat)
@@ -351,6 +342,5 @@ async def run_hunter_shots(t: Table) -> None:
             t.state.seats[target].alive = False
             t.state.deaths.append(Death(seat=target, day=t.state.day, night=0,
                                         cause="hunter_shot"))
-            t.say(Kind.DEATH, seat=target, cause="hunter_shot",
-                  cause_zh=CAUSE_ZH["hunter_shot"])
+            t.say(Kind.DEATH, seat=target, cause="hunter_shot")
             rules.check_win(t.state)

@@ -354,8 +354,8 @@ class Agent:
             "belief": action.belief.model_dump() if action.belief else None,
         }
         payload.update({k: v for k, v in extra.items() if v is not None})
-        if action.potion:
-            payload["potion"] = action.potion
+        # `action.potion` is deliberately *not* copied into the payload: `legality` already
+        # refused any answer where it disagrees with `act`, so a stored copy is a second pen.
         # Provenance goes in a sub-dict rather than loose in the payload, so that
         # `render_line` — which reads payload keys for the chronicle — can never render a
         # token count, and so the vocabulary table in events.Kind stays about the game.

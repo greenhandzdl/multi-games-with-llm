@@ -110,6 +110,11 @@ class Config:
     # --- timeouts, keyed by actor kind (plan §15) ---
     llm_timeout_floor_s: float = 45.0
     llm_timeout_median_mult: float = 3.0
+    # 建连单独封顶，因为 `llm_timeout_floor_s` 同时是 `agent._ask` 的席位 deadline：一个裸 float
+    # 传给 httpx 会让 connect 与席位 deadline 是同一个数，于是端点黑洞（SYN 无应答）里两者同时响，
+    # 抢赢的是 deadline——`is_upstream_error` 那条分类永远到不了，整局打成 37 分钟的引擎兜底。
+    # 取值受 `test_transport.py` 那条不变量约束：重试预算必须赶在席位 deadline 之前判完。
+    connect_timeout_s: float = 5.0
     max_game_wallclock_s: int = 900  # only enforced when every seat is an LlmActor
     max_game_completion_tokens: int = 20000
     max_retries_total: int = 30

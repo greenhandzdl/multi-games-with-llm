@@ -35,10 +35,10 @@ ANSWER = {
 }
 
 
-def _transport(handler, monkeypatch) -> HttpTransport:
+def _transport(handler, monkeypatch, *, cfg: Config | None = None) -> HttpTransport:
     monkeypatch.setenv(Config().api_key_env, PLACEHOLDER)
     client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
-    return HttpTransport(Config(), client=client)
+    return HttpTransport(cfg or Config(), client=client)
 
 
 async def _chat(t: HttpTransport, **kw):
@@ -175,6 +175,84 @@ async def test_a_200_that_is_not_json_or_has_no_choices_fails_loudly(monkeypatch
         t = _transport(lambda request: make(), monkeypatch)
         res = await _chat(t)
         assert not res.ok, "an empty answer must not be parsed as a seat that chose to pass"
+
+
+# ---------------------------------------------------------------- 谁先超时：建连 vs 席位 deadline
+def _peek(handler, box: list):
+    """把每一次请求真正交给 httpx 的那四个数抄下来。
+
+    `request.extensions["timeout"]` 是唯一能离线看见这件事的地方：`httpx.MockTransport` 不建连，
+    所以"连接被黑洞吞掉"没法在这儿演（那是 `test_loopback_endpoint.py` 那一层要真 socket 的理由）。
+    但这一轮的缺陷不是"没演出来"，是**发出去的那个对象长什么样**——四个阶段共用一个数，于是
+    黑洞里 connect 撞不上自己的上限，席位 deadline 先响。那是接线，接线看得见。
+    """
+    def h(request: httpx.Request):
+        box.append(dict(request.extensions["timeout"]))
+        return handler(request)
+    return h
+
+
+async def test_the_connect_phase_gets_its_own_bound_below_the_seat_deadline(monkeypatch):
+    """一个数发下去，connect 和 read 就是同一个上限，于是永远是席位 deadline 先判这一回合。
+
+    实测形状（2026-09-25T01:44:20Z，端点黑洞——SYN 无应答，不是 `ConnectError` 那种立刻被拒）：
+    13 个回合**全部**记成 `timeout_after_45s`、`result.ok: true`、`fallback: 1`，一局打到第 2 天
+    用了 585s、整局预计 ~37 分钟。`agent._ask` 的 deadline 取 `llm_timeout_floor_s`=45s
+    （`actors.py:117-122`），`llm.py:146` 又把同一个 45 当作 `timeout_s` 交给 transport，
+    `transport.py:124` 用裸 float 传下去 = 四个阶段都是 45。于是本文件上面那条
+    `test_an_unreachable_endpoint_is_the_endpoints_fault_not_the_models` 所承诺的分类根本到不了：
+    `asyncio.wait_for` 与 httpx 的 connect 超时同时响，抢先进入 `except` 的是前者，
+    `EndpointUnavailable`（`llm.py:177`）与 `aborted_endpoint`（`game.py:211`）在这形状下不可达。
+
+    7.5 是故意挑的：它既不是 45 的因数也不是任何一个"忘了改"能碰巧写出来的数。钉的是**接线**
+    （connect 单独取新字段），不是那个字段的取值——取值由下一条管。
+    """
+    seen: list[dict] = []
+    t = _transport(_peek(lambda request: httpx.Response(200, json=ANSWER), seen), monkeypatch,
+                   cfg=Config(connect_timeout_s=7.5))
+    res = await _chat(t, timeout_s=45.0)
+    assert res.ok
+    assert seen == [{"connect": 7.5, "read": 45.0, "write": 45.0, "pool": 45.0}], (
+        f"发出去的超时对象：{seen}——connect 若还是 45，黑洞里的端点就被记成一次慢回答")
+
+
+def test_the_default_numbers_let_the_endpoints_verdict_win_the_race():
+    """上一条钉"分了"，这一条钉"分得够开"：默认配置下端点的判决必须**赶在**席位 deadline 之前。
+
+    `llm.py` 的重试预算是 `max_retries_per_call + 1` 次尝试加两段退避；每一次尝试现在最多花
+    `connect_timeout_s`（黑洞形状），所以端点判决的最坏时刻是 `3×connect + (1.5 + 3)`。
+    它必须小于冷启动的席位 deadline `llm_timeout_floor_s`，否则这一轮修的东西只是把 race 挪了个
+    位置。这两个数分别从 `Config` 和 `LLM.__init__` 的签名上读，因为**两侧都会漂移**：
+    退避常数是 `llm.py` 的默认参数，不在 `Config` 里，写死在断言里就是一条会腐烂的散文。
+    （现值实测：3×5.0 + 4.5 = 19.5 < 45。）
+    """
+    import inspect
+
+    from wolfengine.llm import LLM
+
+    cfg = Config()
+    params = inspect.signature(LLM.__init__).parameters
+    attempts = params["max_retries_per_call"].default + 1
+    base = params["backoff_base"].default
+    backoffs = sum(base * 2 ** a for a in range(attempts - 1))
+    worst = attempts * cfg.connect_timeout_s + backoffs
+    assert worst < cfg.llm_timeout_floor_s, (
+        f"{attempts} 次建连 × {cfg.connect_timeout_s}s + 退避 {backoffs}s = {worst}s，"
+        f"席位 deadline 只有 {cfg.llm_timeout_floor_s}s：这局会被记成慢回答而不是端点故障")
+
+
+async def test_the_read_budget_is_unchanged_by_the_connect_bound(monkeypatch):
+    """反方向：一个真答得很慢的端点还是**不能**被 5 秒掐掉。
+
+    把 connect 收紧的同时把 read 也收紧，就等于把"模型在思考"重新归类成"这一回合超时"——那是
+    上面 `test_a_stalled_read_stays_one_turns_problem` 守着的另一半。这一条钉的是新字段**只**动
+    connect 那一格。
+    """
+    seen: list[dict] = []
+    t = _transport(_peek(lambda request: httpx.Response(200, json=ANSWER), seen), monkeypatch,
+                   cfg=Config(connect_timeout_s=7.5))
+    await _chat(t, timeout_s=31.0)
+    assert seen[0]["read"] == 31.0 and seen[0]["connect"] == 7.5
 
 
 # --------------------------------------------------------------------------------- the key

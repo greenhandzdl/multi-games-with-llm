@@ -22,7 +22,8 @@ from typing import Any, Iterable
 
 from . import roles
 from .config import DRIFT_RATIO
-from .events import Event, EventLog, Kind, seq_damage, torn_extent, voting_waves
+from .events import (Event, EventLog, Kind, empty_notice, meta_notice, seq_damage, torn_extent,
+                     voting_waves)
 from .info import percept_for
 from .belief import build_belief
 from .prompts.templates import EXAMPLE_EVENT_IDS
@@ -59,35 +60,73 @@ def jaccard(a: str, b: str, n: int = 4) -> float:
     return inter / union if union else 1.0
 
 
-def collapse_round(speeches: list[str], n: int = 4) -> float:
-    """Mean pairwise char-4-gram Jaccard within one round. M3 secondary criterion."""
-    if len(speeches) < 2:
-        return 0.0
-    vals = [jaccard(a, b, n) for a, b in combinations(speeches, 2)]
+def comparable_speeches(speeches: list[str]) -> list[str]:
+    """本轮真的开口的那几份发言：三把措辞尺子共用的地板（#95 全空、#103 单人轮、#104 第三条尺子）。
+
+    一句空串不是一次"说了不一样的话"，也不是一次"没跟别人重复"。它既不该进分子也不该进分母——
+    沉默由 `passivity_rate` 逐次去量，措辞尺子只量说过话的那几份。地板之所以住在这里而不是各自
+    写一遍：三处各写一遍，迟早有一处漏掉（#104 漏的就是这一处）。
+    """
+    return [s for s in speeches if s.strip()]
+
+
+def collapse_round(speeches: list[str], n: int = 4) -> float | None:
+    """Mean pairwise char-4-gram Jaccard within one round. M3 secondary criterion.
+
+    `None` whenever the round offers fewer than two utterances to compare — plan §8 defines this
+    metric as 同轮内**两两** Jaccard, and "no pair" is not the same finding as "every pair is
+    dissimilar". Both cases used to vote a `0.0`, which is the passing side of `< 0.35`: an
+    all-blank round (#95) and a round where exactly one seat held the microphone (#103, and it
+    happens in real logs — `g00000301`'s day-1 PK round has two speeches, one of them empty).
+    Saying "the table parroted a template" is `collapse_round`'s job; saying "the table was
+    silent" belongs to `passivity_rate`, which does measure it turn by turn.
+    """
+    spoken = comparable_speeches(speeches)
+    if len(spoken) < 2:
+        return None
+    vals = [jaccard(a, b, n) for a, b in combinations(spoken, 2)]
     return sum(vals) / len(vals)
 
 
-def opening_distinct_rate(speeches: list[str], prefix_chars: int = 8) -> float:
-    """Fraction of distinct first-8-character openings. 1.0 = all differ."""
-    if not speeches:
-        return 1.0
-    openings = {"".join(s.split())[:prefix_chars] for s in speeches if s.strip()}
-    return len(openings) / len([s for s in speeches if s.strip()])
+def opening_distinct_rate(speeches: list[str], prefix_chars: int = 8) -> float | None:
+    """Fraction of distinct first-8-character openings. 1.0 = all differ, None = nothing to compare.
+
+    A round where nobody said anything has no openings to compare, which is not the same finding
+    as "all openings differed": 1.0 hands the M3 gate a free pass on a table that never spoke, and
+    0.0 invents a collapse out of silence. `None` is what `m3_gate_verdict` reads as `ok=None`,
+    and NOT_EVALUABLE is the only honest answer there. The same argument covers a round with one
+    speaker — one opening cannot be a duplicate of anything (#103) — so the floor is two.
+    """
+    spoken = comparable_speeches(speeches)
+    if len(spoken) < 2:
+        return None
+    openings = {"".join(s.split())[:prefix_chars] for s in spoken}
+    return len(openings) / len(spoken)
 
 
-def shared_substring_rate(speeches: list[str], min_len: int = 6) -> float:
-    """dup_exact6_rate: fraction of speeches sharing a >=min_len literal run with another.
+def shared_substring_rate(speeches: list[str], min_len: int = 6) -> float | None:
+    """dup_exact6_rate: fraction of the speeches that *held the microphone* sharing a >=min_len run.
 
     Catches verbatim recycling, which n-gram Jaccard can dilute away in long text.
+
+    The third wording ruler, and until #104 the one still standing on the old floor: the share is
+    taken over the speeches that actually said something, not over the entries in the round. With
+    blanks in the denominator, two seats reciting the same sentence while seven never spoke reads
+    0.2222 — silence counting as evidence against repetition, the exact move #95 and #103 ruled
+    out for the other two. Fewer than two speakers means no sharing partner exists in principle,
+    so there is no reading (`None`), not a 0.0.
     """
-    norm = ["".join(s.split()) for s in speeches]
+    spoken = comparable_speeches(speeches)
+    if len(spoken) < 2:
+        return None
+    norm = ["".join(s.split()) for s in spoken]
     grams: dict[str, int] = Counter()
     for t in norm:
         for i in range(len(t) - min_len + 1):
             grams[t[i : i + min_len]] += 1
     repeated = {g for g, c in grams.items() if c >= 2}
     hits = sum(1 for t in norm if any(g in t for g in repeated))
-    return hits / len(norm) if norm else 0.0
+    return hits / len(norm)
 
 
 def template_top_fragments(speeches: list[str], min_len: int = 6, min_count: int = 3) -> list[tuple[str, int]]:
@@ -115,6 +154,26 @@ def template_top_fragments(speeches: list[str], min_len: int = 6, min_count: int
         if not any(g in k for k, kc in kept if kc >= c):
             kept.append((g, c))
     return kept
+
+
+def template_top_share(speeches: list[str], min_len: int = 6,
+                       min_count: int = 3) -> tuple[str | None, float | None]:
+    """本轮的那句模板 `template_top1` 与它占**开口人数**的比例，一起算、一起缺席。
+
+    地板是 `min_count` 而不是 2：少于三份发言的轮里根本不可能有候选，`""` / `0.0` 那种读法是
+    "本轮没有模板"的假证词（`#95`/`#103`/`#104` 同一条：定义值不是测量）。分母取开口人数，
+    因为一张空手不是一次"说了不一样的话"——三句复读配六张空手以前读 `3/9`，与同样三句不配空手
+    时的 `1.0` 是两个数，而它们在同一行里挨着 `dup_exact6_rate=1.0`（`#105`）。
+    默认值必须与 `template_top_fragments` 的一致：C4 黑名单拿的是后者的输出，两边的地板一旦分开，
+    读数就在解释一份和它不同源的提示词。
+    """
+    spoken = comparable_speeches(speeches)
+    if len(spoken) < min_count:
+        return None, None
+    frags = template_top_fragments(spoken, min_len=min_len, min_count=min_count)
+    if not frags:
+        return "", 0.0
+    return frags[0][0], round(frags[0][1] / len(spoken), 4)
 
 
 def _grow(g: str, norm: list[str]) -> str:
@@ -274,6 +333,26 @@ class Game:
         return torn_extent(self.torn_tail)
 
     @property
+    def hollow_notice(self) -> str:
+        """这份文件里**没有一局**时的那句话，否则 ""。两句出处一个字都不重写。
+
+        管"文件头就没有"的那一种是 `meta_notice`，管"开头之后什么都没有"的那一种是
+        `empty_notice`，两者互斥。那三个给人看的出口（replay/export/watch）从 #52/#53 起就在用这只
+        手，批次与闸门这一侧一直没有读者：于是 `wolf gate` 拿到一份 0 字节的日志会印"本批 1 局全为
+        替身桌"——凭空一局，外加一个没人登记过的座位（#99）。`is_synthetic` 是关门（没登记不许进
+        结论），反过来读成"登记成了替身"就是假话，所以"是不是局"和"是谁在桌边"必须是两个判据。
+
+        `events` 先判，是因为 `meta_notice` 说的那件事比"没有局"小：它说的是**叫不出这是哪一局**。
+        一份页眉被删掉、事件还在的日志（人手改过，或 `#54` 那两条 manifest 被砍掉一条）确实叫不出
+        名字，可它真打了一局，事件就在字节里；把它翻成"这里没有局"会让它从闸门五条判据的分母里整个
+        消失（19:03:35Z 现测：9 条发言的日志报 `n_games=0`、`NOT_EVALUABLE`）。页眉缺失有它自己的
+        读者和它自己的那句话。
+        """
+        if self.events:
+            return ""
+        return meta_notice(self.meta) or empty_notice(self.events, self.meta)
+
+    @property
     def is_synthetic(self) -> bool:
         """A stand-in table can never enter a paired corpus (§十一 for mock, §十五 for human), so
         the log has to be able to answer that question without someone remembering which runs were real."""
@@ -380,9 +459,17 @@ def m1_win_rate(games: list[Game]) -> dict[str, Any]:
     over those same games would be a label, not a guard, and the plan's rule is that a
     stand-in table never enters an evaluation corpus — a mock 9-seat script wins its faction
     by authorship, so a rate over it measures the author.
+
+    A file that holds no game is a third category, not a subset of either: no manifest, or a
+    manifest and nothing else (`Game.hollow_notice`). Counting it as a game is how `compare`'s
+    「局数」 column came to read 4 over two boards that were played (#100, the win-rate half of
+    #99), and reading a header-only `["llm"]` file as an unfinished game puts a phantom
+    `excluded: {"unfinished": 1}` behind bytes that never saw a night.
     """
-    synthetic = [g for g in games if g.is_synthetic]
-    usable = [g for g in games if not g.is_synthetic]
+    hollow = [g for g in games if g.hollow_notice]
+    played = [g for g in games if not g.hollow_notice]
+    synthetic = [g for g in played if g.is_synthetic]
+    usable = [g for g in played if not g.is_synthetic]
     decisive = [g for g in usable if g.terminal in DECISIVE]
     excluded = Counter(g.terminal for g in usable if g.terminal not in DECISIVE)
     good = sum(1 for g in decisive if g.winner == "good")
@@ -394,13 +481,18 @@ def m1_win_rate(games: list[Game]) -> dict[str, Any]:
         k = sum(1 for g in sub if g.winner == "good")
         strat[label] = {"n": len(sub), "good_rate": round(k / len(sub), 3) if sub else None}
     note = "胜率在此样本量下仅作描述；b+c<6 时两配置对比会自动打『统计力不足』（plan §8）。"
-    if usable and not decisive:
+    if games and not played:
+        note = (f"{len(games)} 份文件里没有一局：胜率不产出，也不替它们补一个分子分母，"
+                "更不替它们编一个座位表（每一份是什么形状，见「不是局的文件」那一行）。")
+    elif usable and not decisive:
         note = f"本批 {len(usable)} 局无一决出阵营胜负（见 excluded），分母为空，胜率为 None 而非 0。"
     elif synthetic and not usable:
         note = (f"本批 {len(synthetic)} 局全为替身桌（actor_kinds={seat_kinds(synthetic)}），"
                 f"依据 {synthetic_basis(synthetic)}：不入评测语料，胜率不产出，不是 0%。")
     return {
-        "n_games": len(games), "n_decisive": len(decisive), "excluded": dict(excluded),
+        "n_games": len(played), "n_files": len(games),
+        "hollow": _hollow_files(hollow, "——它们没有事件，上面胜率的分子与分母里没有它们一笔。"),
+        "n_decisive": len(decisive), "excluded": dict(excluded),
         "good_win_rate": round(good / len(decisive), 3) if decisive else None,
         "wilson95": [round(lo, 3), round(hi, 3)],
         "mean_days": round(mean([g.days for g in decisive]), 2) if decisive else None,
@@ -410,6 +502,19 @@ def m1_win_rate(games: list[Game]) -> dict[str, Any]:
         "descriptive": True,
         "note": note,
     }
+
+
+def _hollow_files(hollow: list[Game], tail: str) -> dict[str, Any]:
+    """「不是局的文件」那一格：数几份、每份什么形状只这一处算，结论那半句各出口自己说。
+
+    分界线是 `#89`/`#97` 那条：谓词（哪些文件没有一局、它们的页眉长什么样）必须一只手，而"所以这一
+    屏里哪些量没有它们"随出口而变 —— 闸门点名五条判据的 n，胜率点名它的分子分母。
+    """
+    block = {"n": len(hollow), "paths": [str(g.path.name) for g in hollow]}
+    block["note"] = (
+        f"不是局的文件：{len(hollow)} 份（{'；'.join(sorted({g.hollow_notice for g in hollow}))}）"
+        + tail) if hollow else ""
+    return block
 
 
 def _role_survival(games: list[Game]) -> dict[str, float]:
@@ -571,14 +676,39 @@ def m3_gate_verdict(games: list[Game]) -> dict[str, Any]:
 
     A measured FAIL outranks an unmeasurable criterion: hiding a red number behind a missing
     reading is how a batch gets the benefit of the doubt.
+
+    A fourth line sits beside the five criteria rather than inside them: files that hold no game
+    at all (`Game.hollow_notice` — no manifest, or a manifest and nothing else) are counted as
+    *files*, not as games. They contribute no event to any denominator, so the only thing their
+    presence can change is the headline — and a headline reading "3 局" over arithmetic that saw
+    two is how `wolf gate` came to call a zero-byte file "一局替身桌" (#99).
     """
-    usable = [g for g in games if not g.is_synthetic]
+    # "有几局"和"是谁在桌边"是两个问题：一份连开局记录都没有的文件既没有局、也没有座位表，
+    # 把它算进 `len(games)` 会凭空多一局，把它读成"替身桌"会凭空多一个不存在的座位（#99）。
+    hollow = [g for g in games if g.hollow_notice]
+    played = [g for g in games if not g.hollow_notice]
+    # 顺序是判据的一半：`usable` 必须是被减的那一边。`is_synthetic` 只关门不认座，所以一份
+    # 页眉写着 `["llm"]` 的 0 事件文件会从 `games` 而不是 `played` 溜进来，把下面的
+    # `len(played) - len(usable)` 减成 -1（18:40:24Z 真日志目录实测）。
+    usable = [g for g in played if not g.is_synthetic]
     rounds = [r for g in usable for r in speech_rounds(g.events)]
-    turns = [(e.payload.get("act", ""), e.payload["text"]) for r in rounds for e in r]
     calls = [e for g in usable for e in decisions(g.events)]
     lats = [float(e.response["latency_s"]) for e in calls
             if e.response.get("latency_s") is not None]
     overflows = sum(_meta(e).get("context_overflow", 0) for e in calls)
+    # 代打率与截断率是同一类东西：不改任何判据的算术，只让"这一轮有没有模型的话"可见（`#117`）。
+    # `n_turns` 复用 `pooled_passivity` 的那个分母，因为拒绝判定必须问的是"主判据数过的那几轮里
+    # 有几轮是引擎写的"，而不是"日志里有几条 speech"——两个数在有多天发言时会分开。
+    n_engine_turns = sum(1 for r in rounds for e in r if answered_by_engine(e))
+    n_engine_calls = sum(1 for e in calls if answered_by_engine(e))
+    # Beside the style criteria, not in a section of its own: a half-sentence that ran into our own
+    # `max_tokens` reads as a template to `collapse_round` and as "named nobody" to `passivity_rate`,
+    # so a reader who cannot see the ceiling cannot tell a collapsed table from a clipped one.
+    recorded = [(e.phase, truncated_call(e)) for e in calls if truncated_call(e) is not None]
+    n_cut = sum(1 for _, v in recorded if v)
+    per_phase: dict[str, int] = {}
+    for ph, v in recorded:
+        per_phase[ph] = per_phase.get(ph, 0) + (1 if v else 0)
 
     def crit(key: str, value: float | int | None, n: int) -> dict[str, Any]:
         op, thr = M3_GATE[key]
@@ -587,21 +717,33 @@ def m3_gate_verdict(games: list[Game]) -> dict[str, Any]:
 
     # 0.0 s for *every* call is not a fast endpoint, it is an absent clock.
     clock_real = bool(lats) and max(lats) > 0.0
+    # A round that was given but nobody spoke carries no style reading (see `collapse_round`), so
+    # it is left out of these two pools instead of voting in them. A batch of only silent rounds
+    # then reads `ok=None` → NOT_EVALUABLE, which is the same rule the empty denominator uses.
+    # 三条判据的算术全在 `round_readings` / `round_mean` / `pooled_passivity` 里，这里一次都不重算：
+    # 重算的那一份和单局视图对不出同一个数（`#102`）。
+    per = round_readings(rounds)
+    passivity, n_turns = pooled_passivity(rounds)
+    n_collapsed = sum(1 for p in per if p["collapse_round"] is not None)
+    n_openings = sum(1 for p in per if p["opening_distinct_rate"] is not None)
     criteria = {
-        "passivity_rate": crit("passivity_rate",
-                               round(passivity_rate(turns), 4) if turns else None, len(turns)),
-        "collapse_round": crit("collapse_round",
-                               round(mean([collapse_round([e.payload["text"] for e in r])
-                                           for r in rounds]), 4) if rounds else None, len(rounds)),
+        "passivity_rate": crit("passivity_rate", passivity, n_turns),
+        "collapse_round": crit("collapse_round", round_mean(per, "collapse_round"), n_collapsed),
         "opening_distinct_rate": crit(
             "opening_distinct_rate",
-            round(mean([opening_distinct_rate([e.payload["text"] for e in r])
-                        for r in rounds]), 4) if rounds else None, len(rounds)),
+            round_mean(per, "opening_distinct_rate"), n_openings),
         "latency_p95_s": crit("latency_p95_s",
                               round(_pct(lats, 0.95), 2) if clock_real else None, len(lats)),
         "context_overflows": crit("context_overflows",
                                   overflows if calls else None, len(calls)),
     }
+    if n_turns and n_engine_turns == n_turns:
+        # 主判据的分母里一次模型回答都没有：数照印（读的人要看得见那个 0.0，藏起来就等于让人以为
+        # 闸门没算过），但它不再是读数。走的是 `ok=None → NOT_EVALUABLE` 这条现成的路，与"没有
+        # 分母""时钟没走""整批替身桌"同族（#99/#39），不新增阈值、也不动五条判据里任何一条的算术。
+        criteria["passivity_rate"]["refusal"] = (
+            f"{n_engine_turns}/{n_turns} 轮发言是引擎代打的，模型一次也没答")
+        criteria["passivity_rate"]["ok"] = None
     failed = [k for k, c in criteria.items() if c["ok"] is False]
     missing = [k for k, c in criteria.items() if c["ok"] is None]
     if failed:
@@ -613,15 +755,24 @@ def m3_gate_verdict(games: list[Game]) -> dict[str, Any]:
 
     if not games:
         note = "没有可判定的局：分母为空，主判据不给 0.0（`passivity_rate([])` 的定义值不等于通过）。"
+    elif not played:
+        note = (f"{len(games)} 份文件里没有一局：闸门不给判定，也不替它们补一个分母，"
+                "更不替它们编一个座位表（每一份是什么形状，见「不是局的文件」那一行）。")
     elif not usable:
-        note = (f"本批 {len(games)} 局全为替身桌（actor_kinds={seat_kinds(games)}），"
-                f"依据 {synthetic_basis(games)}：不入评测语料，闸门不给判定，不是给通过。")
+        note = (f"本批 {len(played)} 局全为替身桌（actor_kinds={seat_kinds(played)}），"
+                f"依据 {synthetic_basis(played)}：不入评测语料，闸门不给判定，不是给通过。")
     elif not rounds:
         note = "可用局里一条发言都没有：四条风格判据没有分母。"
     elif verdict == "NOT_EVALUABLE":
-        why = ("时钟全程为 0.0 秒（替身 transport 的默认读数），延迟判据无读数"
-               if missing == ["latency_p95_s"] and not clock_real
-               else f"以下判据缺读数：{'、'.join(missing)}")
+        refused = [k for k, c in criteria.items() if c.get("refusal")]
+        blank = [k for k in missing if k not in refused]
+        if missing == ["latency_p95_s"] and not clock_real:
+            why = "时钟全程为 0.0 秒（替身 transport 的默认读数），延迟判据无读数"
+        else:
+            parts = [f"{k} 不计：{criteria[k]['refusal']}" for k in refused]
+            if blank:
+                parts.append(f"以下判据缺读数：{'、'.join(blank)}")
+            why = "；".join(parts)
         note = f"其余判据已算出，但闸门整体不给判定：{why}。"
     elif verdict == "PASS":
         note = ("五条预注册判据全部达标（plan §十 M3★）。样本量见各条 n，"
@@ -630,12 +781,54 @@ def m3_gate_verdict(games: list[Game]) -> dict[str, Any]:
         note = ("未达标：" + "、".join(
             f"{k}={criteria[k]['value']} 需 {criteria[k]['comparator']} {criteria[k]['threshold']}"
             for k in failed) + "。失败也是记录，不改阈值来让它消失。")
+    if not calls:
+        trunc_note = "本臂的可用局里没有一次带回答的调用，这一格读不出来（不是 0）。"
+    elif not recorded:
+        trunc_note = (f"这 {len(calls)} 次调用里没有一次记下 `finish_reason`："
+                      "回答有没有被自家 `max_tokens` 截断，这一批读不出来（不是 0）。")
+    elif not n_cut:
+        trunc_note = f"{len(recorded)}/{len(calls)} 次调用无一被 `max_tokens` 截断。"
+    else:
+        pct = round(100.0 * n_cut / len(recorded), 1)
+        worst = max(per_phase, key=lambda k: per_phase[k])
+        cover = (f"占报了 `finish_reason` 的 {len(recorded)} 次里的 {pct}%"
+                 if len(recorded) != len(calls) else f"{n_cut}/{len(calls)} = {pct}%")
+        trunc_note = (f"{n_cut}/{len(calls)} 次回答被 `max_tokens` 截断（{cover}），"
+                      f"最多的是 `{worst}`：上面的风格判据量的是截断后的文本，"
+                      "不是模型想说完的那句。")
+    truncation = {
+        "n_calls": len(calls), "n_recorded": len(recorded), "n_cut": n_cut,
+        "rate": None if not recorded else round(n_cut / len(recorded), 4),
+        "worst_phase": None if not n_cut else max(per_phase, key=lambda k: per_phase[k]),
+        "note": trunc_note,
+    }
+    # 代打这一格与截断那一格是同一个形状：一只谓词（`answered_by_engine`）、一处算术、一行渲染。
+    eng_frac = f"{n_engine_turns}/{n_turns}"
+    if not rounds:
+        eng_note = "可用局里一条发言都没有：主判据没有分母，这一格也没有（不是 0）。"
+    elif not n_engine_turns:
+        eng_note = f"代打 {eng_frac}：上面每条判据背后的发言都是模型自己答的。"
+    else:
+        eng_note = (f"代打 {eng_frac} 轮发言、{n_engine_calls}/{len(calls)} 次调用："
+                    "这些轮落盘的 `text` 是引擎兜底写的，不是模型说的话——风格判据的分母里有它们一笔，"
+                    "而它们不属于模型。")
+    engine_written = {
+        "n_turns": n_turns, "n_engine": n_engine_turns,
+        "n_calls": len(calls), "n_engine_calls": n_engine_calls,
+        "note": eng_note,
+    }
+    # 份数 ≠ 局数：那两句判据以前只有三个给人看的出口在读，闸门这一侧没人读，于是空文件被数成一局、
+    # 又被说成替身桌（#99）。措辞仍从 `events.py` 那一只手取，这里一个字都不重写。
+    hollow_block = _hollow_files(hollow, "——它们没有事件，上面五条判据的 n 里没有它们一笔。")
     return {
         "verdict": verdict, "criteria": criteria, "failed": failed,
-        "n_games": len(games), "n_games_usable": len(usable),
-        "n_synthetic_excluded": len(games) - len(usable),
-        "n_rounds": len(rounds), "n_turns": len(turns), "n_calls": len(calls),
+        "n_games": len(played), "n_files": len(games), "hollow": hollow_block,
+        "n_games_usable": len(usable),
+        "n_synthetic_excluded": len(played) - len(usable),
+        "n_rounds": len(rounds), "n_turns": n_turns, "n_calls": len(calls),
         "gate": {f"{k}{op}": thr for k, (op, thr) in M3_GATE.items()},
+        "truncation": truncation,
+        "engine_written": engine_written,
         "note": note,
     }
 
@@ -746,36 +939,82 @@ def speech_rounds(events: list[Event]) -> list[list[Event]]:
     return out
 
 
+def round_readings(rounds: list[list[Event]]) -> list[dict[str, Any]]:
+    """每轮一把的四把尺子，一次算给两只出口。
+
+    `m5_style_collapse` 和 `m3_gate_verdict` 以前各写一遍这段算术。写两遍的代价不是重复的行数，
+    是两个出口对同一份文件能对出两个数（`#102`）：这里每一格都取整到 4 位，闸门那边平均的是
+    **未取整**的值，于是同一批轮在两边的均值可以差 0.0001——正好够在 `<0.35` 那一格改判。
+
+    两个分母各自印一格（`#107`）：`n` 是本轮条目数，`passivity_rate` 按设计除的就是它（沉默正是
+    那一格要量的东西，一个 turn 也不能少算）；`n_spoken` 是真正开口的人数，三把措辞尺子共用的地板
+    `comparable_speeches` 数出来的就是它。只印前一个的话，一行四个 `None` 加一个 `n=2` 需要读者
+    自己想出"其中一张是空手"，那笔除法在 `#95`/`#103`/`#104`/`#105` 之后成了行里唯一的隐藏假设。
+    """
+    per = []
+    for r in rounds:
+        texts = [e.payload["text"] for e in r]
+        turns = [(e.payload.get("act", ""), e.payload["text"]) for e in r]
+        top1, share = template_top_share(texts)
+        collapse, opening, dup = (collapse_round(texts), opening_distinct_rate(texts),
+                                 shared_substring_rate(texts))
+        per.append({
+            "day": r[0].day, "phase": r[0].phase, "n": len(r),
+            "n_spoken": len(comparable_speeches(texts)),
+            "collapse_round": None if collapse is None else round(collapse, 4),
+            "dup_exact6_rate": None if dup is None else round(dup, 4),
+            "opening_distinct_rate": None if opening is None else round(opening, 4),
+            "passivity_rate": round(passivity_rate(turns), 4),
+            "template_top1": top1,
+            "template_top1_share": share,
+        })
+    return per
+
+
+def round_mean(per: list[dict[str, Any]], key: str) -> float | None:
+    # `is not None` on both ends: a silent round has no style reading, and counting it as a 0 or a
+    # 1 in the mean would report wording that was never said. A batch of only silent rounds gives
+    # None, which every renderer already prints as an empty cell rather than a zero.
+    v = [p[key] for p in per if p[key] is not None]
+    return round(mean(v), 4) if v else None
+
+
+def pooled_passivity(rounds: list[list[Event]]) -> tuple[float | None, int]:
+    """主判据的聚合只有一种算法：**按次合并**，返回 (读数, 分母)。
+
+    每轮速率再取均值是让一个单人轮和一个九人轮同权重——`m3_gate_verdict` 的 docstring 用同一句
+    理由拒掉了"按局取均值"（3  turn 的局不该和 90 turn 的一样重），但轮这一层上一直留着同一个洞
+    （`#102`）。19:49:01Z 三局真日志上，同一个分母在两个出口差 1.83 倍。
+    """
+    turns = [(e.payload.get("act", ""), e.payload["text"]) for r in rounds for e in r]
+    return (round(passivity_rate(turns), 4) if turns else None), len(turns)
+
+
 def m5_style_collapse(events: list[Event]) -> dict[str, Any]:
     """Template collapse per round, with `passivity_rate` as the headline (plan §8 M3 primary).
 
     `collapse_round` alone can pass while the game is dead, because raising temperature buys
     8/8 distinct openings on this endpoint without buying any behaviour at all — measured
     twice. Passivity is the number that cannot be fooled by wording.
+
+    The two style means are per-round (that is what a round is a sample of), but the headline
+    is not: `passivity_pooled` is the same arithmetic the gate runs, because this view prints
+    the gate's own thresholds beside it and a reader will compare them. Being compared to a
+    threshold means the denominator travels with it (`#107`): `n_turns` is the same number
+    `pooled_passivity` divided by, so 2/18 and 20/180 can't both read as "0.1111 < 0.4".
     """
     rounds = speech_rounds(events)
-    per = []
-    for r in rounds:
-        texts = [e.payload["text"] for e in r]
-        turns = [(e.payload.get("act", ""), e.payload["text"]) for e in r]
-        frags = template_top_fragments(texts)
-        per.append({
-            "day": r[0].day, "phase": r[0].phase, "n": len(r),
-            "collapse_round": round(collapse_round(texts), 4),
-            "dup_exact6_rate": round(shared_substring_rate(texts), 4),
-            "opening_distinct_rate": round(opening_distinct_rate(texts), 4),
-            "passivity_rate": round(passivity_rate(turns), 4),
-            "template_top1": frags[0][0] if frags else "",
-            "template_top1_share": round(frags[0][1] / len(r), 4) if frags else 0.0,
-        })
-    m = lambda k: round(mean([p[k] for p in per]), 4) if per else None  # noqa: E731
+    per = round_readings(rounds)
+    passivity, n_turns = pooled_passivity(rounds)
     return {
         "n_rounds": len(rounds),
-        "collapse_round_mean": m("collapse_round"),
-        "dup_exact6_mean": m("dup_exact6_rate"),
-        "opening_distinct_mean": m("opening_distinct_rate"),
-        "passivity_mean": m("passivity_rate"),
-        "worst_round": max(per, key=lambda p: p["collapse_round"], default=None),
+        "n_turns": n_turns,
+        "collapse_round_mean": round_mean(per, "collapse_round"),
+        "dup_exact6_mean": round_mean(per, "dup_exact6_rate"),
+        "opening_distinct_mean": round_mean(per, "opening_distinct_rate"),
+        "passivity_pooled": passivity,
+        "worst_round": max([p for p in per if p["collapse_round"] is not None],
+                           key=lambda p: p["collapse_round"], default=None),
         "rounds": per,
         # 视图只报它按轮算得出的那三条，且数字取自 `M3_GATE`：阈值抄第二份，迟早有一处先被改。
         "gate": {f"{k}{op}": thr for k, (op, thr) in M3_GATE.items()
@@ -1027,6 +1266,32 @@ def timed_decisions(events: list[Event]) -> list[Event]:
     return [e for e in decisions(events) if e.response.get("latency_s") is not None]
 
 
+def truncated_call(e: Event) -> bool | None:
+    """Was this answer cut off by our own `max_tokens`? `None` when the endpoint never reported a
+    `finish_reason` at all.
+
+    One predicate, three readers: `m7_cost_profile` bills it per phase, `m3_gate_verdict` prints it
+    beside the style criteria it distorts, and the audit JSON carries both. Written inline in each
+    place, a fourth copy would eventually disagree about what `None` means — and "the endpoint does
+    not report this field" is exactly what a hand-rolled `== "length"` reports as "nothing was cut".
+    """
+    reason = e.response.get("finish_reason")
+    return None if reason is None else reason == "length"
+
+
+def answered_by_engine(e: Event) -> bool:
+    """这一轮的话是不是模型说的。`meta.rung == -1` 是引擎自己写的"连提案都没有"（`agent.take_turn`
+    在 `p is None` 时落的就是这一格）。
+
+    **`fallback` 不是这个问题**，它是另一个事实。按 `payload.meta` 数整盘（8 份日志、485 条带
+    meta 的记录，2026-09-25 02:45Z 普查）：`fallback=1` 只有 3 条且全在 `night_action` 上，
+    `speech` 上一条也没有，而 `rung == -1` 有 314 条——拿 `fallback` 当谓词连发言都数不到。
+    端点压根没答的那些 `speech` 才是 `rung=-1, fallback=1`（`/tmp/down116` 那份 9/9）：`text`
+    是空串而 `act` 是指派的那个动作，于是在 `passivity_rate` 里两头都不算（`#117`）。
+    """
+    return _meta(e).get("rung") == -1
+
+
 def m7_cost_profile(events: list[Event], *, constants: dict[str, Any] | None = None,
                     calibration_note: str | None = None) -> dict:
     """Token and wall-clock cost per phase, plus the drift self-check.
@@ -1056,7 +1321,7 @@ def m7_cost_profile(events: list[Event], *, constants: dict[str, Any] | None = N
         ct = float(e.response.get("completion_tokens") or 0)
         d["ct"].append(ct)
         d["pt"].append(float(e.request.get("total_tokens_est") or 0))
-        d["cut"].append(1.0 if e.response.get("finish_reason") == "length" else 0.0)
+        d["cut"].append(1.0 if truncated_call(e) else 0.0)
         asked = e.request.get("max_tokens")
         if asked is not None:
             # Both sides of the ratio come from the same call or neither: a call whose budget
@@ -1088,7 +1353,7 @@ def m7_cost_profile(events: list[Event], *, constants: dict[str, Any] | None = N
         "asked_calls": len(asked_all),
         "fill_rate": None if not sum(asked_all) else round(sum(used_all) / sum(asked_all), 4),
         "latency_total_s": round(sum(float(e.response["latency_s"]) for e in calls), 1),
-        "truncations": sum(1 for e in calls if e.response.get("finish_reason") == "length"),
+        "truncations": sum(1 for e in calls if truncated_call(e)),
         "transport_retries": sum(int(e.response.get("attempts") or 1) - 1 for e in calls),
     }
     if calls and out["fill_rate"] is None:
@@ -1194,6 +1459,26 @@ def prefix_cache_reuse(events: list[Event]) -> dict[str, Any]:
     }
 
 
+def last_fold_state(events: list[Event]) -> dict[str, Any] | None:
+    """What the last `Kind.COMPACTION` marker recorded, in file order.
+
+    `compactions.events` says how many distinct fold states a log holds; that count cannot
+    answer the question a folded chronicle actually raises — how much of region B was still
+    being read line by line. Measured on the three real games: windows of 9, 7 and 9→15
+    against public chronicles of 61/61/63 events, and no product said so.
+
+    The two numbers are copied out of the marker, not recomputed: the window is a decision
+    `plan_fold` made at send time, and `shrink` can halve it per prompt, so an offline
+    recomputation would be a second pen writing a different fact.
+    """
+    marks = [e for e in events if e.kind == Kind.COMPACTION]
+    if not marks:
+        return None
+    last = marks[-1]
+    return {"seq": last.seq, "window": last.payload.get("window"),
+            "folded_days": last.payload.get("folded_days")}
+
+
 # ---------------------------------------------------------------------------------------- M8
 def m8_strategy_proxies(events: list[Event]) -> dict[str, Any]:
     """Do the agents look like they are playing? Readable from one game, no statistical power.
@@ -1272,6 +1557,8 @@ def m8_strategy_proxies(events: list[Event]) -> dict[str, Any]:
         "vote_split_entropy": [round(x, 4) for x in entropies],
         "vote_split_entropy_mean": round(mean(entropies), 4) if entropies else None,
         "abstention_rate": round((written - cast) / written, 4) if written else None,
+        "n_ballots_asked": written,
+        "n_ballots_cast": cast,
         "ballot_mandate": mandate,
         "ballot_mandate_mean": round(mean(mandate), 4) if mandate else None,
     }
@@ -1311,6 +1598,27 @@ def synthetic_basis(games: Iterable[Game]) -> str:
     if not named:
         return "这份日志没登记是谁在桌边（`actor_kinds` 缺格），两种被点名的替身座位都不是它"
     return "、".join(named)
+
+
+def fallback_copy_check(events: list[Event]) -> dict[str, int]:
+    """两条盘上的 `fallback` 拷贝对不上几条：`payload.meta.fallback` 与 `result.fallback`。
+
+    这个键有两个写者、四个读者（`m3_gate_pressure` 读 meta 那份，直播与复盘 HTML 的〔引擎代打〕
+    读 result 那份），而它们读的是同一个事实。实测 2026-09-25T03:04:01Z 扫 `data/**/*.jsonl`：
+    11 份里 464 条带 `payload.meta` 的决策记录，两键每条都在且逐条相等——所以"目前没坏"是真的，
+    "没人会知道它坏"也是真的。这一格要的就是后者：让读侧对过账，坏的那天 `audit` 说得出条数。
+
+    两份拷贝缺任何一份的记录**不算被比过**（既不记成一致也不记成不一致），分母 `n_compared`
+    因此小于决策记录数时，读者看得见是"没看过"而不是"没坏"。
+    """
+    compared = divergent = 0
+    for e in decisions(events):
+        meta, result = _meta(e), e.result
+        if "fallback" not in meta or "fallback" not in result:
+            continue
+        compared += 1
+        divergent += meta["fallback"] != result["fallback"]
+    return {"n_compared": compared, "divergent": divergent}
 
 
 __all__ = [

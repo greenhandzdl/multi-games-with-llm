@@ -61,22 +61,22 @@ class Kind:
     "this never happened" forever.
 
     Payload shapes are documented per kind here rather than in a design doc, because a
-    shape that drifts from the code is exactly the failure above wearing a new hat.
+    shape that drifts is that failure wearing a new hat — `test_payload_shape.py` checks.
     """
 
     GAME_START = "game_start"    # all      {"seats": [int]}
     DEAL = "deal"                # own seat {"role": str, "teammates": [int]}
     PHASE = "phase"              # all      {"text": str}
-    SPEECH = "speech"            # all      {"text": str, "act": str, "target": int|null}
-    NIGHT_ACTION = "night_action"  # acting seats {"action": "kill|save|poison", "target": int|null}
-    WOLF_CHAT = "wolf_chat"      # wolves   {"text": str}
+    SPEECH = "speech"            # all      {"text": str, "act": str, "target": int|null, "evidence": [str], "belief": dict|null, "meta": dict}
+    NIGHT_ACTION = "night_action"  # acting seats {"action": "kill|save|poison", "target": int|null, "text": str, "act": str, "evidence": [str], "belief": dict|null, "meta": dict, "_idem": str}
+    WOLF_CHAT = "wolf_chat"      # wolves   {"text": str, "act": str, "target": int|null, "evidence": [str], "belief": dict|null, "meta": dict}
     SEER_RESULT = "seer_result"  # seer     {"target": int, "verdict": "wolf|good"}
     NOTICE = "notice"            # given    {"text": str, "about": int|null}  法官只对个别座位说的话（女巫见刀口）
-    VOTE = "vote"                # all      {"target": int|null}   appended when the tally opens
-    VOTE_RESULT = "vote_result"  # all      {"summary": str, "tally": {seat: n}, "exiled": int|null}
+    VOTE = "vote"                # all      {"target": int|null, "text": str, "act": str, "evidence": [str], "belief": dict|null, "meta": dict, "_idem": str}  appended when the tally opens
+    VOTE_RESULT = "vote_result"  # all      {"tally": {seat: n}, "exiled": int|null, "abstained": int, "pending_pk": bool}
     DEATH = "death"              # all      {"seat": int, "cause": str}
-    LAST_WORDS = "last_words"    # all      {"text": str}
-    COMPACTION = "compaction"    # all      {"summary": str, "window": int, "folded_days": [int]}
+    LAST_WORDS = "last_words"    # all      {"text": str, "act": str, "target": int|null, "evidence": [str], "belief": dict|null, "meta": dict}
+    COMPACTION = "compaction"    # all      {"summary": str, "window": int, "folded_days": [int], "_idem": str}
                                  #          one per distinct fold state, written by agent.py
                                  #          from compress.fold_body() (plan §83)
     GAME_OVER = "game_over"      # all      {"winner": str|null（平局与三种 aborted_*）, "terminal": str,
