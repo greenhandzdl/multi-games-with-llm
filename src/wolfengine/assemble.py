@@ -193,8 +193,16 @@ def _region_c(
     # the header here instead of re-typing it is what keeps the knife and the reading on one
     # ruler — two spellings is how "C2 passed the audit and still ate the budget" happens.
     fact_head = "== 你目前掌握的事实 ==\n"
+    # The roster goes on the seat line, not into a new block: `block_tokens` changes hands on a
+    # "== " header, so this sentence is in none of §5's five budgeted cells and lengthening it
+    # cannot eat C1–C4. It is also the only path a wolf's team can travel — DEAL is filtered out
+    # of both `chronicle()` and the private block below, so the night-one proposer would else
+    # pick a knife with zero teammate evidence (see #133 for the offline half).
+    mates = sorted(percept.teammates())
+    roster = "你的队友是 " + "、".join(f"{s}号" for s in mates) + "。" if mates else ""
     parts = [
-        f"== 你的座位 ==\n你是{percept.seat}号。你的身份是：{seat_role}。这条信息只有法官和你看得到。",
+        f"== 你的座位 ==\n你是{percept.seat}号。你的身份是：{seat_role}。{roster}"
+        "这条信息只有法官和你看得到。",
         render_persona_card(persona),
         fact_head + card,
     ]

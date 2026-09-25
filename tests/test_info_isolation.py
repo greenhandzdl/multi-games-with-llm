@@ -236,3 +236,26 @@ def test_wolves_hear_each_other_and_nobody_else_hears_them():
 def test_unordered_input_cannot_silently_build_a_shorter_world():
     with pytest.raises(info.IsolationError):
         info.Percept(seat=1, at_seq=LAST_SEQ, events=(BOARD[5], BOARD[2]))
+
+
+def test_a_wolf_seat_reads_his_roster_in_his_own_prompt():
+    """`#133` 印出了名册，可那是离线的四台机器：模型那一屏两条梯子都把 DEAL 筛在外面。
+
+    `assemble.py` 的私有块明写着 `e.kind != Kind.DEAL`，B 段的 `chronicle()` 又只留
+    `visibility == "all"`，所以发牌那一行从来没有到过 prompt。代价落在第一夜先开口的那只狼
+    （`phases.py` 的 proposer）身上：他在任何一条私聊落盘之前就得决定刀谁，而他唯一的队友线索
+    本该是私聊行。名册接进 `== 你的座位 ==` 那一句而不是新开一块：`block_tokens` 换东家的判据
+    是"以 `== ` 开头"，这一句本来就不在 §5 的任何一格里，动它不挤占 B0/C1–C4 的预算。
+    """
+    for wolf, mates in {1: (2, 3), 2: (1, 3), 3: (1, 2)}.items():
+        head = _prompt_bytes(wolf, BOARD, LAST_SEQ).split("== 你的座位 ==")[-1]
+        head = head.split("== 你的性格参数 ==")[0]
+        want = "你的队友是 " + "、".join(f"{s}号" for s in mates) + "。"
+        assert want in head, f"{wolf} 号的座位块里没有名册 {want}：\n{head}"
+
+
+def test_a_seat_that_was_not_dealt_a_team_reads_no_words_for_one():
+    """只查"狼看得到"会放过一具无条件印名册的刀——那正是狼队名单公开的形状。"""
+    for seat in (4, 5, 6, 7, 8, 9):
+        bytes_ = _prompt_bytes(seat, BOARD, LAST_SEQ)
+        assert "队友" not in bytes_, f"{seat} 号的 prompt 里冒出了队友"
