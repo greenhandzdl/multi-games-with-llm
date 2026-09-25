@@ -55,15 +55,22 @@ def build_config(name: str = "default") -> Config:
     return cfg
 
 
-def make_actors(cfg: Config, seed: int, *, mock: bool):
+def make_actors(cfg: Config, seed: int, *, mock: bool, human: int | None = None):
     """Seat -> actor. `mock` synthesises instead of replaying a script: an empty script makes
     every seat fall back to the engine, and the timeline then proves only that the state
-    machine does not crash. See MockActor's two-mode docstring."""
-    from .actors import LlmActor, MockActor
+    machine does not crash. See MockActor's two-mode docstring.
+
+    `human` hands one chair to a person (`#123`). It is a *parameter of the roster*, not a line
+    in `cmd_run` that overwrites a dict entry: the mock table and the real table both come
+    through `_roster`, so there is exactly one place where "this seat is typed into" is decided.
+    """
+    from .actors import MockActor
 
     if mock:
-        return {s: MockActor(s, synthesize=True, rng=random.Random(seed * 100 + s))
-                for s in range(1, cfg.seat_count + 1)}
+        return _roster(cfg,
+                       lambda s: MockActor(s, synthesize=True,
+                                           rng=random.Random(seed * 100 + s)),
+                       human=human)
     raise ValueError("make_actors(mock=False) 需要 transport；由 cmd_run 构造")
 
 
@@ -117,6 +124,34 @@ def _seat_error(seat: int | None, path: Path) -> str | None:
             "越界的座位号是命令写错了，不是引擎拒绝出结论")
 
 
+def _human_error(cfg: Config, seats: list[int], *, dry_run: bool) -> str | None:
+    """`--human` 的三句拒绝，全部说完在磁盘被碰之前（次序是 `#58`/`#59` 立的那条：命令本身不对
+    就 rc 2，不许留下空目录、也不许留下一个"跑了一半"的转储）。
+
+    三条各自拦的是不同的错法，其中两条拦的是**引擎无法察觉**的那种：
+
+    * 两个 `--human`：一桌只有一个键盘。`asyncio.to_thread(input)` 从两个座位同时读同一个 stdin，
+      读回来的是两个人半句话拼成的一行——日志里会显示两席都"答了"，答的却是谁都没说过的那句。
+      取最后一个（argparse 的默认行为）等于让命令行决定"哪一席坐着人"。
+    * `--dry-run` 加真人：转储的每一行都是"模型这一席会读到什么"，而这一席不由模型读。让它进去，
+      `--dry-run` 的全部产出就掺了一席假账。
+    * 越界的座位号：名册是 `_roster` 按 `cfg.seat_count` 摆的，多出来的那一席不会有人坐，
+      而 `--human 10` 会被静默忽略成"这局没有真人"——演示现场最贵的一种假绿。
+    """
+    if not seats:
+        return None
+    if len(seats) > 1:
+        return (f"--human 只给一个座位（收到 {seats}）：一桌只有一个键盘，"
+                "两席同时读 stdin 会把两个人半句话拼成一行")
+    if dry_run:
+        return ("--dry-run 产的是每一席的模型 prompt，真人那一席没有 prompt 可 dump："
+                "转储里混进一席不由模型答的座位，数出来的就是假账。两条各跑一次")
+    if not 1 <= seats[0] <= cfg.seat_count:
+        return (f"--human 要在这桌的名册里（1-{cfg.seat_count}，共 {cfg.seat_count} 席），"
+                f"收到 {seats[0]}：不在名册里的座位号会被当成『这局没有真人』")
+    return None
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     if (err := _games_error(args.games)) is not None:
         print(f"配置错误：{err}", file=sys.stderr)
@@ -126,6 +161,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         cfg = batch.apply_overrides(cfg, _run_overrides(args))
     except batch.BadOverride as e:
         print(f"配置错误：{e}", file=sys.stderr)
+        return 2
+    # 名册先于磁盘：`--set seat_count=5` 也是名册的一部分，所以这一句要等 `cfg` 定型之后，
+    # 而 `out.mkdir` 还在它后面——命令写错不该留下一个目录（`#58` 给 `--games` 立的次序）。
+    if (err := _human_error(cfg, args.human, dry_run=args.dry_run)) is not None:
+        print(f"配置错误：{err}", file=sys.stderr)
         return 2
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -153,9 +193,10 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 async def _run_many(cfg: Config, seeds: list[int], out: Path, args, transport) -> int:
     rc = 0
+    human = args.human[0] if args.human else None
     for seed in seeds:
-        actors = (make_actors(cfg, seed, mock=True) if transport is None
-                  else _llm_actors(cfg, transport))
+        actors = (make_actors(cfg, seed, mock=True, human=human) if transport is None
+                  else _llm_actors(cfg, transport, human))
         res = await play(cfg=cfg, deal_seed=seed, out_dir=out, actors=actors)
         print(_summary_line(res), flush=True)
         if not args.quiet:
@@ -169,12 +210,16 @@ async def _run_many(cfg: Config, seeds: list[int], out: Path, args, transport) -
     return rc
 
 
-def _llm_actors(cfg: Config, transport):
-    """收 seed 的是发牌（`play(deal_seed=...)`）和 mock 座位的人格抽样（`make_actors`），不是这里。"""
+def _llm_actors(cfg: Config, transport, human: int | None = None):
+    """收 seed 的是发牌（`play(deal_seed=...)`）和 mock 座位的人格抽样（`make_actors`），不是这里。
+
+    `human` 走的是与 `make_actors` 同一只手（`_roster`）：真桌留一席给打字的人这件事，本片只在
+    `--mock` 桌上有用例，端点那一侧没有现场——所以 `#125` 之前不要把 `['human','llm']` 的局当数据。
+    """
     from .actors import LlmActor
     from .llm import LLM
     llm = LLM(transport, cfg)
-    return {s: LlmActor(llm, cfg, s) for s in range(1, cfg.seat_count + 1)}
+    return _roster(cfg, lambda s: LlmActor(llm, cfg, s), human=human)
 
 
 def _summary_line(res: GameResult) -> str:
@@ -613,6 +658,8 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--games", type=int, default=1)
     r.add_argument("--out", default="data")
     r.add_argument("--mock", action="store_true", help="用合成替身打牌，不碰端点")
+    r.add_argument("--human", action="append", type=int, default=[], metavar="座位",
+                   help="把这一席交给坐在终端前的人（只给一个；其余各席仍由替身或模型答）")
     r.add_argument("--dry-run", action="store_true", help="装配全部 prompt 并落盘，零 API 调用")
     r.add_argument("--god", action="store_true", help="时间线里显示私有事件")
     r.add_argument("--quiet", action="store_true", help="只打汇总行")
@@ -722,6 +769,21 @@ def _parse_run_set(pairs: list[str]) -> dict[str, Any]:
         except ValueError as e:
             raise batch.BadOverride(f"--set {pair}: 值读不出来（{e}）") from e
     return out
+
+
+def _roster(cfg: Config, seat_actor, *, human: int | None):
+    """把 `cfg.seat_count` 张椅子摆好，`human` 那一席交给打字的人。
+
+    全仓库唯一一处构造 `HumanActor`（`tests/test_run_with_human.py` 在磁盘上数那个调用点）。这条
+    判据存在的理由不是审美：座位表一旦有两处拼法，"这一席坐着人"就有了两个写者，而日志里
+    `actor_kinds` 只有一份——两者不一致时读侧看到的仍是引擎说的那一份。
+
+    住在文件尾是和 `_run_overrides` 同一个理由（文档按行号引本文件下游的语句），不是随手放的。
+    """
+    from .actors import HumanActor
+
+    return {s: (HumanActor(s) if s == human else seat_actor(s))
+            for s in range(1, cfg.seat_count + 1)}
 
 
 if __name__ == "__main__":

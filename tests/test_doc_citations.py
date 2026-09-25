@@ -982,10 +982,11 @@ def test_a_moved_number_names_the_line_it_wanted_and_a_missing_name_says_so():
 
 
 def test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_beside_it():
-    """`cli.py:88` 是一次插入就烂掉的主张：号还在、文件还在，只有指的语句不在那儿了。
+    """README 里那个 `cli.py:88` 是一次插入就烂掉的主张：号还在、文件还在，只有指的语句不在那儿了
+    （`#123` 往 `cli.py` 插了四处之后，它漂到了 95）。
 
     这一族的腐烂有过实测记录——README 自己就写过"一个早就漂走的 `test_live_path.py` 行号"，
-    而 `#59` 这轮往 `cli.py` 里插进一个函数之后，同文件下游 15 处行号引用（今天数：点 `cli.py` 的 18 处
+    而 `#59` 这轮往 `cli.py` 里插进一个函数之后，同文件下游 15 处行号引用（今天数：点 `cli.py` 的 23 处
     里号在插入点下游的那些）全部后移。名字有闸门
     （`test_a_name_cited_in_the_docs_...` 那几条），行号没有，所以这一条来补：号不许只靠"看着像
     对"活着。

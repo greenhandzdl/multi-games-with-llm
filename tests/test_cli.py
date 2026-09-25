@@ -18,40 +18,13 @@ import html as html_mod
 from pathlib import Path
 from types import SimpleNamespace
 
-import httpx
 import pytest
 
 from wolfengine import batch, cli, metrics
 from wolfengine.config import Config
 from wolfengine.state import Phase
-from wolfengine.transport import HttpTransport
 
 SEED = 7
-
-
-@pytest.fixture
-def no_network(monkeypatch):
-    """Any attempt to reach the endpoint fails the test, loudly, with a count to assert on.
-
-    Blocked at two layers on purpose. Patching only `HttpTransport.chat` would go quiet if a
-    refactor ever posted through `client` directly, and `--dry-run`'s whole claim is about the
-    absence of a request, not about the absence of one particular function call.
-    """
-    calls: list[int] = []
-
-    async def boom(self, messages, **kw):
-        calls.append(1)
-        raise AssertionError(f"--dry-run 不得调用端点（第 {len(calls)} 次）")
-
-    async def post_boom(self, *a, **kw):
-        calls.append(1)
-        raise AssertionError(f"--dry-run 发出了 HTTP 请求（第 {len(calls)} 次）")
-
-    monkeypatch.setattr(HttpTransport, "chat", boom)
-    monkeypatch.setattr(httpx.AsyncClient, "post", post_boom)
-    monkeypatch.setattr(httpx.AsyncClient, "request", post_boom)
-    monkeypatch.delenv(Config().api_key_env, raising=False)
-    return calls
 
 
 @pytest.fixture(scope="module")

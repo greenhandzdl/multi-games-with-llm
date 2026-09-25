@@ -154,7 +154,9 @@ def test_a_finished_game_exits_0_although_a_socket_was_opened(stub, tmp_path):
 
 # ----------------------------------------------------------------------------- 批次是第二处
 def test_a_finished_batch_prints_its_line_and_exits_0(stub, tmp_path):
-    """`cmd_batch` 收尾用的是同一只手（cli.py:457）。它比 `run` 还多丢一样东西：`批次 -> …`
+    """`cmd_batch` 收尾用的是同一只手（cli.py:569；这行注释在 `#123` 之前就已经漂过——那个号
+    不在 `test_doc_citations.py` 的行号闸门范围内，它只扫 `docs/*.md` 与 `README.md`）。
+    它比 `run` 还多丢一样东西：`批次 -> …`
     那一行印在 `finally` **之后**，所以崩溃把读数也一起吞了（实测 05:25:14Z：stdout 是空的，
     而 `run_manifest.json` 里 canary 已经 `ok`、两臂日志都落了盘）。读者拿到的是 traceback，
     不是"这批能不能进结论"。

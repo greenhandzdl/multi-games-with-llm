@@ -806,7 +806,7 @@ H5/H6 才是这轮买到的东西。`game_id` 在一帧里印两处（页眉、�
   （`test_the_batch_loader_ignores_the_prompt_dumps`），另两套绿。有断言。（号码在 10:24:31Z 重指过：
   `#65` 那一族在同文件里插了 29 行，把它顶歪了一格，行号闸门当场报红——这就是那套闸门要防的事。）
 - **P2** `src/wolfengine/batch.py:264` 那份（`endswith` 那一支）：**三套测试全部 SURVIVED**。零条断言读过它。
-- **P3** 改**写入方**那个 f-string（`src/wolfengine/cli.py:243`，`.prompts.jsonl` →
+- **P3** 改**写入方**那个 f-string（`src/wolfengine/cli.py:288`，`.prompts.jsonl` →
   `.prompt-dump.jsonl`）：红 4 条。也就是说这份约定从写入方到 `read_dir` 是连上的，到 `read_arm`
   根本没连——两份判据长得一模一样，其中一份是装饰品。
 
@@ -1286,8 +1286,8 @@ is closed`。而它在 `finally` 里，所以它**顶掉**了 `return rc`。三�
 `docs/comparison.md` 第 38 行把 0/1/2 写成了契约（1 是"拒绝出结论"），一次拼错的文件名刚刚在
 `#51` 里被从 1 手上拿走，一个**成功**的批次却由崩溃把它按回 1 上。脚本和无头评测读的就是这一格。
 
-修的是"在哪个 loop 关"，不是"要不要关"：`cli._run_and_close`（`cli.py:71`）让请求和 `aclose()`
-共用同一个 loop，`finally` 留着，两个读者各改一处（`cli.py:151` 的 `run`、`cli.py:524` 的
+修的是"在哪个 loop 关"，不是"要不要关"：`cli._run_and_close`（`cli.py:78`）让请求和 `aclose()`
+共用同一个 loop，`finally` 留着，两个读者各改一处（`cli.py:191` 的 `run`、`cli.py:569` 的
 `batch`）。修后拿真端点复验过一次（05:29:08Z）：退出码 1、stderr 0 行、stdout 那一句一模一样，
 `/tmp/live401` 那份 14 行日志的末行还是 `terminal=aborted_endpoint` 且 `fallback` 兜底 0 次——
 这一轮**没有**动归因，那是 `#39` 已经钉住的部分，它继续绿着才是这次复验的意义。
@@ -1315,7 +1315,7 @@ is closed`。而它在 `finally` 里，所以它**顶掉**了 `return rc`。三�
 | M6 跑完不看返回值、恒 `return 0` | set0 红两条：拒答那条（退出码腿）+ 批次那条；set1 也红 | `asyncio.run(body())` 换成丢掉返回值，崩溃就不发生了，于是"rc 是读数"这一格没人钉 |
 
 M6 的预期要披露一次写错：05:33:37Z 那版（`/tmp/mut57.out` 第 10 行）把 set1 写成"预期 SURVIVED"，
-脚本报 `WRONG`。我漏读的是——`cmd_batch` 拿走的不只是一个整数，`cli.py:532` 还要 `res.out_dir`，
+脚本报 `WRONG`。我漏读的是——`cmd_batch` 拿走的不只是一个整数，`cli.py:577` 还要 `res.out_dir`，
 所以"恒 return 0"在那一处不是丢掉读数、是换掉了类型，红的是 `'int' object has no attribute 'out_dir'`。
 这和这一路反复撞到的那条是同一条：**变异预期只能来自读过的断言**，不能来自"哪些断言在比 0"这种
 分类。改完声明重跑，AS-EXPECTED。
@@ -1362,12 +1362,12 @@ wolf run --mock --dry-run --games 0 → 印"没有捕获到任何 prompt —— 
 
 修的是两格，都没有新增分支：
 
-* **一个地板谓词、两个读者**：`cli._games_error`（`cli.py:88`）说"不足 1 局什么都不产，比较也没有
-  分母"，`cmd_run` 的第一行（`cli.py:121`）和 `cmd_batch` 紧挨臂名检查那一处（`cli.py:493`）各自读
+* **一个地板谓词、两个读者**：`cli._games_error`（`cli.py:95`）说"不足 1 局什么都不产，比较也没有
+  分母"，`cmd_run` 的第一行（`cli.py:156`）和 `cmd_batch` 紧挨臂名检查那一处（`cli.py:538`）各自读
   它，走的还是既有的 `配置错误：…` + rc 2 那条腿。关键是**站在 `mkdir` 与落盘之前**——地板如果
   放在 `run_batch` 里面，`run_manifest.json` 就已经在盘上了。
 * **普查自己说失败的时候，退出码跟着说失败**：`_print_census` 从"印一句话然后返回 None"改成返回
-  这次普查能不能用（`cli.py:266`），`_cmd_dry_run` 是唯一读者（`cli.py:262`）——不能用就 rc 1。
+  这次普查能不能用（`cli.py:311`），`_cmd_dry_run` 是唯一读者（`cli.py:307`）——不能用就 rc 1。
 
 `compare` 那一侧**没有改**，因为不需要：05:51:58Z 拿修前那个 `b5` 直接跑 `compare`，它报的是
 `IDENTICAL_ARMS`、一份写好的 `comparison.md`、rc 1，连复现命令都印对了。读侧一直站得住；这一片
@@ -1389,7 +1389,7 @@ set0 `tests/test_cli.py`、set1 `tests/test_loopback_endpoint.py`，两套 prefl
 
 V7 是这一片留下的一格，写在脚本头部而不是藏起来。本轮**不加**结构守卫——不钉"这个函数只有两个读者"，
 也不钉"这个比较不许在别处出现"：现在只有一份实现，钉形状等于钉一个还没有人违反的约定。
-另外两件明确不做：不删 `cli.py:284` 的 `max(games, 1)`——它护的是同一个 0，删了等于把
+另外两件明确不做：不删 `cli.py:329` 的 `max(games, 1)`——它护的是同一个 0，删了等于把
 ZeroDivisionError 换回来，有了地板它是冗余但不是错误；不顺手去管 `--seed0` 的取值范围，那是另一个参数。
 
 重跑这一片：
@@ -1425,8 +1425,8 @@ ZeroDivisionError 换回来，有了地板它是冗余但不是错误；不顺�
 
 修的是三格，都没有新增分支：
 
-* **一个谓词、两个读者**：`cli._seat_error`（`cli.py:98`）说"越界的座位号是命令写错了"，`cmd_replay`
-  （`cli.py:394`）和 `cmd_watch`（`cli.py:414`）各自读它，走的还是既有的 `配置错误：…` + rc 2 那条腿。
+* **一个谓词、两个读者**：`cli._seat_error`（`cli.py:105`）说"越界的座位号是命令写错了"，`cmd_replay`
+  （`cli.py:440`）和 `cmd_watch`（`cli.py:462`）各自读它，走的还是既有的 `配置错误：…` + rc 2 那条腿。
   名册**从文件里读**（`render_html.seats_of`，和票型矩阵的行是同一个读者），不再抄第二份 9；文件里
   根本没有名册时它让路——那种文件该拿的是 `#53` 那句"没有开局记录"，而不是"这一局没有 42 号"。
 * **板子只有 `roles` 知道**：`batch._set_path` 在类型校验之后、`replace()` 之前问一次 `roles.board_for`
@@ -1474,7 +1474,7 @@ W10 是这一片留下的一格，和 `#58` 的 V7 同族：行为看不见第�
 一行、`/tmp/b59probe` 不存在，说明它站在缺 key 那道腿**之前**。
 
 同一次探针顺带量出来的第二格是次序：`--god` 与 `--seat` 同时给，输出与只给 `--seat` 逐字节相同。这一支
-次序以前**没有读者**（`cli.py:209` 那句 `if as_seat is not None:` 排在 `god` 那一支前面，把两支换序不会有任何用例红），而
+次序以前**没有读者**（`cli.py:254` 那句 `if as_seat is not None:` 排在 `god` 那一支前面，把两支换序不会有任何用例红），而
 [docs/views.md](docs/views.md) 要写它。补的特征化用例
 `test_sitting_at_a_seat_wins_over_the_god_view_on_the_same_file` 第一遍就绿（08:00:19Z）——它钉的行为
 本来就在，所以它的强度不靠"红过"证明，靠三具变异：P1 换序只有它红，P2 拿掉座位那一支它和另外两条一起
@@ -1914,7 +1914,7 @@ Z9–Z11 第一版是 **SURVIVED** 的：`tests/test_batch_paired.py` + `tests/t
 
 分母借不来。`soft_flags` 里的 `act_not_as_assigned` 只记**被打回过**的轮，"没指派"、"指派了且听了"、
 "指派了没听"三者在它那里都是"没有这条码"，所以分母只能来自 `request` 本身。于是
-`assignment_compliance`（`metrics.py:604`）读的就是 `e.request`，而 `cli.py:347` 把它挂在
+`assignment_compliance`（`metrics.py:604`）读的就是 `e.request`，而 `cli.py:355` 把它挂在
 `speech_acts` 旁边：两格并排，一格是行为，一格是行为对指派的符合度，谁也不替代谁。
 
 "0 与缺席"在这一格上要逐字段重判，不能继承别处的结论：`recorded`（这个键在不在记录里）与 `turns`
@@ -2096,7 +2096,7 @@ P6 不是没测到，是**今天测不出来**：全仓库只有一处往记录�
 **"真数照旧等 M0"这一句到 2026-09-24T16:47Z 只对一半了。** 三局真桌的日志逐行扫过（173 次带回答的
 调用）：每一次的 `usage` 都只有 `prompt_tokens`、`completion_tokens`、`total_tokens` 三个键，整份文件里
 `cached_tokens` 出现 **0 次**——不是报了 0，是压根没有这个键。于是读侧那条 `null` 第一次有了真证人：
-`reuse_ratio: null` 现在说的是"这批真调用里没一次报过这件事"（`src/wolfengine/cli.py:352` 那句话），
+`reuse_ratio: null` 现在说的是"这批真调用里没一次报过这件事"（`src/wolfengine/cli.py:397` 那句话），
 而不是"还没跑过真桌"。**剩下那半句仍要等 M0**：为什么不报（端点不支持 / 要显式开关 / 版本没带这个字段）
 只有体检里那一格能答，而它恰好住在这份报告承认被自家 `redact` 遮掉的 7 格里
 （`features.apc_visibility.has_cached_tokens`）。遮它的守卫已经收窄（`scripts/calibrate.py:53` 的
@@ -3273,7 +3273,7 @@ baseline（任何刀之前）`rc=0 red=[]`；`/tmp/mut90.py` 第二跑 `total=7 
 修法是**同一个渲染器多一个调用点**，不是第二份渲染：发射口挂在 `run_batch` 收尾（`src/wolfengine/batch.py:229`
 的 `emit_gate`），写 `<批次目录>/m3_gate.md`；`_m3_md` 那份渲染逻辑原封不动被两处共用，所以 `comparison.md`
 里的那一节和这个文件是同一段字节。判据仍然只从 `m3_gate_verdict` 取，闸门表仍然只有 `M3_GATE` 一张。
-终端那句跟着改了（`src/wolfengine/cli.py:533` 尾部那半句印 `m3_gate.md`）：
+终端那句跟着改了（`src/wolfengine/cli.py:578` 尾部那半句印 `m3_gate.md`）：
 
     批次 -> /tmp/gate94（1 局日志，seed0=21，canary SKIPPED，终态 ok）；M3 闸门判定见 m3_gate.md
 
@@ -4252,7 +4252,7 @@ README 自己就是 `test_doc_citations.py` 与 `test_no_secrets.py` 的输入�
 | 落点 | 干什么 | 为什么这一半便宜 |
 |---|---|---|
 | `metrics.py:1462` `last_fold_state` | 取**文件顺序里最后一格** `Kind.COMPACTION`，把 `window`/`folded_days` 抄出来 | 抄，不重算：窗口是 `plan_fold` 在发那一刻定的，`shrink` 还会逐 prompt 折半，离线重算就是第二支笔写另一个数 |
-| `cli.py:375` `compactions.last_fold` | 那一块里唯一读**标记 payload** 的格子 | 零新事件、零 seq 挪动、零金样本重钉、零模型输入变化——这是它和 `#88`（平安夜要留痕就得发公告、加事件、重钉样本）的分别 |
+| `cli.py:420` `compactions.last_fold` | 那一块里唯一读**标记 payload** 的格子 | 零新事件、零 seq 挪动、零金样本重钉、零模型输入变化——这是它和 `#88`（平安夜要留痕就得发公告、加事件、重钉样本）的分别 |
 
 真日志上这一格现在印得出来（01:28:58Z，`wolf audit`）：`g00000300` 是 `{"seq": 55, "window": 9,
 "folded_days": [1]}`，`g00000301` 是 seq 66 / 窗口 7，`g00000302` 有两格标记（seq 55 窗口 9、seq 87
@@ -4370,7 +4370,7 @@ GREEN 02:04:27Z（传输、批次两页 83 passed）。修完在**同一台死�
 `to_dict()` 里去掉再按同一配方算回来，得到的正好是 2026-09-24 那三局真日志身上那个号——也就是说前面这
 一整批离线加固**一次都没**动过 hash，动它的是这一格）。不重钉金样本：全仓库 `tests/` 里没有任何一处钉过
 12 位十六进制的 hash 字面量（只有伪造用的 `0123456789ab`），比号的两处也都不问"和今天的出厂值相同吗"——
-`batch.py:583` 拿日志对的是同一批的 manifest，`cli.py:584` 只是把松散日志按 hash 分组。所以这一格的后果
+`batch.py:583` 拿日志对的是同一批的 manifest，`cli.py:592` 只是把松散日志按 hash 分组。所以这一格的后果
 是"旧日志从此与新配置不同号"，那是它的本意，不是一笔要平的账。
 
 限界三条：
@@ -4640,6 +4640,86 @@ K5 要按样子读：它确实被杀，但**不是一把能定位证人的刀**�
 仍然密钥未导出，所以这十条一次请求都没发（这一席本来就不经过端点），但它们也不是从桩上取的数——
 `HumanActor`、`agent.take_turn`、`legality.check_action` 和落盘那几列都是真的。
 
+### 一个人坐进命令行那一桌：`run --human 3`，`#123`
+
+`#122` 之后那一席会读一行字、会问第二遍、会把"这个人走了"落进日志——但**全树没有一处生产代码构造
+`HumanActor`**，所以"AI 与人类博弈"是一件存在于测试对象里、不存在于一条命令里的事。这一片把它变成
+一条命令：`wolf run --mock --human 3`（其余八席仍是替身；接真端点时同一根旋钮把一席从模型换成打字的人）。
+
+四个决定：
+
+* **名册只有一个构造点**。`_roster(cfg, seat_actor, *, human)` 按 `cfg.seat_count` 摆椅子，`human`
+  那一席换成 `HumanActor`，mock 桌和真桌都从这一只手过。判据不是审美而是可数的：
+  `test_only_one_place_in_the_cli_puts_a_person_in_a_chair` 在磁盘上数 `src/` 里 `HumanActor(` 的调用点，
+  要求恰好一处且在 `cli.py`。座位表一旦有两处拼法，"这一席坐着人"就有了两个写者，而日志里
+  `actor_kinds` 只有一份。
+* **三句拒绝都站在 `mkdir` 之前**（`_human_error`，次序是 `#58`/`#59` 立的那条）。两个 `--human`：一桌
+  只有一个键盘，两席同时读 stdin 会把两个人的半句话拼成一行，而日志会显示两席都"答了"；
+  `--dry-run --human`：转储的每一行都是"模型这一席会读到什么"，混进一席不由模型答的座位就是假账；
+  `--human 10`：不在名册里的那一席不会被 anyone 坐，而它会被静默读成"这局没有真人"。范围用
+  `apply_overrides` 之后的 `cfg.seat_count`，所以 `--set seat_count=5 --human 9` 也拦得住。
+* **`no_network` 搬进 `tests/conftest.py`**，不是顺手整理：`#123` 是第二个需要"这条命令够不到端点"
+  这把尺的文件，而夹具按名字注入、AST 里没有点名者——`#84` 那条用例的 docstring 早就写了这一族的
+  修法（"搬进 conftest，不是给闸门开豁免"）。留在一处，两份判据就是同一份。
+* **真人那一席答没答，日志里分得开**：`actor_kinds` 落成 `['human','mock']`（`game.open_log` 从名册取，
+  不是 CLI 另写一句），逐回合则看 `result.fallback` 与 `attempts[].failure`。
+
+六用例在 `tests/test_run_with_human.py`（6 条，一秒内，不发请求）。真跑一遍的现场
+（2026-09-25T10:57Z，`--mock --human 3 --seed 7`，rc 0、83 事件、`actor_kinds=['human','mock']`，
+stdin 用管道喂三行后就是 EOF）里，3 号那六回合各自说的是三种不同的事：
+
+| seq | 回合 | 落下来的 | 依据 |
+| --- | --- | --- | --- |
+| 19 | 发言 | 他**第二句**的动作（`vote 2`），`fallback=1` | `attempts[]` 两条：`act_not_as_assigned:listen` 然后 `:vote`——被判官指派换掉会被再问一次 |
+| 36 | 投票 | 引擎代答 `pass` | 他打的「指控 8」在投票轮不是 `act_not_as_assigned` 而是 `act_not_allowed`，越出"只驳标签"那一支，句子按规矩不保留 |
+| 47/60/73/79 | 发言与投票 | `pass`/代答，`attempts[]` 记 `human_input_closed` | 键盘已经关了：这一席空着，但每一回合都说清了是谁答的 |
+
+**顺带量出来一件这一片没解决的事**（记账给 `#127`）：`agent.py` 的修复重试对人也生效——第一句被驳回后
+再问一次，`retry=` 那一格跟着加，而第二次印的是**同一张卡片**：`ctx.attempt` 已经带着"这是第几次问"，
+`retry_note`（`agent.py:232` 算出来的拒绝理由）只进模型那一侧的 prompt，真人这一侧零读者。于是他会看到
+自己刚读过的那屏原样重来，而卡片上那句"换成别的会被引擎代答一次"与实际发生的"会被再问一次"不一致。
+
+七把正刀、两把负控制、一具缺口刀（共十具）照 `/tmp/mut123.py`（2026-09-25T11:13Z，每具跑
+`tests/test_run_with_human.py` 与 `tests/test_cli.py` 两个文件，合计 75 个用例）——带上后者是因为
+这一片动的是 `cmd_run` 的入口和名册拼法，一把只该弄红真人用例的刀若顺手红了替身桌的旧用例，那张
+"红用例 = 这条主张"的表就是
+假话，所以判据是**恰好相等**、多一个也算不符；跑完按字节 `cmp` 还原，前后基准都是 0 红，pyc 前缀每轮
+换新）：
+
+| 刀 | 红用例 |
+| --- | --- |
+| K1 mock 桌根本没把椅子交出去（`human=human` 改成 `human=None`） | `test_a_person_at_the_table_is_asked_and_their_words_are_in_the_log` + `test_the_person_who_leaves_leaves_a_record_and_the_game_still_ends` |
+| K2 椅子给了隔壁那一席（`s == human` 改成 `s == human - 1`） | 同上两条 |
+| K3 构造点变成两处（`make_actors` 的 lambda 里也换一次） | `test_only_one_place_in_the_cli_puts_a_person_in_a_chair` |
+| K4 越界只拦下界、不拦上界 | `test_a_seat_outside_the_table_is_refused_before_the_disk_is_touched` |
+| K5 三句拒绝挪到 `out.mkdir` 之后 | 上面那一条 + `test_two_people_on_one_keyboard_are_refused` + `test_the_prompt_dump_refuses_to_promise_a_seat_a_person_is_in` |
+| K6 两把键盘放行（`len(seats) > 1` 改成 `> 2`） | `test_two_people_on_one_keyboard_are_refused` |
+| K7 dry-run 那一支不拦 | `test_the_prompt_dump_refuses_to_promise_a_seat_a_person_is_in` |
+| K8 负控制：换 `--human` 的帮助文字 | 活着（对：那串字不是这批用例认领的东西） |
+| K9 负控制：换 `_roster` 的 docstring 措辞 | 活着（同上一条） |
+| K10 缺口刀：真桌不交椅子（`_llm_actors` 里 `human=None`） | 活着，而**这一具的活着不是刀钝**——它量的正是上面那句"`['human','llm']` 那张桌这轮没有用例" |
+
+**K2 第一轮是漏刀，而它漏出来的东西比咬住更贵。** 第一版那条断言扫的是**全部**事件里有没有那个人的
+原话，于是把椅子挪到 2 号之后它仍然全绿：`actor_kinds` 还是 `['human','mock']`（桌边确实有个人）、
+`calls` 还是非空（他确实被打字）、`meta.rung` 还是 -1（`#122` 那格定了替身也不走解析梯子）——换句话说
+"名册说的那一席"六个字当时在整批用例里**只有一个证人**（EOF 那位的 `human_input_closed`）。补的断言
+把同一句话收进 3 号自己的格子，收完之后先在**未变异**的代码上确认它是绿的（把用例修剪到产物上不算
+证人），K2 才有了上面那一格。
+
+**改文档**：`cli.py` 里这次有四处插入（`make_actors` 体内、`_seat_error` 之后、`cmd_run` 体内、
+`build_parser` 的 `run` 子命令），下游偏移是 +7/+35/+40/+45 几种混合，所以文档里 23 处 `cli.py:NN`
+全部按**语句**重钉而不是按算式——`/tmp/relock123.py` 在写盘前逐条回读新号那一行，要求它仍然含着点名的
+东西（`_games_error` 的定义、`_run_and_close` 的两个调用点、`res.out_dir`……），有一条对不上就整体不写。
+`tests/test_loopback_endpoint.py` 里那句"收尾用的是同一只手"后面跟的号写的是 `cli.py` 的 457 行，而这是
+**这一片之前就已经漂了**的号（当时真号 524 行、现在 569 行）：`test_doc_citations.py` 的行号闸门只扫
+`docs/*.md` 与 `README.md`，测试文件的 docstring 不在范围内，所以它没红过——记为 `#126`。
+
+**这一片没有动的**：那个人的**屏幕上还没有局况**——`decision_card()` 读的是 `LegalSet` 而不是事件流，
+所以他只知道自己这一轮能答什么、不知道前面发生过什么（`#124`，金丝雀与这一屏同片做）；`['human','llm']`
+那张桌（`--human` 不配 `--mock`）这轮没有用例，端点可及性是唯一原因；含真人座位的局在读侧还没被点名
+剔除并附一句依据，`metrics.is_synthetic` 会把它们请出配对语料分母，但那是替身桌那句话在替他说
+（`#125`）。
+
 ## 这个仓库现在能做什么、不能做什么
 
 
@@ -4837,10 +4917,12 @@ K5 要按样子读：它确实被杀，但**不是一把能定位证人的刀**�
 - ⛔ 对比链的**结论路径**一次真数据都没走过：上面那两条 `--mock` 命令产的是替身桌，按 plan
   §十一 设计成必然被拒（`SYNTHETIC_TABLE`）；真桌那三局是 `wolf run` 出的**单局**，不是一批两臂，
   所以 `compare` 的 McNemar / bootstrap 至今只在替身数据上走过。`data/` 不进版本库，批次也得自己重生成。
-- ⛔ 一个人还坐不进**命令行**那一桌：座位本体已经实现了（`#122`：`human.py` 读一行字、
-  `HumanActor.act()` 交出一个 `Proposal`、`tests/test_human_seat.py` 10 条钉着三种落点），但
-  `wolf run` 至今没有 `--human` 旋钮，产品代码里没有一个构造点（`#123`），而那一屏给这个人看的
-  东西还没有金丝雀（`#124`）。
+- ⛔ 一个人坐进**命令行**那一桌了，但那桌还是替身桌：`wolf run --human 3` 从"没有任何构造点"走到了
+  "名册、落盘、三种拒绝都有用例"（`#123`：`tests/test_run_with_human.py` 6 条，一次请求没发，
+  `actor_kinds` 只能落成 `['human','mock']`）。剩下三格各自是独立的账——那一屏给这个人看的东西还没有
+  金丝雀（`#124`）；卡片上那句"换成别的会被引擎代答一次"与实测的"再问了一遍、第二张是一模一样的
+  那一屏"对不上，而 `retry_note` 在真人这条腿上根本没有读者（`#127`）；`['human','llm']` 那张混合桌
+  需要端点上有活，这轮没有用例。
 - ⛔ 女巫用药救下的那一夜在公开产物里**不留痕迹**：`rules.NightResult.peace`（平安夜）算出来之后
   产品链上零读者，只有两条测试读它，所以"昨晚没人死"这件事九个座位谁都读不到（`#87` 的第三处发现，
   账见那一节）。修法要给公告新增一个事件，那会挪动 seq、逼金样本重钉、并改变模型读到的输入分布——

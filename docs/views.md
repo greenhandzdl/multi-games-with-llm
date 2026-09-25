@@ -46,7 +46,7 @@ wolf watch   <file> [--god] [--seat N]   # 同一批判定，终端里 tail
 `--seat` 与 `--god` 同时给时，坐进某一位优先，`--god` 不再往上抬。07:55:40Z 在同一份日志上敲了四种
 给法（`/tmp/seat_precedence.out`）：只给 `--god` 的是 104 行、sha 前 12 位 `8918d0e775a1`；只要句子里
 出现了 `--seat 3`——放在 `--god` 前、放在后面、或者根本不给 `--god`——输出都是同一份 81 行
-`dd111ac69f24`。这一格只能这样量：判定点只有一处，`cli.py:209` 那句 `if as_seat is not None` 排在
+`dd111ac69f24`。这一格只能这样量：判定点只有一处，`cli.py:254` 那句 `if as_seat is not None` 排在
 `god` 那一支前面——给了座位就按那位玩家的可感知集合渲染，`god` 无从往上加。这句话钉在用例
 `test_sitting_at_a_seat_wins_over_the_god_view_on_the_same_file`（`tests/test_cli.py`）上：把两支换序
 只有它红（P1，08:03:54Z，`/tmp/mut60.out`）。在那之前这一支没有任何读者——仓库里 `god=True` 的十几处
@@ -103,7 +103,7 @@ engine belief（`build_belief(seat, [e for e in events if e.visible_to(seat)])`�
   closed`，而它站在 `finally` 里，把 `return rc` 顶掉：05:23:33Z 实测一局**打完了**的局（60 个事件、
   `draw_day_limit`）返回 1，05:25:14Z 一个跑完了的批次连 `批次 ->` 那一行都没印出来。按
   [comparison.md](comparison.md) 第 38 行那句契约，1 是"拒绝出结论"——脚本读到的是一句判决，实际发生的
-  是一次崩溃。现在请求和关闭共用同一个 loop（`cli._run_and_close`，两个读者 `cli.py:151` / `cli.py:524`），
+  是一次崩溃。现在请求和关闭共用同一个 loop（`cli._run_and_close`，两个读者 `cli.py:191` / `cli.py:569`），
   退出码重新只来自判据。证人不能是进程内调用：`rc` 被 `SystemExit` 接住就看不出形状了，所以那条用例
   在子进程里跑真 `cli.main`、连的是 127.0.0.1 上的桩
   （`test_a_finished_game_exits_0_although_a_socket_was_opened`）。
@@ -220,18 +220,21 @@ rich 有两条坑，都各有一条测试钉着：
 * **逐字流式出现**：计划 §9 的 MVP 清单里有一条"说话人文本逐格出现"。现在一条发言是**整条**
   出现的，因为 UI 只读日志，而日志只在一次 turn 完成时才落一行。真流式需要 UI 去读模型的 token
   流——那正是 §9 决定不做的解耦。**代价是观感，换来的是两种模式共享同一份判定。**
-* **让一个人从命令行坐到桌边**：座位本体已经实现了（`#122`）——`human.py` 读一行字，
-  `HumanActor.act()` 把它变成一个 `Proposal`，`agent.py` 用同一道合法性闸门过它。它的用例在
-  `tests/test_human_seat.py`（10 条）：读懂的那一行进了哪个格子、读不懂时问第二遍而不烧模型的
-  修复额度、输入关了要说清是谁答的、以及"等这个人打字时其余八座没有被挂住"。契约那三条"上桌前
-  必须清掉的假设"（plan §15）另有一组测试兜着：`tests/test_actor_contract.py` 钉住 `timeout_for()`
+* **给坐在命令行那一桌边的人看的一屏**：座位本体与那条命令都实现了——`#122` 把 `human.py` 写成
+  读一行字、`HumanActor.act()` 把它变成一个 `Proposal`，`agent.py` 用同一道合法性闸门过它，用例在
+  `tests/test_human_seat.py`（10 条）；`#123` 把它接进 `wolf run --human 3`，名册只由 `cli.py` 里一只手
+  拼，真桌与替身桌走同一个构造点，用例在 `tests/test_run_with_human.py`（6 条，一次请求不发）。读懂的
+  那一行进了哪个格子、读不懂时问第二遍而不烧模型的修复额度、输入关了要说清是谁答的、以及"等这个人
+  打字时其余八座没有被挂住"。契约那三条"上桌前必须清掉的假设"（plan §15）另有一组测试兜着：
+  `tests/test_actor_contract.py` 钉住 `timeout_for()`
   返回 `None` 的座位不能被 `Config` 的地板值判死、`wave_size()` 把 `blocking` 座位剔出 worker
   名额且无论如何不留 0、墙钟只对全模型桌生效（`aborted_wallclock` 正反各一条）；替身是 `_Seat`——
   kind / blocking / 截止时间 / 答题耗时四个旋钮各自独立，绑成"像不像人"就只剩人设可测，规则本身
-  测不到。还缺的两件事都在 CLI 与这一层：`wolf run` 没有 `--human` 旋钮，所以生产代码里今天没有
-  一处构造 `HumanActor`（`#123`）；而那一屏"给这个人看什么"还没有金丝雀——`decision_card()` 读的是
-  `LegalSet` 而不是事件流，是一条**新的**输出通路，`test_info_isolation.py` 那套正反证的是
-  `percept_for` 过滤得对，够不到它（`#124`）。
+  测不到。还没做的是这一屏的**内容**：`decision_card()` 读的是 `LegalSet` 而不是事件流，是一条**新的**
+  输出通路，`test_info_isolation.py` 那套正反证的是 `percept_for` 过滤得对，够不到它，所以这个人只知道
+  自己这一轮能答什么、不知道自己该知道发生过什么（`#124`）；而被判官驳回、再问第二遍时印出来的是
+  **同一张卡片**——`retry_note` 里那份拒绝理由只进模型的 prompt，这一侧零读者，于是卡片上"会被引擎
+  代答一次"与实际发生的"会被再问一次"对不上（`#127`）。
 * **解说员 LLM**：它的 percept 只含公开事件，结构上不可能泄密，是后置清单里性价比最高的一个。
 * 单文件 HTML 里的曲线是 `data-suspicion` 属性（无 JS），要画成图得引入脚本——与"自包含 +
   不可信输入"冲突，目前用 `wolf audit` 出数字，不画图。
