@@ -92,7 +92,10 @@ def check_action(
         # this satisfiable: an assigned act the rules never grant would be an unwinnable turn.
         _add(v, True, f"act_not_as_assigned:{action.act} (法官指派 {legal.assigned_act})")
 
-    if action.target is not None and action.act not in TARGETLESS_ACTS:
+    if action.target is not None:
+        # A number is a claim about the table whoever typed it. `agent.py` writes `target` for
+        # every decision, targetless acts included, so a seat the judge never granted would
+        # reach the log wearing the same shape as one it did.
         if action.target not in legal.targets:
             _add(v, strict, f"target_not_legal:{action.target} (只能 {sorted(legal.targets)})")
     elif action.act not in TARGETLESS_ACTS and action.act in allowed:

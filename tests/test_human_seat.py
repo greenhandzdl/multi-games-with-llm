@@ -28,7 +28,7 @@ from typing import get_args
 import pytest
 
 from test_actor_contract import SEED, _table  # 同一副牌、同一张桌，不重造现场
-from wolfengine import human, phases, rules
+from wolfengine import compress, human, phases, rules
 from wolfengine.actors import HumanActor, Proposal
 from wolfengine.cli import render_chronicle
 from wolfengine.events import Kind, PUBLIC
@@ -617,3 +617,36 @@ def test_a_code_the_card_has_no_words_for_is_still_shown():
     assert "invented_event_ids" in lines[1], lines
     assert "something_new_the_gate_invented" in lines[2], lines
 
+
+async def test_the_seat_number_typed_with_a_targetless_act_reaches_a_reader(tmp_path):
+    """真人打「讨论 5 今晚刀他」，那个 5 不能只活在日志里（`#130`）。
+
+    写侧一直是通的：`agent.py` 给每种决策都带 `target`，形状表也给 `wolf_chat` 声明了这一格。
+    断的是后半段——渲染层只印文本，于是那一格落盘之后没有读者。这一条从键盘一路走到模型和复盘
+    共用的那条渲染梯子，中间不换数据源。
+    """
+    agent, log, console, outcome = await _turn(
+        tmp_path, ["讨论 5 今晚刀他。"], seat=3, phase=Phase.NIGHT_WOLF, kind=Kind.WOLF_CHAT,
+        legal=LegalSet(acts=("discuss",), targets=frozenset({2, 5})))
+    assert not outcome.fell_back, outcome
+    ev = log.all()[-1]
+    assert ev.kind == Kind.WOLF_CHAT and ev.payload.get("target") == 5, ev.payload
+    assert "（指 5号）" in compress.render_line(ev), compress.render_line(ev)
+
+
+async def test_a_seat_the_judge_never_granted_is_named_on_the_second_screen(tmp_path):
+    """「讨论 9 …」里那个 9 不在名单里：硬相位打回一次，第二屏要说清点不到的是谁（`#130`）。
+
+    闸门从前对 targetless 的动作根本不看 target，所以这一格在真人那一侧的形状不是"一次拒绝"而是
+    "一句没有理由的再问"——他甚至不知道自己哪里不对。现在它走的是 `#127` 那条路：码进
+    `TurnContext.refusal`，人话由 `refusal_lines` 印成「9 号这一轮点不到」。
+    """
+    agent, log, console, outcome = await _turn(
+        tmp_path, ["讨论 9 今晚刀他。", "讨论 5 那就他。"], seat=3, phase=Phase.NIGHT_WOLF,
+        kind=Kind.WOLF_CHAT, legal=LegalSet(acts=("discuss",), targets=frozenset({2, 5})))
+    cards = [s for s in console.shown if s.startswith("轮到你了")]
+    assert len(cards) == 2, f"点了个不存在的座位，该问第二遍：{len(cards)} 屏"
+    assert "9 号这一轮点不到" in cards[1], cards[1]
+    assert "打回" in cards[1], cards[1]
+    assert not outcome.fell_back, outcome
+    assert log.all()[-1].payload.get("target") == 5, log.all()[-1].payload

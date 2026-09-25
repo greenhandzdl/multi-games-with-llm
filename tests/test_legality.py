@@ -168,6 +168,37 @@ def test_a_targetless_act_may_carry_no_target():
                         percept=VILLAGER_TURN, phase=state.Phase.DAY_SPEECH).ok
 
 
+def test_a_target_carried_by_a_targetless_act_is_checked_too():
+    """「讨论 5 …」里那个 5 会落盘（`agent.py` 给每种决策都写 `target`），闸门却一个都不看。
+
+    不在名单里的座位号被静默收下，产物里就多了一条没有根据的指向：读的人以为法官认过它，
+    而它其实谁都没查过。拒一次的代价只是一次重问，而真人那一侧已经有现成的话
+    （`human.refusal_lines` 里 `target_not_legal` → 「N 号这一轮点不到」）。
+    """
+    legal = state.LegalSet(acts=("discuss",), targets=frozenset({2, 3}))
+    v = check_action(schema.Action(act="discuss", target=9, speech="这一轮我有想法。"),
+                     legal=legal, percept=VILLAGER_TURN, phase=state.Phase.NIGHT_WOLF,
+                     role="wolf")
+    assert not v.ok and "target_not_legal:9" in v.reason
+    ok = check_action(schema.Action(act="discuss", target=3, speech="这一轮我有想法。"),
+                      legal=legal, percept=VILLAGER_TURN, phase=state.Phase.NIGHT_WOLF,
+                      role="wolf")
+    assert ok.ok, ok.reason
+
+
+def test_an_illegal_target_on_a_targetless_act_is_a_flag_in_a_soft_phase():
+    """软相位那一侧跟着同一条判据走：说得出、不拦。
+
+    和 `#127` 的 R3 同一口径——发言内容在软相位不硬拦，但"这条指向没被法官认过"要留在账上，
+    否则日志里那条指向和硬相位里被验过的那一条长得一模一样。
+    """
+    legal = state.LegalSet(acts=("defend",), targets=frozenset({2, 3}))
+    v = check_action(schema.Action(act="defend", target=9, speech="我是好人。"), legal=legal,
+                     percept=VILLAGER_TURN, phase=state.Phase.DAY_SPEECH)
+    assert v.ok, v.reason
+    assert any(f.startswith("target_not_legal:9") for f in v.flags), v.flags
+
+
 def test_an_act_that_requires_a_target_but_gives_none_is_refused():
     legal = state.LegalSet(acts=("accuse",), targets=frozenset({2}))
     v = check_action(schema.Action(act="accuse", speech="有人装得太极其容易"), legal=legal,

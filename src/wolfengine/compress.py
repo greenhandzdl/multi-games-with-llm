@@ -102,7 +102,12 @@ def render_line(e: Event) -> str:
     if k == Kind.NIGHT_ACTION:
         return f"[{tag}] {e.actor}号（夜间行动）：{_night_text(p)}"
     if k == Kind.WOLF_CHAT:
-        return f"[{tag}] 狼队私聊 {e.actor}号：{_said(p)}"
+        tgt = p.get("target")
+        # The shape table gives wolf_chat a `target`, and the writer fills it for every decision.
+        # A proposal that names a seat has to say so on the line, or that cell stays unwritten
+        # news: nobody downstream would ever read it.
+        who = f"（指 {tgt}号）" if tgt is not None else ""
+        return f"[{tag}] 狼队私聊 {e.actor}号{who}：{_said(p)}"
     if k == Kind.SEER_RESULT:
         verdict = VERDICT_ZH.get(str(p.get("verdict")), str(p.get("verdict")))
         return f"[{tag}] 法官（私发）：你查验的{p.get('target')}号是{verdict}。"

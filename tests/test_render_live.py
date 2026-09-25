@@ -177,7 +177,7 @@ def test_revealing_a_seat_shows_that_seat_and_nobody_else(gold):
     not the witch's."""
     _, events, meta = gold
     seer_verdict = "[e17] 法官（私发）：你查验的1号是狼人。"
-    wolf_chat = "[e12] 狼队私聊 1号：刀3号，他发言太像神牌。"
+    wolf_chat = "[e12] 狼队私聊 1号（指 3号）：刀3号，他发言太像神牌。"
     witch_notice = "[e14] 法官（私发）：今晚3号倒在了狼刀下。"
 
     assert seer_verdict in render_live.frame_text(events, meta, reveal_seat=7)

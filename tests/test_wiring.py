@@ -953,6 +953,24 @@ def test_silence_is_rendered_as_silence_not_as_an_empty_line():
                                   text="")) == "[e9] 狼队私聊 1号：（沉默）"
 
 
+def test_the_wolf_chat_line_shows_the_seat_being_point_at():
+    """形状表给 `wolf_chat` 声明了 `target`，而渲染层只印文本——那一格落盘之后没有读者。
+
+    写侧是真的在写：`agent.py` 给每种决策都带 `target`，所以真人打「讨论 5 今晚刀他」时那个 5
+    进了日志、又谁都不读（实测 16:29Z：`compress.py` 的狼聊分支只用 `_said(p)`）。一条没人读的
+    指向有两种坏法：要么它是死字段（该从表里删），要么它在骗读表的人（该印出来）。狼队私聊里
+    "指向谁"是提案的一部分，所以这一片选了印出来——同一行文本在模型看得见的那条梯子上也变，
+    不需要第二条取数据的路。
+    """
+    assert compress.render_line(ev(9, Kind.WOLF_CHAT, visibility=seats(1, 2), actor=1,
+                                   text="今晚动手。", act="discuss", target=5)) \
+        == "[e9] 狼队私聊 1号（指 5号）：今晚动手。"
+    # 反向：没带指向的一行不能被凭空补一个"指"字。
+    assert compress.render_line(ev(9, Kind.WOLF_CHAT, visibility=seats(1, 2), actor=1,
+                                   text="今晚动手。", act="discuss", target=None)) \
+        == "[e9] 狼队私聊 1号：今晚动手。"
+
+
 def test_the_wave_splitter_has_one_owner_and_both_readers_call_it():
     """Where a voting wave *ends* is a rule about the log, and two modules need it: the metric
     that counts 弃票 per wave, and the 复盘 that prints one grid per wave. Two definitions drift,
