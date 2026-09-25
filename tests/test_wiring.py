@@ -574,8 +574,9 @@ def test_no_class_in_the_engine_is_kept_alive_by_a_namesake():
       source for `test_golden_game.py`"，而那局金样本是手写的。删。
     - `actors.HumanActor` 连同名属性都没有，纯粹是 `#81` 不数类。它是 plan §15 留的上桌契约，
       这件事只活在 docstring 和 `docs/views.md` 里——**一句只活在散文里的主张就是个缺陷**，所以
-      修法是给它真读者（`tests/test_actor_contract.py` 的 ④ 把它构造出来，钉住它自己声明的四个值
-      和那句拒绝），不是给闸门加一条"看着像桩就放过"的豁免。
+      修法是给它真读者（`tests/test_actor_contract.py` 的 ④ 把它构造出来，钉住它自己声明的四个值），
+      不是给闸门加一条"看着像桩就放过"的豁免。`#122` 把 `act()` 从 `NotImplementedError` 变成了
+      真座位，钉那句拒绝的那半条随之删除——留着的这半条仍然要它能构造。
 
     限界也写在这里：这条仍然按名字匹配，一个方法名与活的兄弟同名时它不区分（`chat` 就是），它靠的是
     "类不可达则成员一起不可达"这一层；至于"签名与调用都对、但从没接进产物链"，那是 #74/#75 那一族。
@@ -589,8 +590,8 @@ def test_no_class_in_the_engine_is_kept_alive_by_a_namesake():
 def _is_a_declaration_only(fn) -> bool:
     """去掉 docstring 之后，函数体只剩 `...`/`pass`/`raise`：它是**声明**，不是实现。
 
-    `raise` 也算声明，因为"这里刻意没做，去别处做"（`HumanActor.act`）和"签名在这、实现待定"
-    （Protocol 桩）是同一种东西：body 里本来就不该有读者。
+    `raise` 也算声明，因为"这里刻意没做，去别处做"（测试里那些整个 body 只有一个 `raise` 的回调
+    替身 `boom` / `dead`）和"签名在这、实现待定"（Protocol 桩）是同一种东西：body 里本来就不该有读者。
     """
     body = [s for s in fn.body
             if not (isinstance(s, ast.Expr) and isinstance(s.value, ast.Constant)

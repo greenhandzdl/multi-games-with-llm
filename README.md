@@ -357,7 +357,7 @@ A 组有个**等价变异**要写清楚：删掉 `if limit is None` 那一支测
 `asyncio.wait_for(coro, None)` 本来就是无限等。这一条不为分支存在作证，只为"截止时间不从 `Config`
 里来"作证——所以能抓住的恰好是最自然的那种回归写法（A1）。
 
-重跑：`.venv/bin/pytest tests/test_actor_contract.py`（9 条，半秒内，不发请求）。
+重跑：`.venv/bin/pytest tests/test_actor_contract.py`（8 条，半秒内，不发请求）。
 
 同一条找缺口的方法（"public 函数里没有一个测试点过名的"）还带出一片统计：`metrics.wilson_ci` 是
 胜率区间的实现，之前**唯一**的数值锚点是金样本那条 `wilson95 == [0.207, 1.0]`——一个点，而且挂在
@@ -1923,7 +1923,7 @@ Z9–Z11 第一版是 **SURVIVED** 的：`tests/test_batch_paired.py` + `tests/t
 会把"升级之前跑的批"说成"那批桌没有指派需求"。
 
 12:28:35Z 那份 audit 读数里两格比率都是 1.0，`by_assigned` 与 `speech_acts` 逐键相同。这不是闸门通过，
-是 mock 桌由构造就听指派（`actors.py:224` 直接取 `legal.assigned_act`，真读数要等端点）。分辨力另有钉：
+是 mock 桌由构造就听指派（`actors.py:232` 直接取 `legal.assigned_act`，真读数要等端点）。分辨力另有钉：
 `test_a_forked_act_moves_the_final_rate_and_leaves_the_first_try_one_alone` 只改一条 `payload.act`，
 要求 `obeyed_final` 掉下来而 `obeyed_first_try` 不动——两格一起动就说明其中一格读错了东西。
 
@@ -4580,6 +4580,66 @@ K5 要按样子读：它确实被杀，但**不是一把能定位证人的刀**�
 **这一片没有动的**：仓库里没有任何脚本消费 `comparison.json`——它是出口，不是消费方；而这一格里
 的臂级读数仍然全部来自伪造批次（同 `#120`），真端点上两臂的 JSON 至今没有产出过一次。
 
+### 一行字变成一张票：那一席从契约变成坐得下人的座位，`#122`
+
+§十五那三条（超时按 actor 取、并发度表剔掉 `blocking`、墙钟只对全模型桌生效）在 `#34` 就有测试了，
+但那一席的 `act()` 是一句 `NotImplementedError`。于是能测的只有"**编排层**为'有人在想'prepared 到
+什么程度"，测不出"**一个人**怎么把那三样用起来"——因为没有实现。这一片补后半边：
+`src/wolfengine/human.py`（读一行字、算一屏卡片、那块真终端）和 `HumanActor.act()`（把读懂的那一行
+交出去，把没读懂的那一行问第二遍）。
+
+五个决定各自有理由，都不是风格：
+
+* **不进 `schema.py`**。`test_purity.py` 那份纯核名单里 `schema.py` 不许碰 I/O，而这一模块存在的理由
+  就是碰终端；把"读一个人"的语法放进去，等于让"零 LLM 单测整局"依赖一台连着控制台的机器。
+* **借词表，不借容错**。玩家能打的词整张来自 `schema.ACT_SYNONYMS`（模型那条解析梯子用的同一张表），
+  但 `normalize_act` 那支"整句里含动作词就算"不借——它是对模型输出的容错，用在打字的人身上会把一句
+  题外的话变成一张他没打算下的票。
+* **问第二遍住在 `HumanActor.act()` 里，不住在 `human.py` 里**：重问需要那块屏幕，而 `human.py`
+  一只手都没有。分开的另一个好处是它整个模块字符串进、字符串出，测一屏卡片不必构造 `Proposal`。
+  打错的行既不占 `cfg.max_repair_retries`（那是模型的账），也不进 `attempts[]`（没人被问过，就没有
+  一条偏好对的"被拒"侧）。
+* **读输入走 `asyncio.to_thread`**。阻塞的 `input()` 写在协程里占的是**事件循环**，其余八座都在里面。
+  §十五第 2 条以前只在替身桌上测过（`_Seat` 的 `blocking` 旋钮），这一片是它第一次有现场。
+* **EOF 是一个名字，不是一次代答**：`Proposal(failure="human_input_closed")` 让"这个人走了"落进
+  `attempts[]`，而引擎替他做的是 `pass`（`default_action` 的口径），不是替谁编一票。
+
+十用例在 `tests/test_human_seat.py`（10 条，0.7 秒，不发请求）。八具变异加两具负控制照
+`/tmp/mut122.py`（2026-09-25T10:33Z，每具点名它期望弄红的那条，跑完按字节 `cmp` 还原，前后基准都是
+0 红，pyc 前缀每轮换新）：
+
+| 刀 | 红用例 |
+| --- | --- |
+| K1 「在行首」放宽成「句中含」 | `test_a_sentence_that_merely_contains_an_act_word_is_not_an_instruction` |
+| K2 删掉「紧跟非座位号 ⇒ 整行不算指令」那一支 | 同上 |
+| K3 玩家那句话被丢掉，只剩动作和座位号 | `test_a_typed_line_names_the_act_then_the_seat_then_the_words` + `test_the_players_sentence_lands_in_the_same_cell_the_models_do` |
+| K4 读不懂就交一份失败的、不问第二遍 | `test_an_unintelligible_line_is_asked_again_without_burning_a_repair_retry` |
+| K5 输入关了不说是谁答的（改成交 `Proposal()`） | `test_a_closed_input_ends_the_turn_and_says_which_hand_answered` |
+| K6 卡片把所有动作都列出来 | `test_the_card_offers_only_the_acts_this_turn_can_answer` |
+| K7 卡片不说法官指派了什么 | `test_the_card_says_what_the_judge_assigned_and_what_refusing_costs` |
+| K8 读输入不再走线程 | `test_reading_a_human_does_not_hold_the_event_loop` |
+| K9 负控制：换提示符的文字 | 活着（对：那串字不是这套用例认领的东西） |
+| K10 负控制：`Console.show` 不再 flush | 活着（同上一条） |
+
+**K1 在第一轮下刀时是活着的**，而它活着说明的不是刀钝，是那一支收紧没有证人。第一版 K1 只把
+`text.startswith(t)` 换成 `t in text`，十条全绿：`rest = text[len(token):]` 仍从行首切，剩下的是
+`_lead_seat` 在挡。把刀修诚实（按找到的位置切）之后差别才露出来——「先票 3」这种"动作词前面有字、
+后面紧跟空格和座位号"的行，放宽以后是一张票，按原来的代码是"没读懂"。少了这条断言，"动作词必须在
+行首"这句话就只活在 docstring 里。补上之后 K1 才有了上面那一格。顺带把 `human.py` 里那句"这是唯一
+区分两种行的东西"改成实测的样子：两处收紧各挡一种松法，而「我票了3号」同时落在两处——单独放宽任何
+一处都到不了"变成一张票"那一步，所以两把刀分开下、两条断言分开钉。
+
+**改文档**：`tests/test_actor_contract.py` 的文档计数从九顶到八（删掉的那条钉的是 `act()` 里那句
+`NotImplementedError`，前提没了；条数闸门抓的正是这一格），`tests/test_wiring.py` 里拿 `HumanActor.act`
+当"整个 body 只有一个 `raise`"例子的两处改成今天仍是桩的名字，`docs/views.md` 那条"真人入座的界面"
+从"只定契约不实现"改成了"座位有了、命令行还没接"。
+
+**这一片没有动的**：`wolf run` 还认不出"这一席坐着人"——全树没有一处生产代码构造 `HumanActor`
+（`#123`）；那一屏给这个人看的**内容**还没有金丝雀，`decision_card()` 读的是 `LegalSet` 而不是事件流，
+`test_info_isolation.py` 那套正反证的是 `percept_for` 过滤得对，够不到这条新通路（`#124`）；端点这一轮
+仍然密钥未导出，所以这十条一次请求都没发（这一席本来就不经过端点），但它们也不是从桩上取的数——
+`HumanActor`、`agent.take_turn`、`legality.check_action` 和落盘那几列都是真的。
+
 ## 这个仓库现在能做什么、不能做什么
 
 
@@ -4777,8 +4837,10 @@ K5 要按样子读：它确实被杀，但**不是一把能定位证人的刀**�
 - ⛔ 对比链的**结论路径**一次真数据都没走过：上面那两条 `--mock` 命令产的是替身桌，按 plan
   §十一 设计成必然被拒（`SYNTHETIC_TABLE`）；真桌那三局是 `wolf run` 出的**单局**，不是一批两臂，
   所以 `compare` 的 McNemar / bootstrap 至今只在替身数据上走过。`data/` 不进版本库，批次也得自己重生成。
-- ⛔ 没有真人入座的界面。`Actor` 协议一期就预留了（`MockActor` / `LlmActor` 之外只需要再一个
-  实现），但界面本身按计划后置。
+- ⛔ 一个人还坐不进**命令行**那一桌：座位本体已经实现了（`#122`：`human.py` 读一行字、
+  `HumanActor.act()` 交出一个 `Proposal`、`tests/test_human_seat.py` 10 条钉着三种落点），但
+  `wolf run` 至今没有 `--human` 旋钮，产品代码里没有一个构造点（`#123`），而那一屏给这个人看的
+  东西还没有金丝雀（`#124`）。
 - ⛔ 女巫用药救下的那一夜在公开产物里**不留痕迹**：`rules.NightResult.peace`（平安夜）算出来之后
   产品链上零读者，只有两条测试读它，所以"昨晚没人死"这件事九个座位谁都读不到（`#87` 的第三处发现，
   账见那一节）。修法要给公告新增一个事件，那会挪动 seq、逼金样本重钉、并改变模型读到的输入分布——

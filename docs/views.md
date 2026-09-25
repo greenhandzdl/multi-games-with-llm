@@ -220,15 +220,18 @@ rich 有两条坑，都各有一条测试钉着：
 * **逐字流式出现**：计划 §9 的 MVP 清单里有一条"说话人文本逐格出现"。现在一条发言是**整条**
   出现的，因为 UI 只读日志，而日志只在一次 turn 完成时才落一行。真流式需要 UI 去读模型的 token
   流——那正是 §9 决定不做的解耦。**代价是观感，换来的是两种模式共享同一份判定。**
-* **真人入座的界面**：`Actor` 协议一期就留了（`HumanActor` 只定契约不实现），界面按计划后置。
-  契约那三条"上桌前必须清掉的假设"（plan §15）有测试兜着：`tests/test_actor_contract.py` 钉住
-  `timeout_for()` 返回 `None` 的座位不能被 `Config` 的地板值判死、`wave_size()` 把 `blocking`
-  座位剔出 worker 名额且无论如何不留 0、墙钟只对全模型桌生效（`aborted_wallclock` 正反各一条）。
-  替身是 `_Seat`——kind / blocking / 截止时间 / 答题耗时四个旋钮各自独立，绑成"像不像人"就只剩
-  人设可测，规则本身测不到。契约**本体**也有读者了（`#85` 起）：同一个文件末尾那两条把 `HumanActor`
-  真的构造出来，钉住它自己声明的座位号、种类、`blocking`、`timeout_for()` 和 `act()` 里那句
-  `NotImplementedError`——在那之前"一期只留契约"这句话只活在注释里，而全树没有一个读者叫得出这个
-  类名，`tests/test_wiring.py` 的类闸门因此红过。
+* **让一个人从命令行坐到桌边**：座位本体已经实现了（`#122`）——`human.py` 读一行字，
+  `HumanActor.act()` 把它变成一个 `Proposal`，`agent.py` 用同一道合法性闸门过它。它的用例在
+  `tests/test_human_seat.py`（10 条）：读懂的那一行进了哪个格子、读不懂时问第二遍而不烧模型的
+  修复额度、输入关了要说清是谁答的、以及"等这个人打字时其余八座没有被挂住"。契约那三条"上桌前
+  必须清掉的假设"（plan §15）另有一组测试兜着：`tests/test_actor_contract.py` 钉住 `timeout_for()`
+  返回 `None` 的座位不能被 `Config` 的地板值判死、`wave_size()` 把 `blocking` 座位剔出 worker
+  名额且无论如何不留 0、墙钟只对全模型桌生效（`aborted_wallclock` 正反各一条）；替身是 `_Seat`——
+  kind / blocking / 截止时间 / 答题耗时四个旋钮各自独立，绑成"像不像人"就只剩人设可测，规则本身
+  测不到。还缺的两件事都在 CLI 与这一层：`wolf run` 没有 `--human` 旋钮，所以生产代码里今天没有
+  一处构造 `HumanActor`（`#123`）；而那一屏"给这个人看什么"还没有金丝雀——`decision_card()` 读的是
+  `LegalSet` 而不是事件流，是一条**新的**输出通路，`test_info_isolation.py` 那套正反证的是
+  `percept_for` 过滤得对，够不到它（`#124`）。
 * **解说员 LLM**：它的 percept 只含公开事件，结构上不可能泄密，是后置清单里性价比最高的一个。
 * 单文件 HTML 里的曲线是 `data-suspicion` 属性（无 JS），要画成图得引入脚本——与"自包含 +
   不可信输入"冲突，目前用 `wolf audit` 出数字，不画图。

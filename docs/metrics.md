@@ -101,7 +101,7 @@ mock（seed 1–30，`tests/test_day_cap.py` 的那个桌）在上限 6 下最�
 > → 12:28:35Z 实测 `{"recorded":58,"turns":21,"by_assigned":{"accuse":5,"probe":4,"align":2,"listen":2,
 > "defend":7,"pivot":1},"obeyed_first_try":1.0,"obeyed_final":1.0}`。
 > **mock 桌上 `by_assigned` 与 `speech_acts` 逐格相同**不是巧合也不是 bug：替身座位就照
-> `legal.assigned_act` 出牌（`src/wolfengine/actors.py:224`）。所以这一格的分辨力要等真端点，离线能钉
+> `legal.assigned_act` 出牌（`src/wolfengine/actors.py:232`）。所以这一格的分辨力要等真端点，离线能钉
 > 的是接线与两口径的分离——`test_a_forked_act_moves_the_final_rate_and_leaves_the_first_try_one_alone`
 > 改一条 speech 的 `payload.act`，`obeyed_final` 掉下来而 `obeyed_first_try` 纹丝不动；两格一起动就说明
 > 其中一格读错了东西。

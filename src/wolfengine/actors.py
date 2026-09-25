@@ -20,10 +20,12 @@ canary test covers the human UI without knowing anything about it.
 
 from __future__ import annotations
 
+import asyncio
 import random
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol, runtime_checkable
 
+from . import human
 from .assemble import Prompt
 from .belief import BeliefState
 from .config import Config
@@ -35,6 +37,12 @@ from .schema import Action, Belief, Suspect, parse_action
 from .state import LegalSet, Phase
 
 ActorKind = Literal["llm", "mock", "human"]
+
+# The two strings this seat says out loud, as constants because `human.py`'s card is checked
+# word by word against the legal act set (`test_human_seat.py`), and a re-ask that quietly
+# grew a second offered verb would be a card the gate refuses.
+PROMPT = "你的选择 > "
+NOT_UNDERSTOOD = "没读懂这一行。用上面列出的那个词开头，后面跟座位号，再跟你要说的话。"
 
 
 @dataclass
@@ -307,25 +315,48 @@ LINES: dict[str, tuple[str, ...]] = {
 
 
 class HumanActor:
-    """Contract only, on purpose (plan §15). The UI is deferred; the *shape* is not.
+    """A seat a person is sitting in (plan §15). `blocking=True`, `timeout_for()` returns None.
 
-    Kept as a physical reminder of the three rules above rather than a comment: a seat
-    that must never be timed out, and whose Percept is the same type the canary test
-    already proves is minimal.
+    The three rules in this module's header are what the rest of the engine owes this seat, and
+    they are asserted in `test_actor_contract.py`. What the seat owes back is one line of typing
+    per turn: `human.py` reads it, this method turns it into a `Proposal`, and `agent.py` runs
+    the same gate over it that it runs over a model's JSON. No legality lives here — a
+    hand-written ballot that skipped the gate would make the transcript a record of whoever
+    typed fastest rather than of what the rules allowed.
+
+    `console` is the screen, injectable so a test can show itself a queue instead of a terminal.
+    It has no default *value* on purpose: `Console()` binds `input()`, and constructing one at
+    import time would leave a module import waiting on whoever ran it.
     """
 
     kind: ActorKind = "human"
     blocking = True
 
-    def __init__(self, seat: int) -> None:
+    def __init__(self, seat: int, *, console: "human.Console | None" = None) -> None:
         self.seat = seat
+        self.console = console if console is not None else human.Console()
 
     def timeout_for(self, phase: Phase) -> None:
         """None means wait forever. A person thinking out loud is not a timeout case."""
         return None
 
     async def act(self, ctx: TurnContext) -> Proposal:
-        raise NotImplementedError(
-            "上桌界面刻意未实现（一期只留契约）。需要实现时：读入 → 组装 Action → "
-            "交给 agent.py 的同一个闸门；不要在本类里做合法性判断。"
-        )
+        card = human.decision_card(ctx)
+        while True:
+            self.console.show(card)
+            # `to_thread`, not `await console.read(...)`: a blocking `input()` in this
+            # coroutine holds the *event loop*, and the other eight seats are in it. Whether
+            # this seat is waited on or waited for is what §15 rule 2 is about, and the read
+            # is the first place that rule can actually be broken.
+            line = await asyncio.to_thread(self.console.read, PROMPT)
+            if line is None:
+                # EOF is "this person left", and the engine must say so in the log rather than
+                # answer for him silently. `failure` reaches `attempts[]`; `fallback=1` is what
+                # the abstention below is recorded as.
+                return Proposal(failure="human_input_closed")
+            action = human.parse_human_line(line)
+            if action is not None:
+                return Proposal(action=action)
+            # Re-asked inside this seat: a typo is neither a repair retry (that budget is the
+            # model's) nor a rejected output (nothing was asked, so nothing is a preference pair).
+            self.console.show(NOT_UNDERSTOOD)

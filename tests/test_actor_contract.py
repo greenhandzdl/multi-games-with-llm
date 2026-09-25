@@ -1,8 +1,8 @@
 """plan §15 的三条"上桌前必须从编排层清掉的隐含假设"：代码里都实现了，仓库里 0 条测试。
 
-三条都不是抽象洁癖。`HumanActor` 一期只写契约（`act()` 直接抛 `NotImplementedError`），所以任何
-一条被后来的重构悄悄改回去，都要等到真有人坐进那个座位时才炸——而那是全仓库唯一没有替身、也就
-唯一没法离线复现的地方。这里用最小替身把三条各自钉住：
+三条都不是抽象洁癖。这三条立起来的时候 `HumanActor.act()` 还是一句 `NotImplementedError`（直到
+`#122` 才变成坐得下人的座位），所以任何一条被后来的重构悄悄改回去，都要等到真有人坐进那个座位时
+才炸——而那时全仓库没有替身能复现。这里用最小替身把三条各自钉住：
 
 * ①超时按 actor 取，不按阶段、也不拿配置兜底：`timeout_for()` 返回 `None` 的座位不能被地板值判死。
 * ②并发度表接受"此刻能答的座位"，且 `blocking` 的座位要剔出去——它正在被逐个等，不是一个 worker
@@ -14,8 +14,10 @@
 `Config` 里来"——能抓住的是 `actor.timeout_for(...) or cfg.llm_timeout_floor_s` 这种"顺手兜个底"，
 而那恰好是把 §15 第 1 条改回去的最自然写法。
 
-第四条不是 §15 的假设，是**契约本体**（`HumanActor` 自己那四个声明）。`#85` 之前全仓库没有一个
-命名 `HumanActor` 的读者，"一期只留契约"这句话因此只活在 docstring 里。
+最后一条不是 §15 的假设，是**契约本体**（`HumanActor` 自己那四个声明）。`#85` 之前全仓库没有一个
+命名 `HumanActor` 的读者，"一期只留契约"这句话因此只活在 docstring 里。`#122` 把 `act()` 实现了
+之后，这一条更吃重而不是更轻松：那四个声明现在是**生产路径**读的输入（`wave_size`、墙钟闸门、
+`to_thread` 里那次阻塞读），而它自己那一侧的行为住在 `tests/test_human_seat.py`。
 """
 
 from __future__ import annotations
@@ -26,8 +28,6 @@ import dataclasses
 import io
 import random
 from typing import get_args
-
-import pytest
 
 from wolfengine import game, phases, rules
 from wolfengine.agent import Agent
@@ -183,13 +183,12 @@ def test_one_seat_of_flesh_takes_the_wallclock_off_the_game(tmp_path):
 def test_the_reserved_seat_declares_the_shape_the_orchestrator_reads():
     """`#85`：把"一期只留契约"从一句 docstring 变成一条断言。
 
-    在这两条之前，`HumanActor` 全树零读者——`tests/test_wiring.py` 的类闸门因此需要一条"看着像桩
+    在这一条之前，`HumanActor` 全树零读者——`tests/test_wiring.py` 的类闸门因此需要一条"看着像桩
     就放过"的豁免，而豁免是要有证人的洞。构造它、把编排层真的会去读的四个属性钉住，就有了一个
     命名它的读者，而契约也不再依赖有人记得读那段话。`timeout_for()` 返回 `None` 是第 1 条的**前提**：
     上面那两条用本地替身 `_Seat` 测的是"编排层拿到 `None` 怎么办"，这一条测的是"这个座位声明的是
     `None`"——两件事各有一个读者，缺了后者，前者用的那个 `None` 是谁给的没人说得出。
     """
-    seat = HumanActor(3)
     seat = HumanActor(3)
     assert seat.seat == 3, "构造器连座位都不认，那上桌时它是谁"
     assert seat.kind in get_args(ActorKind), (
@@ -198,14 +197,3 @@ def test_the_reserved_seat_declares_the_shape_the_orchestrator_reads():
         "`blocking` 是 `wave_size` 与墙钟闸门的输入：改成 False 就是把 §15 第 2 条改回去")
     assert seat.timeout_for(Phase.NIGHT_WOLF) is None, (
         "这个座位的截止时间是『永远』不是『没填』；给它一个数，第 1 条的替身就成了唯一说法")
-
-
-async def test_the_reserved_seat_says_so_instead_of_answering(tmp_path):
-    """未实现必须是**说出来的**，不是静悄悄返回一个空提案。
-
-    `act()` 抛的句子里写着实现者该走哪条路（读入 → `Action` → 交给 `agent.py` 的同一个闸门）。
-    这条断言只钉"它拒绝回答"这一件事：真去实现它的人会红在这里，然后按句子里那句话改这条。
-    """
-    with pytest.raises(NotImplementedError) as got:
-        await HumanActor(3).act(None)  # 抛在读到 ctx 之前，所以不需要一整套现场
-    assert "agent.py" in str(got.value), "拒绝实现却不指路，下一个人就会在本类里判合法性"
