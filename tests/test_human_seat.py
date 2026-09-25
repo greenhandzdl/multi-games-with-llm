@@ -507,3 +507,113 @@ async def test_reading_a_human_does_not_hold_the_event_loop(tmp_path):
         "其余八座会被这一席卡死")
     mine = [e for e in log.all() if e.kind == Kind.VOTE and e.actor == 3]
     assert len(mine) == 1 and mine[0].payload["target"] == target, mine
+
+
+# ------------------------------------------------------------------------- 打回之后的那一屏
+async def test_the_second_screen_names_the_word_the_gate_sent_back(tmp_path):
+    """法官把一行字打回之后，第二屏必须说出**哪个词**不对（`#127`）。
+
+    这一席的 `attempts[]` 从来不缺——`agent.py` 的循环对每种座位都记一条拒绝，人打的也一样记。
+    缺的是人这一侧：`retry_note` 今天唯一的读者是 `assemble.py` 的 C5 区，也就是只进模型的
+    prompt，于是他被再问一次时看到的是**同一张卡片**，只能自己猜刚才哪里错了。这两格必须同时
+    成立才谈得上"手打的一票和模型生成的一票在同一处失败、为同一个理由"：机器侧有账，人这一侧
+    得有一句读得到的话。
+
+    那一行「毒 5 …」是**读得通**的（`parse_human_line` 会给它 `act="poison"`），所以这一屏不会
+    走"没读懂"那条本座位内的循环；它是在共享闸门上被 `act_not_allowed` 打回的，因此占的是
+    `cfg.max_repair_retries` 那一格预算——这正是要说清的理由从哪来的地方。
+    """
+    _, _, console, outcome = await _turn(
+        tmp_path, ["毒 5 我先把他毒掉", "票 5 就这么定"],
+        legal=LegalSet(acts=("vote",), targets=frozenset({5}), allow_pass=True))
+    cards = [s for s in console.shown if s.startswith("轮到你了")]
+    assert len(cards) == 2, f"这一行该被打回再问一次，实得 {len(cards)} 屏：{console.shown}"
+    assert len(outcome.attempts) == 1, (
+        f"机器侧该有一条拒绝记录，实得 {outcome.attempts}")
+    assert "act_not_allowed" in str(outcome.attempts[0]), outcome.attempts
+    assert not outcome.fell_back, "第二行是他自己打的，这一轮不该由引擎替答"
+    assert outcome.action.act == "vote", outcome.action
+    assert "打回" in cards[1] and "毒" in cards[1], (
+        f"第二屏没有说出被打回的是哪个词：\n{cards[1]}")
+    assert "打回" not in cards[0], "第一屏无账可报，出现「打回」就是假话"
+
+
+async def test_an_out_of_set_act_in_a_soft_phase_is_taken_as_typed(tmp_path):
+    """软的那一轮根本不查 act 集合：越权的词照收，落盘的就是他打的那个动作（`#127` 第三行）。
+
+    这一条今天**是绿的**，它不是缺陷报告而是**口径登记**：`legality.py` 的 `act_not_allowed`
+    只在 `strict` 下进 `violations`，软相位把它放进 `flags` 而 `ok` 保持 True。于是"打一个这一
+    轮没被 grant 的动作"有两种结局，取决于法官当时在哪个相位——卡片上那句承诺对这两种都许了同
+    一个诺，所以对两种都不准。把它钉住是因为这是**选择**（软相位放行是 M4 那条测量留下的证据
+    通道），不是疏忽；电池里对应的那把刀是把 `strict` 变成恒真。
+    """
+    _, _, console, outcome = await _turn(
+        tmp_path, ["毒 5 我先把他毒掉"], phase=Phase.DAY_SPEECH, kind=Kind.SPEECH,
+        legal=LegalSet(acts=("discuss",), targets=frozenset({5}), allow_pass=True))
+    cards = [s for s in console.shown if s.startswith("轮到你了")]
+    assert len(cards) == 1, f"软相位没有任何东西该被打回，却问了 {len(cards)} 遍"
+    assert not outcome.fell_back, outcome
+    assert outcome.action.act == "poison", (
+        f"这一轮该照他打的收进日志，实得 {outcome.action}")
+
+
+async def test_the_assigned_line_tells_the_truth_about_a_soft_phase(tmp_path):
+    """软相位里换掉指派动作：他坚持的话**按他打的记**，卡片那一行必须这么写（`#127`）。
+
+    `agent.py` 走的是 `_only_the_label_was_refused` 那一格：唯一没过账的是"标签"，句子是他的、
+    动作也是他打的，于是 `action = last.action` 而不是 `default_action`——但 `fallback=1` 照写，
+    服从率仍然读得到这一格。旧卡片那句「换成别的会被引擎代答一次」在这里是假的：没有东西被代答，
+    被换掉的只有"这一轮算不算他服从指派"。留在全局名册（`#117`）里的那个 `fallback` 才是这条
+    分支的记号，卡片不该把一个"标一下"说成"替他说"。
+    """
+    _, _, console, outcome = await _turn(
+        tmp_path, ["毒 5 我就毒他", "毒 5 我不改"], phase=Phase.DAY_SPEECH, kind=Kind.SPEECH,
+        legal=LegalSet(acts=("discuss", "last_words"), targets=frozenset({5}),
+                       allow_pass=True, assigned_act="last_words"))
+    cards = [s for s in console.shown if s.startswith("轮到你了")]
+    assert len(cards) == 2, f"这一行该被打回再问一次，实得 {len(cards)} 屏"
+    assert "act_not_as_assigned" in str(outcome.attempts[0]), outcome.attempts
+    assert outcome.action.act == "poison", "留下的该是他自己打的那个动作"
+    assert outcome.fell_back, "保留他的动作也要在账上标一次，否则服从率看不见这一格"
+    assert "按你打的记" in cards[0], f"第一屏没说清这一格的代价：\n{cards[0]}"
+    assert "被引擎代答一次" not in cards[0], "那句承诺在这一格是假话"
+    assert "打回" in cards[1] and "毒" in cards[1], cards[1]
+
+
+async def test_the_assigned_line_tells_the_truth_about_a_hard_phase(tmp_path):
+    """硬相位里答一个本轮没有的动作：这一轮**真的**由引擎替他答，卡片得换成另一句（`#127`）。
+
+    同一个判据在两把账下翻面：`act_not_allowed` 这时进了 `violations`，`_only_the_label_was_refused`
+    因此为假，走的是 `default_action`——他打的那句话不进日志（它进 `attempts[]`，那里是数据集）。
+    这一桌的 default 是弃票，所以落盘的动作连"票"都不是；上一条例外和这一条例外不是同一句话能
+    许的诺，所以卡片要按相位分岔；分岔的依据就是闸门自己的 `HARD_PHASES`，不是第二份口径。
+    """
+    _, _, console, outcome = await _turn(
+        tmp_path, ["毒 5 我就毒他", "毒 5 我不改"],
+        legal=LegalSet(acts=("vote",), targets=frozenset({5}), allow_pass=True,
+                       assigned_act="vote"))
+    cards = [s for s in console.shown if s.startswith("轮到你了")]
+    assert len(cards) == 2, cards
+    assert "act_not_allowed" in str(outcome.attempts[0]), outcome.attempts
+    assert outcome.fell_back
+    assert outcome.action.act != "poison", (
+        f"这一轮该由引擎替他答，落盘的不该还是他打的那个动作：{outcome.action}")
+    assert "由引擎替你答" in cards[0], f"第一屏许了个不实的诺：\n{cards[0]}"
+    assert "按你打的记" not in cards[0], "这一格他的句子不进日志，那句话是假话"
+    assert "打回" in cards[1] and "毒" in cards[1], cards[1]
+
+
+def test_a_code_the_card_has_no_words_for_is_still_shown():
+    """闸门哪天多出一个卡片不认识的码，那一屏不许缩成一句空话（`#127`）。
+
+    `refusal_lines` 只认识四种码，其余的原样印出去：一条看不见的拒绝等于一次没有理由的再问，
+    而"有理由"正是这一片存在的目的。`target_not_legal` 走的是另一格——它点名的是座位不是动作。
+    这条是分支覆盖的证人，落笔时就绿了，所以它的杀伤力由电池里 M3 那具（删掉 `else`）来还。
+    """
+    lines = human.refusal_lines(("target_not_legal:7 (只能 [3, 5])",
+                                 "invented_event_ids:['e9']",
+                                 "something_new_the_gate_invented"))
+    assert lines[0] == "7 号这一轮点不到", lines
+    assert "invented_event_ids" in lines[1], lines
+    assert "something_new_the_gate_invented" in lines[2], lines
+

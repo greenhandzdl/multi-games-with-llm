@@ -64,6 +64,10 @@ class TurnContext:
     prompt: Prompt
     belief: BeliefState
     attempt: int = 1
+    # The complaints that caused this re-ask, as codes. `retry_note` is the same information
+    # rendered for region C5 — a model's prompt text, ending in "只输出一个 JSON 对象" — and a
+    # person would be told to emit JSON. So the codes travel, and each audience renders its own.
+    refusal: tuple[str, ...] = ()
 
 
 @dataclass

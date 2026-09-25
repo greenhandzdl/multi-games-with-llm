@@ -164,7 +164,7 @@ class Agent:
         last: Proposal = Proposal()
         timed_out = False
         overflow = False
-        verdict = Verdict(ok=False, violations=["no_attempt"])
+        verdict = Verdict(ok=False)  # empty, not a marker: this list is also shown to the seat
         view = _View(seat=seat, role=role, persona=persona, percept=percept, belief=belief,
                      legal=legal, phase=phase, repeat_fragments=repeat_fragments)
 
@@ -197,8 +197,8 @@ class Agent:
                 self.retries += 1
 
             proposal = await self._ask(actor, TurnContext(
-                seat=seat, role=role, phase=phase, percept=percept, legal=legal,
-                persona=persona, prompt=prompt, belief=belief, attempt=attempt_no))
+                seat=seat, role=role, phase=phase, percept=percept, legal=legal, belief=belief,
+                persona=persona, prompt=prompt, attempt=attempt_no, refusal=tuple(verdict.violations)))
             last = proposal
             self.calls += 1
 

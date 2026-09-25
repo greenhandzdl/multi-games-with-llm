@@ -28,7 +28,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .compress import render_line
-from .legality import TARGETLESS_ACTS
+from .legality import HARD_PHASES, TARGETLESS_ACTS
 from .schema import ACT_SYNONYMS, Action, coerce_seat
 
 if TYPE_CHECKING:  # `actors.py` imports this module; the annotation must not close the cycle
@@ -111,10 +111,46 @@ def _lead_seat(text: str) -> tuple[int | None, str]:
     return seat, tail.lstrip(_BOUNDARY_CHARS)
 
 
+def _act_word(act: str) -> str:
+    """The Chinese word the card offers for an act — the same derivation, looked up not re-derived.
+
+    The refused act is by definition *not* in `ctx.legal.acts`, so the card's own offer table
+    cannot answer this; it has to come from the full vocabulary or the line would name the gate's
+    English code at a person who never typed English.
+    """
+    return next((zh for zh, en in ACT_SYNONYMS.items() if en == act), act)
+
+
+def refusal_lines(refusal: tuple[str, ...]) -> list[str]:
+    """Gate codes, phrased as something about the player's own typing.
+
+    `schema.errors_to_prompt_lines` is the other renderer for these same codes and it ends in
+    「只输出一个 JSON 对象」 — it writes region C5, for a model. Nothing here re-derives the
+    *rules*; it only re-words the codes. An unknown prefix is printed verbatim rather than
+    dropped: a refusal the player cannot see is a retry he was never told the reason for.
+    """
+    out = []
+    for code in refusal:
+        head, _, tail = code.partition(":")
+        act = tail.split(" (", 1)[0]
+        if head == "act_not_allowed":
+            out.append(f"「{_act_word(act)}」这一轮不能答")
+        elif head == "act_not_as_assigned":
+            assigned = tail.partition("法官指派")[2].strip(" )")
+            out.append(f"法官指派的是「{_act_word(assigned)}」，「{_act_word(act)}」不算")
+        elif head == "target_not_legal":
+            out.append(f"{act} 号这一轮点不到")
+        elif head == "target_required_for":
+            out.append(f"「{_act_word(act)}」要点一个座位")
+        else:
+            out.append(code)
+    return out
+
+
 def decision_card(ctx: "TurnContext") -> str:
     """The screen a player reads before answering: what happened, then what he can answer with.
 
-    Three rules shape it. The first two are checked by `tests/test_human_seat.py`, the third by
+    Four rules shape it. The first three are checked by `tests/test_human_seat.py`, the fourth by
     `tests/test_info_isolation.py`:
 
     * Every word offered comes from `ACT_SYNONYMS` and only for an act in `ctx.legal`. A card
@@ -125,9 +161,14 @@ def decision_card(ctx: "TurnContext") -> str:
       The block is followed by one worked example, left unindented so it is not part of it — "you
       may add your sentence after the seat" is only actionable as a line that really parses, and
       a sentence of Chinese contains act words.
-    * The assigned speech act is named, with what refusing it costs. `legality.py` treats that
-      field as hard even in a soft phase; a player who is not told is being decided for
-      without knowing it.
+    * A re-ask says what was refused, in the words he typed (`ctx.refusal`, rendered by
+      `refusal_lines`). The machine side of this was never missing — `attempts[]` records every
+      refusal for every kind of seat — but the only reader of the rendered note was a model's
+      prompt, so a person was handed the same card twice and left to guess.
+    * The assigned speech act is named, with what refusing it costs — and the cost is stated
+      separately for a hard phase and a soft one, because the gate really does do different
+      things. `legality.py` treats the assignment as hard even in a soft phase; a player who is
+      not told is being decided for without knowing it.
     * The chronicle is `ctx.percept`'s tail, rendered by the one renderer (`compress.render_line`)
       and never re-selected from the log. A seat that cannot see a fact must not read it here
       either — which is why this reads the same `Percept` object a model seat is given rather
@@ -136,6 +177,10 @@ def decision_card(ctx: "TurnContext") -> str:
     legal = ctx.legal
     allowed = list(legal.acts) + (["pass"] if legal.allow_pass else [])
     out = [f"轮到你了：{ctx.seat} 号" + (f"（{ctx.role}）" if ctx.role else "")]
+    if ctx.refusal:
+        # First thing after his own name: he read the recap once already, and what changed is the
+        # verdict on his own line, not the world.
+        out.append("法官打回：" + "；".join(refusal_lines(ctx.refusal)) + "。")
     heard = [render_line(e) for e in ctx.percept.tail(SCREEN_TAIL)]
     out.append(f"局况（你看得见的最近 {len(heard)} 条）：")
     out.extend(f"  {line}" for line in heard)
@@ -148,7 +193,15 @@ def decision_card(ctx: "TurnContext") -> str:
                    + " 后面可以跟你要说的话")
     if legal.assigned_act:
         out.append(f"法官指派本轮使用的动作：{legal.assigned_act}")
-        out.append("换成别的会被引擎代答一次，你那句话仍然算你说的。")
+        # Two different costs, and the gate picks between them by whether the act was granted at
+        # all: an out-of-set answer in a hard phase ends in `default_action` (his words are gone
+        # from the log, they survive only in `attempts[]`), while an act that merely isn't the
+        # assigned one ends with *his* action kept and `fallback=1` written. `#129` registered the
+        # old single sentence as a promise nobody had witnessed; each half of it is now a claim
+        # with its own witness in `test_human_seat.py`.
+        out.append("换成别的会被问第二遍；答本轮没有的动作，那一轮由引擎替你答。"
+                   if ctx.phase in HARD_PHASES else
+                   "换成别的会被问第二遍；还是答别的，那一轮按你打的记，日志里标一次引擎代答。")
     if legal.targets:
         out.append("可点名的座位：" + "、".join(str(s) for s in sorted(legal.targets)))
     else:
