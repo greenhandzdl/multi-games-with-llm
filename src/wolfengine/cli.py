@@ -39,7 +39,7 @@ from . import batch, metrics, render_html, render_live
 from .compress import render_line
 from .config import Config, ConfigError
 from .events import (Event, EventLog, Kind, LogDamage, empty_notice, meta_notice, seq_damage,
-                     seq_notice, torn_notice)
+                     seq_notice, torn_notice, roster_notice)
 from .game import DRAW_DAY_LIMIT, GameResult, play
 from .info import percept_for
 
@@ -237,10 +237,10 @@ def render_chronicle_file(path: Path, *, god: bool = False, as_seat: int | None 
     # The transcript ends here, and a reader cannot tell that apart from a game that ended here
     # unless it says so — including in a seat's own view, which is the one people act on. The
     # other ways a transcript misleads are a file with no manifest at all, a manifest with nothing
-    # after it, and a numbering that isn't 1,2,3: same rule, four sentences, one owner each
-    # (`events.py`). The numbering sentence comes before the cut, which is about the file's tail.
-    for notice in (meta_notice(meta), empty_notice(events, meta), seq_notice(events),
-                   torn_notice(torn)):
+    # after it, and a numbering that isn't 1,2,3: same rule, five sentences, one owner each
+    # (`events.py`). Roster heads them: the tail two are about where the file stops, not who spoke.
+    for notice in (roster_notice(meta), meta_notice(meta), empty_notice(events, meta),
+                   seq_notice(events), torn_notice(torn)):
         if notice:
             lines.append(f"〔{notice}〕")
     return lines

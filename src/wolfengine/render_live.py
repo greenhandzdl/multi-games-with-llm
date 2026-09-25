@@ -36,7 +36,7 @@ from rich.table import Table
 from rich.text import Text
 
 from .compress import render_line
-from .events import Event, EventLog, Kind, empty_notice, meta_notice, seq_notice
+from .events import Event, EventLog, Kind, empty_notice, meta_notice, roster_notice, seq_notice
 from .render_html import (event_flags, game_over_event, markers, mind_pairs, role_zh,
                           roles_by_seat, seats_of, shown_events)
 
@@ -190,9 +190,9 @@ def draw(console: Console, events: list[Event], meta: dict[str, Any], *,
 
     line(f"狼人杀直播 {meta.get('game_id', '') or '—'} · 第{evs[-1].day if evs else 1}天 · "
          f"视角：{'上帝' if god else '观众'}", style="bold")
-    unnamed = meta_notice(meta)
-    if unnamed:
-        line(f"〔{unnamed}〕")
+    for notice in (roster_notice(meta), meta_notice(meta)):
+        if notice:
+            line(f"〔{notice}〕")
     # `events`, not `evs`: these sentences are about what the file holds, not about what this view
     # is allowed to show. A seat's own frame can legitimately be empty while the file is full.
     for notice in (empty_notice(events, meta), seq_notice(events)):

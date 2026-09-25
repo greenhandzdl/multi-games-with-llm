@@ -223,7 +223,8 @@ rich 有两条坑，都各有一条测试钉着：
 * **给坐在命令行那一桌边的人看的一屏**：座位本体与那条命令都实现了——`#122` 把 `human.py` 写成
   读一行字、`HumanActor.act()` 把它变成一个 `Proposal`，`agent.py` 用同一道合法性闸门过它，用例在
   `tests/test_human_seat.py`（12 条）；`#123` 把它接进 `wolf run --human 3`，名册只由 `cli.py` 里一只手
-  拼，真桌与替身桌走同一个构造点，用例在 `tests/test_run_with_human.py`（6 条，一次请求不发）。读懂的
+  拼，真桌与替身桌走同一个构造点，用例在 `tests/test_run_with_human.py`（13 条，一次请求不发；
+  `#125` 之后多的是读侧那一族）。读懂的
   那一行进了哪个格子、读不懂时问第二遍而不烧模型的修复额度、输入关了要说清是谁答的、以及"等这个人
   打字时其余八座没有被挂住"。契约那三条"上桌前必须清掉的假设"（plan §15）另有一组测试兜着：
   `tests/test_actor_contract.py` 钉住 `timeout_for()`

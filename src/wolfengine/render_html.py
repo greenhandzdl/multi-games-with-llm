@@ -32,8 +32,8 @@ from typing import Any, Iterable
 from . import roles
 from .belief import build_belief
 from .compress import cause_text, render_line
-from .events import (Event, EventLog, Kind, empty_notice, meta_notice, seq_notice, torn_notice,
-                     voting_waves)
+from .events import (Event, EventLog, Kind, empty_notice, meta_notice, roster_notice,
+                     seq_notice, torn_notice, voting_waves)
 from .info import eid
 
 IMPOSSIBLE = "不可能感知"
@@ -333,9 +333,15 @@ def render(events: list[Event], meta: dict[str, Any], *, god: bool = False,
     # from the same counter: two renderers, one number for one cut.
     # Same order the transcript appends them in, so "the page's ⚠ and the transcript's last line
     # are one sentence" stays true for the inputs that carry exactly one of the four.
+    #
+    # The roster sentence gets no ⚠: the four after it say the file is damaged, and a person at
+    # seat 3 is not damage. It heads them because it is a claim about who answered, not a verdict
+    # on these bytes. The ⚠ chain stays contiguous, so the ordering claim above still holds.
+    roster = roster_notice(meta)
     meta_line = (f"第{max(by_day, default=0)}天结束 · {_esc(over.get('terminal', '未结束'))} · "
                  f"发言{counts['speech']}条 · 私有事件{counts['private']}条 · "
                  f"闸门拒绝{counts['refused']}次 · 视角：{'上帝' if god else '观众'}"
+                 + (f" · {_esc(roster)}" if roster else "")
                  + "".join(f" · ⚠ {_esc(n)}"
                            for n in (meta_notice(meta), empty_notice(events, meta),
                                      seq_notice(events), torn_notice(torn)) if n))

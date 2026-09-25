@@ -12,8 +12,13 @@
 * **整局的证据要在 CLI 上**。`test_human_seat.py` 那十条走的是 `agent.take_turn`；一局打完之后
   `actor_kinds` 里有没有 `human`、那个人说的话在不在日志里、他离开之后剩下的回合还认不认得出是
   谁答的——这三格以前没有现场。
+* **读侧认领这一局（`#125`）**。上面那些日志被写出来之后，还没有一条用例把它读回去。于是写侧的
+  归一化（`game.open_log` 的 `sorted(set(...))`）和读侧的谓词（`metrics.is_synthetic` 的
+  `sorted(...) != ["llm"]`）之间没有对过账，而 `SYNTHETIC_CLAUSE["human"]` 那句 §十五 只被**手填**
+  页眉的用例引过（`test_synthetic_attribution.py` 的 `_table`/`_rehumanise`）——手填的页眉证明不了
+  引擎写的就是那个形状。这一片把那一局真日志读回三个出口。
 
-不发一次请求：这六条全在 `--mock` 桌上跑（真人那一席本来就不经过端点）。
+不发一次请求：这些用例全在 `--mock` 桌上跑（真人那一席本来就不经过端点）。
 """
 
 from __future__ import annotations
@@ -178,3 +183,150 @@ def test_the_prompt_dump_refuses_to_promise_a_seat_a_person_is_in(tmp_path, caps
     assert rc == 2, capsys.readouterr().err
     assert not out.exists(), f"命令本身不对，却在磁盘上留下了 {out}"
     assert no_network == [], "被拒绝的命令仍然够到了端点"
+
+
+# ------------------------------------------------------------------ 读侧认领这一局（#125）
+#
+# 上面几条读的是**磁盘上那一格**。这一节把这局真日志交回给读侧，为的是让两头对一次账：
+# `test_synthetic_attribution.py` 把"替身桌被拒时引用哪一条"钉得很死，可它的页眉是**手填**的
+# （`_table` 造 dict，`_rehumanise` 就地改 jsonl 的第一行）。手填的页眉证不到引擎写的那一格长什么
+# 样：`game.open_log` 写的是 `sorted(set(kinds))`，`metrics.is_synthetic` 读的是
+# `sorted(...) != ["llm"]`，`seat_kinds` 读的是 set 摊平——三处任何一处改法不同，只有真日志会红。
+ROSTER = "桌边坐着一个真人"
+HUMAN_CLAUSE = "plan §十五（含真人座位的局永远不得进入配对评测语料）"
+
+
+def _played(tmp_path, keyboard, name, *, human="3", seed=SEED):
+    """CLI 真打的一局，返回**日志路径**——读侧要的是文件，不是已经解析过的结果。"""
+    keyboard([MARK] * 40)
+    out = tmp_path / name
+    args = ["run", "--mock", "--seed", str(seed), "--quiet", "--out", str(out)]
+    if human:
+        args += ["--human", human]
+    assert cli.main(args) == 0, f"{name}：一局没打完，读侧就没有东西可读"
+    paths = sorted(out.glob(f"*_g{seed:08d}.jsonl"))
+    assert len(paths) == 1, f"一局该只有一个日志，实得 {paths}"
+    return paths[0]
+
+
+def test_a_real_human_seat_game_is_refused_by_the_clause_about_humans(tmp_path, keyboard):
+    """写侧落的那一格，读侧要认得出来，并且引用的是**管人的那一条**。
+
+    这张桌上同时还有八席替身，所以两条条款都该在场、各带自己管的种类。只钉"§十五 在"是不够的：
+    一句写死"含 mock/human"的措辞也能过（`#89` 的红就是这样来的），所以种类也按实印的那串比。
+    """
+    g = metrics.read_game(_played(tmp_path, keyboard, "read"))
+    assert g.meta["actor_kinds"] == ["human", "mock"], g.meta["actor_kinds"]
+    assert g.is_synthetic, "引擎自己写的页眉，读侧没认出来是替身桌"
+    note = metrics.m1_win_rate([g])["note"]
+    assert HUMAN_CLAUSE in note, note
+    assert "plan §十一" in note, f"八席替身没被引用它们那条：{note}"
+    assert "actor_kinds=['human', 'mock']" in note, note
+    assert metrics.m1_win_rate([g])["good_win_rate"] is None, "被拒的局仍然产出了胜率"
+    gate = metrics.m3_gate_verdict([g])["note"]
+    assert HUMAN_CLAUSE in gate, f"两个出口说的是两件事：{gate}"
+
+
+def test_the_same_game_with_no_person_cites_only_the_clause_about_stands(tmp_path, keyboard):
+    """一行之差的对照：桌边没有人的同一局，只许引 §十一。
+
+    少了这一半，上一条就成了空判据——一句"两种条款都印"的措辞也能把它喂绿。
+    """
+    g = metrics.read_game(_played(tmp_path, keyboard, "no-human", human=None))
+    assert g.meta["actor_kinds"] == ["mock"], g.meta["actor_kinds"]
+    assert g.is_synthetic, "替身桌照样该被拒——被拒的理由不是「有没有人」"
+    note = metrics.m1_win_rate([g])["note"]
+    assert "plan §十一（mock 只会自证，这几项不许省）" in note, note
+    assert "§十五" not in note and "§15" not in note, f"没人的桌被说成了有人的桌：{note}"
+
+
+def test_two_games_on_one_read_share_a_seat_kind_list_without_repeating_it(tmp_path, keyboard):
+    """批次侧那句话数的是**跨局摊平**的种类，而那一摊以前只有手填页眉在读。
+
+    `metrics.seat_kinds` 是一个 set 推导。把 `sorted({...})` 换成 `sorted([...])` 时，上面那两条单局
+    用例一条都不会红——`game.open_log` 已经在每一局的页眉里去过一次重了，所以那是一具**等价变异**
+    （`/tmp/mut125.py` 的 W3 量的正是这件事：它红 2 条，不是我预期的 3 条）。只有把两局真日志放到同
+    一张桌上，才问得到"读者看到的那张种类表里 mock 出现一次还是两次"。
+    """
+    games = [metrics.read_game(_played(tmp_path, keyboard, f"pair-{i}", seed=11 + i,
+                                       human="3" if i == 0 else None)) for i in (0, 1)]
+    assert [g.meta["actor_kinds"] for g in games] == [["human", "mock"], ["mock"]]
+    note = metrics.m1_win_rate(games)["note"]
+    assert "本批 2 局全为替身桌" in note, note
+    assert "actor_kinds=['human', 'mock']" in note, (
+        f"两局共用的种类被数了两遍，那一格就不再是'桌上坐着谁'：{note}")
+
+
+@pytest.mark.parametrize("which", ["replay", "watch", "export"])
+def test_every_screen_of_this_game_says_a_person_sat_at_the_table(tmp_path, keyboard, capsys,
+                                                                  which):
+    """三个给人看的出口以前**一个字都没提**（2026-09-25T12:04Z 实测：拿含真人的日志逐屏读过，
+    `replay`、`watch --once`、`export` 的 HTML 里连 "human" 这串都没出现）。
+
+    为什么这一格值得单独一句，而不是并进 `actor_kinds` 那个读数：拿给人看的三屏都在说"这局不可
+    复现，因为端点没有确定性"——桌边坐着一个从不经过端点的人时，那句话的主语根本不在这张桌上。
+    批次那一侧不受影响：`batch` 的参数表里没有 `--human`（本节最后一条），它产不出这种局。
+    """
+    log = _played(tmp_path, keyboard, f"screen-{which}")
+    if which == "export":
+        page = tmp_path / "page.html"
+        assert cli.main(["export", str(log), "--out", str(page)]) == 0
+        text = page.read_text(encoding="utf-8")
+    else:
+        assert cli.main([which, str(log)] + (["--once"] if which == "watch" else [])) == 0
+        text = capsys.readouterr().out
+    assert ROSTER in text, f"{which} 上没有那一席是谁答的：{text[:300]!r}"
+    assert "human" in text, f"{which} 只说了'有个'却说不出的种类：{text[:300]!r}"
+    if which == "export":
+        # 页眉那一串 `⚠` 说的是"这个文件坏了"。桌边坐着一个人什么也没坏，把它标成损坏等于让
+        # 读者去找一个不存在的坏处。
+        assert f"⚠ {ROSTER}" not in text, "页面把'桌边有人'印成了文件损坏"
+
+
+def test_the_same_three_screens_stay_quiet_when_nobody_sat_there(tmp_path, keyboard, capsys):
+    """反向对照：同一份夹具、桌边没有人的那一局，三屏都不许印出那句话。
+
+    少了这一半，`roster_notice` 改成"无条件返回那句话"照样全绿——而它对替身桌是假话（没有哪一席
+    是不经过端点的人答的），读者会以为自己看的是一局人机。实测（2026-09-25T12:18Z，同一个
+    `--seed 7`）：`--human 3` 的日志在 replay/watch/export 上各印 1 次，纯替身日志印 0 次。
+    """
+    log = _played(tmp_path, keyboard, "no-person", human=None)
+    page = tmp_path / "page.html"
+    assert cli.main(["export", str(log), "--out", str(page)]) == 0
+    assert ROSTER not in page.read_text(encoding="utf-8")
+    assert cli.main(["replay", str(log)]) == 0
+    assert ROSTER not in capsys.readouterr().out
+    assert cli.main(["watch", str(log), "--once"]) == 0
+    assert ROSTER not in capsys.readouterr().out
+
+
+def test_the_roster_sentence_has_one_owner_and_reaches_three_screens():
+    """同一句话不许长两种措辞：判据住在 `events.py`，三个出口各自去够它那只手。
+
+    与 `meta_notice`/`empty_notice` 同一个待遇（`test_log_recovery.py` 里那三条 `..._has_one_owner`）。
+    """
+    hits = sorted(p.name for p in Path("src").rglob("*.py")
+                  if ROSTER in p.read_text(encoding="utf-8"))
+    assert hits == ["events.py"], f"这句话被抄到了别处：{hits}"
+    for mod in ("cli.py", "render_html.py", "render_live.py"):
+        src = (Path("src/wolfengine") / mod).read_text(encoding="utf-8")
+        assert "roster_notice" in src, f"{mod} 没走那只手，它印的是自己那份措辞"
+
+
+def test_the_batch_side_still_cannot_claim_a_person_at_its_table():
+    """`--human` 只挂在 `run` 上：批次那张桌构造不出一席真人，所以 §十五 在批次侧是一句**结构**上
+    成立的话，而不是一条要有人记得加的过滤。
+
+    判据从 parser 上取，不从磁盘上 grep：`_rehumanise` 那一类夹具改的是文件，改不了命令行；而
+    "批次的产物就是配对语料"这句一旦哪天 `batch` 也接了真人，就得有人在那里补一条真的剔除。
+    """
+    subparsers = cli.build_parser()._subparsers._group_actions[0].choices
+    assert {"run", "batch", "compare", "gate"} <= set(subparsers), sorted(subparsers)
+    flags = {name: {opt for a in sp._actions for opt in a.option_strings}
+             for name, sp in subparsers.items()}
+    assert "--human" in flags["run"], "run 上的 --human 没了，那这一族的用例全在测空气"
+    for name, opts in sorted(flags.items()):
+        if name != "run":
+            assert "--human" not in opts, (
+                f"{name} 也接了 --human：批次侧那句结构性结论作废，"
+                f"§十五 在那里需要一个真的过滤器（并把这条用例改成断言它）")

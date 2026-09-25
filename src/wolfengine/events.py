@@ -462,3 +462,25 @@ class EventLog:
                 )
             )
         return out, meta
+
+
+def roster_notice(meta: dict[str, Any]) -> str:
+    """One sentence for whoever is about to call a transcript "a game between the models".
+
+    `actor_kinds` is the only place a game records *who* sat at its table, and no human exit read
+    it: measured 2026-09-25T12:04Z against a log with a person at seat 3, `replay`,
+    `watch --once` and the 复盘 page contained neither 「真人」 nor the string "human" — the only
+    un-reproducibility they announced was the endpoint's, whose words are not on that table at all.
+    The clause that excludes such a game from the paired corpus (`metrics.SYNTHETIC_CLAUSE`) is
+    deliberately not quoted here: a screen reader wants to know whose words these are, and that
+    sentence already has exactly one owner on the batch side.
+
+    Owned here, with `meta_notice`/`empty_notice`/`seq_notice`/`torn_notice`, so the three exits
+    cannot grow three wordings of one fact. Placed at the end of the module rather than next to
+    that family because `events.py:332` and `events.py:410` are cited by line number in README.
+    """
+    kinds = meta.get("actor_kinds") or []
+    if "human" not in kinds:
+        return ""
+    return (f"桌边坐着一个真人（actor_kinds={kinds}）：他答的那几席不经过端点，"
+            "这一屏不是九个模型自玩的那一局")
