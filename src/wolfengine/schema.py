@@ -69,7 +69,7 @@ ACT_SYNONYMS = {
     "跟票": "align", "附议": "align", "质疑": "probe", "试探": "probe", "改口": "pivot",
     "转向": "pivot", "听": "listen", "观望": "listen", "弃票": "pass", "过": "pass",
     "跳过": "pass", "刀": "kill", "击杀": "kill", "验": "check", "查验": "check",
-    "救": "save", "毒": "poison", "开枪": "shoot", "发言": "last_words",
+    "救": "save", "毒": "poison", "开枪": "shoot", "发言": "last_words", "讨论": "discuss",
 }
 
 _CN_NUM = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5,

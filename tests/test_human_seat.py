@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import time
 from pathlib import Path
+from typing import get_args
 
 import pytest
 
@@ -31,7 +32,7 @@ from wolfengine import human, phases, rules
 from wolfengine.actors import HumanActor, Proposal
 from wolfengine.cli import render_chronicle
 from wolfengine.events import Kind, PUBLIC
-from wolfengine.schema import ACT_SYNONYMS
+from wolfengine.schema import ACT_SYNONYMS, ActName
 from wolfengine.state import LegalSet, Phase
 
 
@@ -209,6 +210,37 @@ def test_a_bracket_that_opens_the_sentence_is_not_boundary_punctuation():
     assert human.parse_human_line("票 5，先听").speech == "先听"
 
 
+def test_the_last_character_of_what_a_person_typed_stays_in_his_sentence():
+    """每个人打的句子末尾那个标点，从来没进过日志（2026-09-25T14:11Z 实测，`#128` 之前之后一样）。
+
+    `parse_human_line` 在把整行交给 `_lead_seat` 之前做的是 `rest.strip(_SEPARATORS)`，那一刀也从**行尾**
+    啃。前三条读起来无害（少一个句号、少一个感叹号），第四条说明它其实是在编辑那个人说的话：丢掉的是
+    引号，成对符号的另一半还留在正文里。修法只有一处：整行的**开头**可以切，结尾归打字的人自己负责。
+    """
+    for line, want in [("票 3 他昨晚没动手。", "他昨晚没动手。"),
+                       ("投票 5 先听听吧！", "先听听吧！"),
+                       ("弃票 就这样。", "就这样。")]:
+        a = human.parse_human_line(line)
+        assert a is not None and a.speech == want, f"{line!r} 读出了 {a.speech if a else None!r}"
+    b = human.parse_human_line("指控 3 「他是狼」")
+    assert b is not None and b.speech == "「他是狼」", b.speech
+
+
+def test_a_seat_number_that_runs_straight_into_the_sentence_is_refused():
+    """`#128` 的 A7 探针实测那一句红 0 条＝这一支没有证人。补的就是那一条证人。
+
+    2026-09-25T14:11Z 实测：`票3他说得对` 与 `票5号他说得对` 在改前改后都是 `None`。这一支守的是
+    "座位号必须在一个边界上收尾"，它挡掉的是一个字面串有两种读法：紧挨着的「5号他」既可能是 5 号 +
+    「他…」，也可能是「号码」那种另一个词的开头（上一条反例就是那种）。**读错了要落进日志、永远留在
+    那条发言里；读不出来只是再问一遍**，所以这里选再问一遍。
+
+    这条在今天的代码上是绿的，它的红望在电池那一侧：A7 那具刀（删掉这一支）现在必须弄红它。
+    """
+    assert human.parse_human_line("票3他说得对") is None
+    assert human.parse_human_line("票5号他说得对") is None
+    assert human.parse_human_line("票 3 他说得对").speech == "他说得对"
+
+
 def test_the_words_the_player_can_type_are_the_ones_the_ladder_already_knows():
     """可打的词**整张**来自 `ACT_SYNONYMS`：既不少一个（玩家打不出模型认得的词），也不多一个
     （那张表就成了两处）。少一条断言都拦不住"给真人单独加个词"这种顺手改。
@@ -216,6 +248,19 @@ def test_the_words_the_player_can_type_are_the_ones_the_ladder_already_knows():
     wrong = [(zh, en) for zh, en in ACT_SYNONYMS.items()
              if (a := human.parse_human_line(zh)) is None or a.act != en]
     assert not wrong, f"这些词读懂的结果和词表不一致：{wrong[:5]}"
+
+
+def test_every_act_the_engine_can_ask_for_has_a_word_the_player_can_type():
+    """词表可以有多余的词（模型那条梯子认得更多说法），**不可以有缺词的 act**。
+
+    缺一个 act 的坏处不在解析侧——那一行永远读不懂，坏处发生在卡片上：`decision_card` 给这个 act
+    印出一个空词，玩家对着一个空格子打字，最后被引擎代答。这一格的口径是"全不全"，和上面那条
+    "词都对不对"是两件事，所以各钉一条。
+
+    名单取 `get_args(ActName)` 而不是抄一份：`schema.py` 加 act 时抄的那一份不会跟着长。
+    """
+    missing = sorted(set(get_args(ActName)) - set(ACT_SYNONYMS.values()))
+    assert not missing, f"这些 act 玩家一个词都打不出来：{missing}"
 
 
 def test_a_sentence_that_merely_contains_an_act_word_is_not_an_instruction():
@@ -322,6 +367,51 @@ async def test_the_card_offers_only_the_acts_this_turn_can_answer(tmp_path):
     assert "vote" in offered, f"投票轮没给『票』这个字：{offered_words}"
     for seat in sorted(ctx.legal.targets):
         assert str(seat) in human.decision_card(ctx), f"可点名的 {seat} 号没出现在卡片上"
+
+
+async def test_the_card_prints_one_example_and_that_example_parses(tmp_path):
+    """卡片上「后面可以跟你要说的话」是一句关于**怎么打**的话，所以它得有一个真打得通的例子。
+
+    这条不去匹配字符串（那种断言改个说法就红，改错了行为却不红），它把屏上那行示例原样交给解析器：
+    示例一旦被写成「票3他说」这种被解析器打回去的紧挨着法，红的就是这一条。`#129` 那格里"卡片与
+    解析器之间没有读者"从此有了一个。例子**不缩进**，所以它不在"这一轮可以答"那一段里：那一段的
+    边界是两格缩进，例子里那句人话含着一个动作字，进了那段就等于给卡片加了一条没被法官允许的答法。
+    """
+    ctx = await _ctx(tmp_path, phase=Phase.DAY_VOTE, heard=("我同意先听他说完再决定",))
+    card = human.decision_card(ctx)
+    ex = [ln.strip().split("：", 1)[1] for ln in card.splitlines() if ln.strip().startswith("示例：")]
+    assert len(ex) == 1, f"卡片上该有一行示例，实际 {len(ex)} 行：\n{card}"
+    a = human.parse_human_line(ex[0])
+    assert a is not None, f"卡片印的示例被解析器打回去了：{ex[0]!r}"
+    assert a.act in set(ctx.legal.acts) | {"pass"}, f"示例答了一个本轮答不上的动作：{a.act}"
+    assert a.speech, f"示例只教了怎么点名、没教怎么把话接在后面：{ex[0]!r}"
+    assert a.target in set(ctx.legal.targets) | {None}
+
+
+async def test_a_wolf_chat_turn_offers_a_word_and_an_example_that_answer_it(tmp_path):
+    """`#129` 撞到的那一格：狼队夜里只有 `discuss` 一个 act，而它是词表**漏掉**的那一个。
+
+    两格断言的顺序是有意的，这条用例的存在理由就在那个区别里。漏词时示例那一格不是断言失败而是
+    `RuntimeError: coroutine raised StopIteration`（崩在 `agent.py` 里，整桌跟着倒），也就是卡片
+    自己长出了一只没人接的刀；修法是把示例的词接到上面那个循环算好的 `words` 上，缺词就只是没印
+    出这一行。于是"这一轮给的是什么词"必须**先**断言：空词在这里红得起来，而它一旦红，后面的
+    示例那一格也就同时从"崩"变成了"红"。两格都留着，因为将来漏一个 act 时这两格说的是同一件事
+    的两半——屏上没词、也就没例子。
+
+    `LegalSet` 照 `phases.py` 狼聊那一轮的形状手搭（单 act + 可点名同伴），不去跑真相位：真相位
+    得让狼坐在人类席上，那是 `test_run_with_human.py` 那一族的现场，这里只欠一张卡片。
+    """
+    ls = LegalSet(acts=("discuss",), targets=frozenset({4, 5}))
+    ctx = await _ctx(tmp_path, phase=Phase.NIGHT_WOLF, legal=ls)
+    card = human.decision_card(ctx)
+    words = _offer_block(card).split(" 后面可以跟")[0]
+    assert words.strip(), f"卡片给这一轮印了一个空词：\n{card}"
+    for zh in words.split("/"):
+        a = human.parse_human_line(zh)
+        assert a is not None and a.act == "discuss", f"屏上这个词答不上本轮：{zh!r} → {a}"
+    ex = [ln.split("：", 1)[1] for ln in card.splitlines() if ln.startswith("示例：")]
+    assert len(ex) == 1, f"卡片上该有一行示例，实际 {len(ex)} 行：\n{card}"
+    assert human.parse_human_line(ex[0]) is not None, f"示例打不通：{ex[0]!r}"
 
 
 async def test_the_screen_says_what_this_seat_was_allowed_to_hear(tmp_path):

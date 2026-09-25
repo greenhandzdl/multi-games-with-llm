@@ -4483,8 +4483,8 @@ GREEN 02:04:27Z → 死端点重跑 02:04:45Z → 全套 02:05:22Z→02:06:18Z�
 | K3 只要有轮次就拒（去掉 `== n_turns` 那半条件） | 击杀（8 红） | 含 `test_the_gate_returns_a_verdict_for_every_pre_registered_criterion` 与 `test_a_measured_failure_is_not_hidden_behind_a_missing_reading` |
 | K4 把拒绝写成 `ok=False`（"没测到"混成"不合格"） | 击杀（4 红） | `test_a_batch_the_engine_answered_for_cannot_be_certified_not_passive` 与 `test_relabelling_a_mock_batch_cannot_turn_the_m3_gate_green` 等 |
 | K5 删掉 refusal 文案、只留 `ok=None` | 击杀（2 红） | `test_a_batch_the_engine_answered_for_cannot_be_certified_not_passive`（`"引擎" in note`） |
-| K6 渲染器不认 refusal，把"不计"印成"无读数" | **第一遍存活** → 补 `test_a_refused_criterion_is_not_printed_as_a_missing_reading` 后击杀 |
-| K7 次分母抄主分母（`n_engine_calls = n_engine_turns`） | **第一遍存活** → 补 `test_the_engine_share_counts_calls_separately_from_turns` 后击杀 |
+| K6 渲染器不认 refusal，把"不计"印成"无读数" | **第一遍存活** → 补用例后击杀 | `test_a_refused_criterion_is_not_printed_as_a_missing_reading` |
+| K7 次分母抄主分母（`n_engine_calls = n_engine_turns`） | **第一遍存活** → 补用例后击杀 | `test_the_engine_share_counts_calls_separately_from_turns` |
 
 两处预期落空，各记一句。K2 我押它活，理由是"没有任何闸门用例造过 `rung>=0 且 fallback=1` 的发言"——
 这句是对的，但方向反了：真桌上 `rung=-1` 与 `fallback=1` 几乎不相交（314 对 3），所以读错键会翻掉
@@ -4653,7 +4653,7 @@ K5 要按样子读：它确实被杀，但**不是一把能定位证人的刀**�
 * **EOF 是一个名字，不是一次代答**：`Proposal(failure="human_input_closed")` 让"这个人走了"落进
   `attempts[]`，而引擎替他做的是 `pass`（`default_action` 的口径），不是替谁编一票。
 
-十用例在 `tests/test_human_seat.py`（16 条，一秒钟内，不发请求；这一片落地的是其中前十条，`#124`
+十用例在 `tests/test_human_seat.py`（21 条，一秒钟内，不发请求；这一片落地的是其中前十条，`#124`
 又在这份文件里加了两条屏上局况的）。八具变异加两具负控制照
 `/tmp/mut122.py`（2026-09-25T10:33Z，每具点名它期望弄红的那条，跑完按字节 `cmp` 还原，前后基准都是
 0 红，pyc 前缀每轮换新）：
@@ -4806,7 +4806,7 @@ stdin 用管道喂三行后就是 EOF）里，3 号那六回合各自说的是�
 
 ### 这一片的两条主张各自住在哪个文件
 
-"该在的在"是 `tests/test_human_seat.py`（16 条）：他听过的两句原话上了屏、屏上说了是谁说的、窗口
+"该在的在"是 `tests/test_human_seat.py`（21 条）：他听过的两句原话上了屏、屏上说了是谁说的、窗口
 的**方向**（砍的是最旧的）、以及标题上那个"最近 N 条"和屏上真的条数是同一个数。
 "不该在的不在"是 `tests/test_info_isolation.py`（10 条函数、跑起来 34 个用例，其中三条是这一片新加的，
 展开成 15 个断言）：原来那张板的五条私有
@@ -4960,7 +4960,7 @@ E1 只剩我自己那 4 条、E3 只剩那 1 条，而 P1 那把位置刀在**�
   同一个检查上失败（实测 `票5号他说` 改前改后都是 `None`）。这一片没为这次删除下刀——没有行为差异
   可红，就是等价改动的定义。
 
-四条新用例（`tests/test_human_seat.py` 从 12 条长到 16 条，全在本地、一次请求不发）：隔空格的单位
+四条新用例（`tests/test_human_seat.py` 那一片从 12 涨到 16，全在本地、一次请求不发）：隔空格的单位
 三种写法各一条断言、行尾收在单位上、「号码」那把刀的反例、开括号那一格。
 
 九具刀（五正、三负、一探针）照 `/tmp/mut128.py`（2026-09-25T13:52Z，产物 `/tmp/bat128d.out`，EXIT=0，
@@ -5001,11 +5001,109 @@ A7 是这一片留下的**登记项而不是缺陷**：那一句严格性判据�
 
 前三条读起来无害，第四条说明它不是无害而是**在编辑那个人说的话**：丢的是引号，成对符号的另一半还
 留在正文里。这一片没动它——动它要重写"整行的首尾"和"边界"两处共用一张表的那个决定，而那条决定
-正是 A8 对着的东西。`#129` 一并接：行尾那个标点、卡片承诺与解析器的差、A7 那支没有证人的严格性。
+正是 A8 对着的东西。`#129` 一并接：行尾那个标点、卡片承诺与解析器的差、A7 那支没有证人的严格性（三格已由下一节接掉）。
 
-**这一片没有动的**：`#127` 原样；`#129` 三格（上表）；混合桌仍然端点阻塞。`coerce_seat` 认 `P3`
+**这一片没有动的**：`#127` 原样；`#129` 三格（上表，已由下一节接掉）；混合桌仍然端点阻塞。`coerce_seat` 认 `P3`
 （实测返回 3），而 `_lead_seat` 不把它当座位引用——真人打「票 P3」读出的是 `target=None` 加一句
 `P3`。卡片没有教人这么打，所以它是文档里的一处口径差，不是缺陷。
+
+### 那一行字的三格账：行尾的句号、卡片印的例子、词表漏掉的那个动作，`#129`
+
+`#128` 收尾时量出来的那三格，这一片一次接掉。三条都不是"引擎算错了"，是**一个人打字的那一行
+进了系统之后，被人替着改了、被卡片许空了、或者根本打不出来**。
+
+**第一格：行尾那个标点从来没进过日志。** `parse_human_line` 在把剩下的部分交给 `_lead_seat`
+之前做的是 `rest.strip(_SEPARATORS)`——同一张表既从行首切边界、也从行尾啃字。2026-09-25T14:26Z
+实测（HEAD 与现在各跑一次同一份探针 `/tmp/probe129.py`）：
+
+| 打进去的一行 | 改前落盘的 speech | 现在 |
+|---|---|---|
+| `票 3 他昨晚没动手。` | `他昨晚没动手` | `他昨晚没动手。` |
+| `投票 5 先听听吧！` | `先听听吧` | `先听听吧！` |
+| `弃票 就这样。` | `就这样` | `就这样。` |
+| `指控 3 「他是狼」` | `「他是狼` | `「他是狼」` |
+| `票3他说得对` | `None` | `None`（没动） |
+| `票5号他说得对` | `None` | `None`（没动） |
+
+前三条读起来只是少一个句号，第四条才是这一格的真名字：**丢的是引号，成对符号的另一半还留在正文
+里**，那是把一个人说的话改成了另一个人会说的话。修法一个字符：`strip` → `lstrip`，边界只在开头，
+结尾归打字的人自己负责。
+
+`#128` 那一节里有两处旧读数归这一格管：末尾"这一片没动的"那一段引的四行（`speech='他昨晚没动手'`
+那族），和中段那句「两个引号都没了，比修之前更坏」。两句都是**改之前**的实照，按原样留着不改——
+上面那张表的右列就是它们的后继，"更坏"那一格今天两头引号都在。
+
+**第二格：卡片上那句「后面可以跟你要说的话」没有例子。** 那是一句关于**怎么打**的承诺，而这一片
+之前卡片和解析器之间零读者。现在卡片末尾多一行不缩进的 `示例：票 1 我先记着，回头再说`，证人
+不是去匹配那串字，而是把它原样喂回 `parse_human_line`：断言它读得通、动作在这一轮允许集合里、
+带一句话、点的名在可点名清单里。例子刻意不缩进——那一屏"这一轮可以答"的边界是两格缩进，例子
+进那段就等于给卡片加了一条法官没批的答法。
+
+**第三格是最贵的：`discuss` 在词表里根本没有词。** 接线上的例子时，`test_run_with_human.py` 里
+一条读侧用例当场崩了——`RuntimeError: coroutine raised StopIteration`，崩在 `agent.py`，
+而根因是 `decision_card` 里那句 `next(zh for … if en == demo)`：`ACT_SYNONYMS` 有 29 个词、覆盖
+14 个 act，`ActName` 有 15 个，缺的就是 `discuss`（狼队夜里那一轮唯一的动作）。也就是说真人坐在
+狼席上时，卡片给他印的是一个**空格子**，而他除了被引擎代答没有第二条路。两个动作：词表补
+`"讨论": "discuss"`（30 词 → 15 act，`get_args(ActName) - set(values)` 现在为空），以及例子的词
+不再自己二次查表，改用上面那个循环算好的 `words`——缺词从"崩掉整桌"降级成"那一行没印出来"，
+而没印出来是有断言可红的。
+
+新增五条用例（`tests/test_human_seat.py` 21 条）：`test_the_last_character_of_what_a_person_typed_stays_in_his_sentence`、
+`test_a_seat_number_that_runs_straight_into_the_sentence_is_refused`（今天绿，红望在电池那一侧，见下）、
+`test_the_card_prints_one_example_and_that_example_parses`、
+`test_a_wolf_chat_turn_offers_a_word_and_an_example_that_answer_it`、
+`test_every_act_the_engine_can_ask_for_has_a_word_the_player_can_type`。
+
+七具刀（四正、两负、一探针）照 `/tmp/mut129.py`，跑了两轮：pass 1 `/tmp/bat129a.out`（写完于
+14:37Z，`EXIT=143`——半径那一步之前被中断）、pass 2 `/tmp/bat129b.out`（15:01Z，`EXIT=0`，
+七具全判定 + 收尾基线 `194 passed`）。判定行两轮逐字一致：
+
+| 刀 | 结果 |
+|---|---|
+| B1 行尾又被人啃掉一格（`lstrip`→`strip`） | 红 1 条 = `test_the_last_character_of_what_a_person_typed_stays_in_his_sentence`，两轮同 |
+| B2 座位号紧挨正文也算指令（`#128` 的 A7 那一支） | 红 1 条 = `test_a_seat_number_that_runs_straight_into_the_sentence_is_refused` |
+| B3 卡片不再印示例 | 红 2 条 = `test_the_card_prints_one_example_and_that_example_parses` 与 `test_a_wolf_chat_turn_offers_a_word_and_an_example_that_answer_it` |
+| B4 负控制：例子改取最后一个词 | 活着（`rc=0`）——主张是"打得通"，不是拼写 |
+| B5 探针：例子不再优先挑能点名的 act | 活着（`rc=0`）：**登记成新缺口**，见本节末 |
+| B6 词表漏回 `discuss` | 红 2 条 = `test_a_wolf_chat_turn_offers_a_word_and_an_example_that_answer_it` 与 `test_every_act_the_engine_can_ask_for_has_a_word_the_player_can_type` |
+| B7 负控制：`discuss` 多一个词 | 活着（`rc=0`），pass 2 才跑到的那一具 |
+
+## 半径这一格：名字集作数，时间不作数
+
+全量半径只对 B1、B6 两具量（变异体还在盘上时跑整套 `tests/`）：**B1 = 1 条、B6 = 2 条**。名字集
+取自 pass 2 打印的红名单，计数与 pass 1 的 `[k0-all] 1 failed` / `[k5-all] 2 failed` 相互对上。
+也就是说这一片改的那段落盘文本只有 `test_human_seat.py` 里那一条读；词表那一格有两条，其中一条
+是这一片新加的"每个 act 都有能打的词"。
+
+同一轮里那个 63 → 292 秒（4.6 倍）**不发布**，理由不是它算错而是它不可归因：同样这 194 条七文件
+范围，pass 1 开跑时 1.38 秒跑完，pass 2 开跑时 20.33 秒——机器自己的基准在两轮之间挪了 15 倍
+（当时 `vm.loadavg` 59.7，占 CPU 前列的是浏览器与容器，没有一个是这套测试）。在这种斜率上，一具刀
+的 4.6 倍和外面进程的 15 倍是同一个形状。要坐实"缺一个词会拖慢测试"，得在负载回落后把三档各复跑
+取中位数——这一格记在提交说明里，不在结论里。
+
+**B1 那一格两跑对不上，多出来的名字已定性，不算读者。** pass 2 的 B1 红名单比 pass 1 多一条
+`test_a_finished_batch_prints_its_line_and_exits_0`（批次收尾那一行，住在
+`tests/test_loopback_endpoint.py`）。单独复跑把它咬住后拿到的失败文本是
+`rc=1 out='批次 -> …（2 局日志，seed0=11，canary INVALID_DRIFT，终态 INVALID_DRIFT）…'`，
+而那份批次目录留下的 `drift.md` 写着 `异常探针：latency×0.14`、中位延迟比 0.137、**五个探针的
+批首答案与批尾答案逐字相同**。`report.py:315` 那条 `latency×` 追加与 `report.py:310` 的 `:answer`
+是两回事：这条红走的是延迟闸门，不是内容。而 `parse_human_line` 在生产链上只有一个调用者
+（`actors.py:357` 那一行），批次侧没有 HumanActor——一具改人话解析的刀没有路径去动端点延迟。
+所以半径发布为 1，这一条记成"canary 的延迟通道对机器负载敏感"的又一例：同一只手、同一个理由，
+也是上面那个 4.6 倍不发布的理由。**一具刀弄红一条、而我说不清它为什么红的，不算证据。**
+
+**B2 是把上一片的登记项结掉的。** `#128` 那表里 A7 红 0 条＝"数字后面紧跟的不是分隔符 ⇒ 整行
+不算指令"这一支没有证人；这一片给它补了 `test_a_seat_number_that_runs_straight_into_the_sentence_is_refused`，
+同一具刀现在必须弄红它——红了才说明那条严格性判据真的有人守，也才说明它是**选择**而不是疏忽。
+选它的理由和 #128 同一句：读错了要落进日志、永远留在那条发言里；读不出来只是再问一遍。
+
+**B5 开出来的新缺口**：例子挑哪一个 act 印（优先挑能点名的那个）现在没有证人——把那个 `not`
+加回去，194 条一条不红。这一片的例子只在"恰好是 `vote`"这一种挑法下被测过。
+
+**这一片没有动的**：`#127` 那格原样（卡片上"会被引擎代答一次"与实测仍对不上：出厂
+`max_repair_retries=1` 下第一次打回是再问一遍，第二次才代答），以及 `discuss` 带着 target 落盘
+却没人读（`legality.py` 对 targetless act 压根不看 target，`compress.py` 的狼聊那一支只印
+`_said(p)`）——记成 `#130`。
 
 ## 这个仓库现在能做什么、不能做什么
 

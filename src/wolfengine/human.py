@@ -72,7 +72,10 @@ def parse_human_line(line: str) -> Action | None:
         if target is None:
             return None
     else:
-        target, speech = _lead_seat(rest.strip(_SEPARATORS))
+        # Only the *head* of what is left is a boundary; the tail belongs to the sentence. A `.strip`
+        # here used to eat the period (and the closing quote) off every line a person typed, editing
+        # his words on the way into the log.
+        target, speech = _lead_seat(rest.lstrip(_SEPARATORS))
     return Action(act=ACT_SYNONYMS[token], target=target, speech=(speech or "").strip())
 
 
@@ -119,6 +122,9 @@ def decision_card(ctx: "TurnContext") -> str:
       silently *drops* a legal act takes a choice away from him. The offered acts are therefore
       a block with its own header: once the chronicle is on the screen too, scanning the whole
       card for act words would be counting what the judge said, not what the player was offered.
+      The block is followed by one worked example, left unindented so it is not part of it — "you
+      may add your sentence after the seat" is only actionable as a line that really parses, and
+      a sentence of Chinese contains act words.
     * The assigned speech act is named, with what refusing it costs. `legality.py` treats that
       field as hard even in a soft phase; a player who is not told is being decided for
       without knowing it.
@@ -134,8 +140,10 @@ def decision_card(ctx: "TurnContext") -> str:
     out.append(f"局况（你看得见的最近 {len(heard)} 条）：")
     out.extend(f"  {line}" for line in heard)
     out.append(OFFER_HEADER)
+    typed = {}
     for act in allowed:
         words = "/".join(zh for zh, en in ACT_SYNONYMS.items() if en == act)
+        typed[act] = words.split("/")[0] if words else ""
         out.append(f"  {words}" + ("" if act in TARGETLESS_ACTS else " 加座位号")
                    + " 后面可以跟你要说的话")
     if legal.assigned_act:
@@ -145,6 +153,17 @@ def decision_card(ctx: "TurnContext") -> str:
         out.append("可点名的座位：" + "、".join(str(s) for s in sorted(legal.targets)))
     else:
         out.append("本轮没有可点名的座位。")
+    # 「后面可以跟你要说的话」 only becomes actionable as a line somebody can copy, and the copy has
+    # to be one this turn can actually answer with: a real act from `allowed`, a real namable seat.
+    # The word is the one the offer block above just printed — looked up, not re-derived. A second
+    # `next(...)` over `ACT_SYNONYMS` here crashed on `discuss`, an act the table had no word for:
+    # the card then raised instead of showing an empty slot, and an empty slot is the *reportable*
+    # failure (`test_human_seat.py` reddens on it; a crash takes the whole table down with it).
+    demo = next((a for a in allowed if a not in TARGETLESS_ACTS and legal.targets),
+                next((a for a in allowed if a in TARGETLESS_ACTS), None))
+    if word := typed.get(demo, ""):
+        seat = f" {sorted(legal.targets)[0]}" if demo not in TARGETLESS_ACTS else ""
+        out.append(f"示例：{word}{seat} 我先记着，回头再说")
     return "\n".join(out)
 
 
