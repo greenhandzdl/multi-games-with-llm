@@ -6,7 +6,9 @@ to deliberately delete a guard, not to forget a filter. This is the module that 
 product's whole premise (information asymmetry) enforceable instead of requested.
 
 Corollary that matters for the seat abstraction: a human player is handed the *same*
-`Percept` object, so the human UI cannot leak either, because the data isn't in it.
+`Percept` object, so the human UI cannot leak either, because the data isn't in it. Since `#124`
+that is a tested claim about the *screen* and not only about the object: the canaries in
+`tests/test_info_isolation.py` are asserted against the bytes `human.decision_card` renders, too.
 """
 
 from __future__ import annotations

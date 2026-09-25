@@ -18,7 +18,7 @@ import dataclasses
 
 import pytest
 
-from wolfengine import assemble, belief, info, persona, state
+from wolfengine import actors, assemble, belief, human, info, persona, state
 from wolfengine.config import Config
 from wolfengine.events import Event, Kind, PUBLIC, seats
 
@@ -32,12 +32,13 @@ def _event(seq: int, kind: str, *, day: int = 1, visibility=PUBLIC,
                  visibility=visibility, payload=dict(payload), actor=actor)
 
 
-def _prompt_bytes(seat: int, events: tuple[Event, ...], at_seq: int) -> str:
-    """The exact bytes this seat would be asked to read, at this moment in the game.
+def _ctx_for(seat: int, events: tuple[Event, ...], at_seq: int):
+    """The real `TurnContext` this seat would be handed at this moment.
 
-    Assembled rather than filtered-by-hand: the claim under test is about the prompt, so a
-    test that only checked `Percept.events` would miss a renderer that goes looking for its
-    own facts elsewhere.
+    One builder for both readers — the prompt and the screen a person reads — because two
+    fixtures would let a leak found in one be an artifact of the other. Assembled rather than
+    filtered-by-hand: the claim under test is about what a seat is *shown*, so a test that only
+    checked `Percept.events` would miss a renderer that goes looking for its own facts elsewhere.
     """
     percept = info.percept_for(seat, events, at_seq=at_seq)
     bs = belief.build_belief(seat, percept.events)
@@ -47,7 +48,24 @@ def _prompt_bytes(seat: int, events: tuple[Event, ...], at_seq: int) -> str:
         cfg=CFG, percept=percept, seat_role=percept.role(),
         persona=persona.PersonaParams(), belief=bs, legal=legal,
         phase=state.Phase.DAY_SPEECH)
-    return "\n".join(m["content"] for m in p.messages)
+    return actors.TurnContext(
+        seat=seat, role=percept.role(), phase=state.Phase.DAY_SPEECH,
+        percept=percept, legal=legal, persona=persona.PersonaParams(), prompt=p, belief=bs)
+
+
+def _prompt_bytes(seat: int, events: tuple[Event, ...], at_seq: int) -> str:
+    ctx = _ctx_for(seat, events, at_seq)
+    return "\n".join(m["content"] for m in ctx.prompt.messages)
+
+
+def _card_bytes(seat: int, events: tuple[Event, ...], at_seq: int) -> str:
+    """The same seat's world, rendered for a person instead of a model.
+
+    `#124`: the isolation guarantee was only ever proven on the prompt path. A human seat reads a
+    screen built by a different function, and "it uses the same `Percept`" is a claim about bytes
+    until something checks the bytes.
+    """
+    return human.decision_card(_ctx_for(seat, events, at_seq))
 
 
 def _board() -> tuple[Event, ...]:
@@ -129,6 +147,51 @@ def test_reverse_control_a_deliberate_leak_is_caught():
     victim = 6  # a villager with no claim on the wolf channel
     assert "CANARY_WOLFCHAT_12" not in _prompt_bytes(victim, BOARD, LAST_SEQ)
     assert "CANARY_WOLFCHAT_12" in _prompt_bytes(victim, leaked, LAST_SEQ)
+
+
+# ------------------------------------------------------- the same board, on a person's screen
+#
+# `info.py`'s module docstring claims a human seat "cannot leak either, because the data isn't in
+# it". That was true of the *object* and untested about the *screen* — and the screen is what a
+# person reads. These three are that claim's witnesses; the first two mirror the prompt tests
+# exactly so a green here means the same property, not a weaker one.
+
+
+@pytest.mark.parametrize("canary,entitled", CANARIES, ids=[c for c, _ in CANARIES])
+def test_the_screen_holds_exactly_what_this_seat_was_allowed_to_know(canary, entitled):
+    for seat in ALL_SEATS:
+        shown = canary in _card_bytes(seat, BOARD, LAST_SEQ)
+        assert shown == (seat in entitled), (
+            f"{canary} {'leaked onto' if shown else 'missing from'} seat {seat}'s screen")
+
+
+@pytest.mark.parametrize("seat", ALL_SEATS)
+def test_the_screen_names_the_role_this_seat_was_dealt_and_nobody_elses(seat):
+    """The header line is the one place the card does *not* render events, so it needs its own
+    assertion: `ctx.role` is read back out of this seat's own DEAL by `percept_for`, and a card
+    that printed another seat's role would leak without touching the transcript."""
+    card = _card_bytes(seat, BOARD, LAST_SEQ)
+    assert f"CANARY_DEAL_{1 + seat}" in card, f"seat {seat} 的卡片上没有自己的身份"
+    for other in ALL_SEATS:
+        if other != seat:
+            assert f"CANARY_DEAL_{1 + other}" not in card
+
+
+def test_reverse_control_a_deliberate_leak_reaches_the_screen_too():
+    """The screen's version of the control above, and it carries a second job.
+
+    The card shows a *window* of the transcript (`human.SCREEN_TAIL`), so an event that fell out
+    of the window would make the "leaked" half of a canary test unachievable — the absence
+    assertion would pass for the wrong reason. This one asserts the leak does show up, which is
+    only possible while the canary sits inside the window: grow this board past
+    `SCREEN_TAIL` and it goes red and says so, instead of quietly degrading the tests above.
+    """
+    leaked = tuple(
+        dataclasses.replace(e, visibility=PUBLIC) if e.kind == Kind.WOLF_CHAT else e
+        for e in BOARD)
+    victim = 6
+    assert "CANARY_WOLFCHAT_12" not in _card_bytes(victim, BOARD, LAST_SEQ)
+    assert "CANARY_WOLFCHAT_12" in _card_bytes(victim, leaked, LAST_SEQ)
 
 
 def test_percept_refuses_to_be_constructed_with_someone_elses_event():

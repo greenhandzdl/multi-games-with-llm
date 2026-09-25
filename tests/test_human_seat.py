@@ -91,6 +91,23 @@ class _Capture:
         return Proposal(failure="capture_only")
 
 
+def _offer_block(card: str) -> str:
+    """卡片上"这一轮可以答"那一段，缩进的两格就是它的边界。
+
+    为什么不让它继续扫整张卡片：`#124` 之后屏上有局况，而局况是中文散文——"出局""发言""听"
+    都在这张词表里，扫全文等于让法官的一句话替一个动作背书。Offer 段可辨认之后，那条断言
+    才真的在说"列出来的动作 = 闸门答得上的动作"。
+    """
+    lines = card.splitlines()
+    start = lines.index(human.OFFER_HEADER)
+    body = []
+    for line in lines[start + 1:]:
+        if not line.startswith("  "):
+            break
+        body.append(line)
+    return "\n".join(body)
+
+
 async def _turn(tmp_path, lines, *, seat=3, phase=Phase.DAY_VOTE, kind=Kind.VOTE,
                 legal: LegalSet | None = None):
     """让真 `HumanActor` 坐在 3 号位答一轮，返回 (agent, log, console, outcome)。"""
@@ -104,9 +121,16 @@ async def _turn(tmp_path, lines, *, seat=3, phase=Phase.DAY_VOTE, kind=Kind.VOTE
     return agent, log, console, outcome
 
 
-async def _ctx(tmp_path, *, seat=3, phase=Phase.DAY_VOTE, legal: LegalSet | None = None):
-    """玩家那一席真会被递给的一张 `TurnContext`。"""
+async def _ctx(tmp_path, *, seat=3, phase=Phase.DAY_VOTE, legal: LegalSet | None = None,
+               heard: tuple[str, ...] = ()):
+    """玩家那一席真会被递给的一张 `TurnContext`。
+
+    `heard` 是先落进日志的公开发言（4 号说的）：`#124` 之前这一屏只读 `LegalSet`，递进去的
+    `percept` 没有读者，所以"这一席听到了什么"这件事在卡片上一格都没有。
+    """
     cfg, state, log, agent, _, _ = _table(_desk(tmp_path, "ctx"))
+    for text in heard:
+        log.append(Kind.SPEECH, day=state.day, phase=str(phase), actor=4, text=text)
     state.phase = phase
     ls = rules.legal_actions(state, seat) if legal is None else legal
     cap = _Capture()
@@ -222,14 +246,55 @@ async def test_a_closed_input_ends_the_turn_and_says_which_hand_answered(tmp_pat
 
 # ------------------------------------------------------------------------- 玩家看到的那一屏
 async def test_the_card_offers_only_the_acts_this_turn_can_answer(tmp_path):
-    ctx = await _ctx(tmp_path, phase=Phase.DAY_VOTE)
-    card = human.decision_card(ctx)
+    """`heard` 里那句发言带着一个**这一轮答不上**的动作词（"出局"=accuse，投票轮闸门不收），
+    且整句不含数字——否则下面那条"每个可点名的座位都上了卡片"就会由着法官的散文蒙对。
+
+    这句发言同时是"局况必须落在 Offer 段之外"的证人：那一段一旦被挪进两格缩进里，
+    `offered` 就会多出一个 accuse，这条立刻红。
+    """
+    ctx = await _ctx(tmp_path, phase=Phase.DAY_VOTE, heard=("有人喊先出局一个再说",))
+    offered_words = _offer_block(human.decision_card(ctx))
     allowed = set(ctx.legal.acts) | ({"pass"} if ctx.legal.allow_pass else set())
-    offered = {en for zh, en in ACT_SYNONYMS.items() if zh in card or en in card}
-    assert offered <= allowed, f"卡片给了这一轮答不了的词：{sorted(offered - allowed)}"
-    assert "vote" in offered, f"投票轮没给『票』这个字：{card}"
+    offered = {en for zh, en in ACT_SYNONYMS.items() if zh in offered_words}
+    assert offered == allowed, (
+        f"卡片列的与闸门答得上的不是一张表：多 {sorted(offered - allowed)}、"
+        f"少 {sorted(allowed - offered)}")
+    assert "vote" in offered, f"投票轮没给『票』这个字：{offered_words}"
     for seat in sorted(ctx.legal.targets):
-        assert str(seat) in card, f"可点名的 {seat} 号没出现在卡片上"
+        assert str(seat) in human.decision_card(ctx), f"可点名的 {seat} 号没出现在卡片上"
+
+
+async def test_the_screen_says_what_this_seat_was_allowed_to_hear(tmp_path):
+    """`#124` 的前半：那一屏不再只回答"这一轮能答什么"，也回答"发生过什么"。
+
+    读的是 `ctx.percept`——和模型同一只手（`agent.py` 给每种座位都调 `percept_for`），而**不**是
+    自己再去翻日志。后半句（"只到他有权的那部分"）在 `test_info_isolation.py` 里用金丝雀钉，
+    两句话各自可失败，所以不并成一条。
+    """
+    heard = ("4 号昨夜整晚没出声，我想先问他", "我同意先听他说完再决定")
+    ctx = await _ctx(tmp_path, phase=Phase.DAY_SPEECH, heard=heard)
+    card = human.decision_card(ctx)
+    for text in heard:
+        assert text in card, f"他听到的那句话没上屏：{text}\n{card}"
+    assert "4号" in card, f"上了屏却没说是谁说的：{card}"
+
+
+async def test_the_screen_block_is_a_window_not_the_whole_transcript(tmp_path):
+    """窗口是**有意的**，所以它也得有一条断言：一个人面前不该堆一百行。
+
+    这条同时是 `SCREEN_TAIL` 这个常数的第二个读者：它若被改成一个不存在的数，上面那两条
+    "该在的在"仍然全绿，只有这一条会问"为什么第 1 条不在了"。
+    """
+    heard = tuple(f"这是第 {i} 句公开发言内容" for i in range(1, human.SCREEN_TAIL + 3))
+    ctx = await _ctx(tmp_path, phase=Phase.DAY_SPEECH, heard=heard)
+    card = human.decision_card(ctx)
+    shown = [t for t in heard if t in card]
+    assert shown, "一屏里一条局况都没有"
+    assert len(shown) < len(heard), "整份记录都上了屏：这一屏该是窗口，不是复盘"
+    assert heard[-1] in card, "窗口砍掉的是最近的发言，方向反了"
+    # 标题上那个"最近 N 条"是要给人看的数，所以它也得和屏上真的条数一致：改成一个不匹配的数
+    # 就等于在卡片上写了一句假话，而这句话目前只有这一条读者。
+    assert f"最近 {len(shown)} 条" in card, f"标题说了一个数，屏上是另一个数：{card.splitlines()[1]}"
 
 
 async def test_the_card_says_what_the_judge_assigned_and_what_refusing_costs(tmp_path):

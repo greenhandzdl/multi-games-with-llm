@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .compress import render_line
 from .legality import TARGETLESS_ACTS
 from .schema import ACT_SYNONYMS, Action, coerce_seat
 
@@ -38,6 +39,12 @@ _ACT_TOKENS = sorted(ACT_SYNONYMS, key=len, reverse=True)
 _SEAT_CHARS = frozenset("0123456789一二两三四五六七八九十")
 _SEPARATORS = " \t，,、。．.：:；;！!？?（）()「」『』“”\"'—-…"
 _CN_SUFFIXES = ("号位", "号", "位")
+
+OFFER_HEADER = "这一轮可以答："
+# A person reads one screen, not a transcript: the recap is for `replay`, this is for deciding.
+# Sized to the shortest turn that still needs context — a seat picking a ballot has to have seen
+# the speeches it is answering, and nine seats speaking once each is the normal-case window.
+SCREEN_TAIL = 12
 
 
 def parse_human_line(line: str) -> Action | None:
@@ -92,20 +99,31 @@ def _lead_seat(text: str) -> tuple[int | None, str]:
 
 
 def decision_card(ctx: "TurnContext") -> str:
-    """The screen a player reads before answering: only what *this* turn can be answered with.
+    """The screen a player reads before answering: what happened, then what he can answer with.
 
-    Two rules shape it, and both are checked by `tests/test_human_seat.py`:
+    Three rules shape it. The first two are checked by `tests/test_human_seat.py`, the third by
+    `tests/test_info_isolation.py`:
 
     * Every word offered comes from `ACT_SYNONYMS` and only for an act in `ctx.legal`. A card
       that offers what the gate will refuse is a retry paid for by the player, and a card that
-      silently *drops* a legal act takes a choice away from him.
+      silently *drops* a legal act takes a choice away from him. The offered acts are therefore
+      a block with its own header: once the chronicle is on the screen too, scanning the whole
+      card for act words would be counting what the judge said, not what the player was offered.
     * The assigned speech act is named, with what refusing it costs. `legality.py` treats that
       field as hard even in a soft phase; a player who is not told is being decided for
       without knowing it.
+    * The chronicle is `ctx.percept`'s tail, rendered by the one renderer (`compress.render_line`)
+      and never re-selected from the log. A seat that cannot see a fact must not read it here
+      either — which is why this reads the same `Percept` object a model seat is given rather
+      than reaching for `log.all()`.
     """
     legal = ctx.legal
     allowed = list(legal.acts) + (["pass"] if legal.allow_pass else [])
     out = [f"轮到你了：{ctx.seat} 号" + (f"（{ctx.role}）" if ctx.role else "")]
+    heard = [render_line(e) for e in ctx.percept.tail(SCREEN_TAIL)]
+    out.append(f"局况（你看得见的最近 {len(heard)} 条）：")
+    out.extend(f"  {line}" for line in heard)
+    out.append(OFFER_HEADER)
     for act in allowed:
         words = "/".join(zh for zh, en in ACT_SYNONYMS.items() if en == act)
         out.append(f"  {words}" + ("" if act in TARGETLESS_ACTS else " 加座位号")
