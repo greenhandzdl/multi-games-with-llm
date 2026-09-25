@@ -177,6 +177,11 @@ def decision_card(ctx: "TurnContext") -> str:
     legal = ctx.legal
     allowed = list(legal.acts) + (["pass"] if legal.allow_pass else [])
     out = [f"轮到你了：{ctx.seat} 号" + (f"（{ctx.role}）" if ctx.role else "")]
+    mates = sorted(ctx.percept.teammates())
+    if mates:
+        # 狼队友名册独立成一行，不靠局况里那条发牌：局况只有 `SCREEN_TAIL` 条，打到第 13 条
+        # 事件之后那张牌就从人眼前滚走了，而他的队友不会因此变少。
+        out.append("你的队友是 " + "、".join(f"{s}号" for s in mates) + "。")
     if ctx.refusal:
         # First thing after his own name: he read the recap once already, and what changed is the
         # verdict on his own line, not the world.

@@ -971,6 +971,29 @@ def test_the_wolf_chat_line_shows_the_seat_being_point_at():
         == "[e9] 狼队私聊 1号：今晚动手。"
 
 
+def test_the_deal_line_says_who_is_on_your_team():
+    """形状表给 `deal` 声明了 `teammates`，写侧也在写（`game.py:134`），渲染层却只印到身份为止。
+
+    这一格和 `#130` 那一格是同一种坏法：落盘了、没人念。区别在于这里的代价是牌桌上的一个事实——
+    狼不知道自己跟谁一伙。实测 12 局 mock（`/tmp/probe133.py`，17:02Z）：74 次问狼里 12 次
+    percept 里认不出任何队友，而且**每局都恰好一次**，就是 `phases.py:137` 那个先开口的 proposer，
+    他在任何一条私聊落盘之前就得决定今晚刀谁。补这一行只改一处：`--god` 时间线、直播、复盘 HTML
+    和真人屏上的局况四台机器共用 `render_line`，写一次就全都念得到。**模型 prompt 不在这四条出口
+    里**：`chronicle()` 只留公开事件，C 段那块私有信息又明写着 `e.kind != Kind.DEAL`，那一格是
+    `#134`，不在这一片里顺手。
+    """
+    assert compress.render_line(ev(2, Kind.DEAL, visibility=seats(1), actor=1,
+                                   role="wolf", teammates=[4, 2])) \
+        == "[e2] 法官（私发）：你的身份是 wolf，队友是 2号、4号。"
+    # 反向两腿：平民没有名册，旧日志干脆没有这一格——两种都不能多出"队友"两个字。
+    assert compress.render_line(ev(2, Kind.DEAL, visibility=seats(3), actor=3,
+                                   role="villager")) \
+        == "[e2] 法官（私发）：你的身份是 villager。"
+    assert compress.render_line(ev(2, Kind.DEAL, visibility=seats(6), actor=6,
+                                   role="villager", teammates=[])) \
+        == "[e2] 法官（私发）：你的身份是 villager。"
+
+
 def test_the_wave_splitter_has_one_owner_and_both_readers_call_it():
     """Where a voting wave *ends* is a rule about the log, and two modules need it: the metric
     that counts 弃票 per wave, and the 复盘 that prints one grid per wave. Two definitions drift,

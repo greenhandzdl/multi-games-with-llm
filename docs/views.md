@@ -77,7 +77,7 @@ engine belief（`build_belief(seat, [e for e in events if e.visible_to(seat)])`�
 
 角色名统一走 `roles.board_for()` 的 `name_zh`，两种视图同一份词表。有两处**故意**保留英文 id：
 `data-role="wolf"` 这类机器可读钩子（与 `data-death="9:wolf_kill"` 一致），以及发牌那一行
-`法官（私发）：你的身份是 wolf`——那是 `render_line` 渲染出的**模型当时被告诉的那句话**，
+`法官（私发）：你的身份是 wolf，队友是 2号、4号`——那是 `render_line` 渲染出的**模型当时被告诉的那句话**，
 时间线渲染器全工程只有一个，不为了排版好看而改它。
 
 ## 直播这一屏
@@ -222,7 +222,7 @@ rich 有两条坑，都各有一条测试钉着：
   流——那正是 §9 决定不做的解耦。**代价是观感，换来的是两种模式共享同一份判定。**
 * **给坐在命令行那一桌边的人看的一屏**：座位本体与那条命令都实现了——`#122` 把 `human.py` 写成
   读一行字、`HumanActor.act()` 把它变成一个 `Proposal`，`agent.py` 用同一道合法性闸门过它，用例在
-  `tests/test_human_seat.py`（现 28 条）；`#123` 把它接进 `wolf run --human 3`，名册只由 `cli.py` 里一只手
+  `tests/test_human_seat.py`（现 30 条）；`#123` 把它接进 `wolf run --human 3`，名册只由 `cli.py` 里一只手
   拼，真桌与替身桌走同一个构造点，用例在 `tests/test_run_with_human.py`（13 条，一次请求不发；
   `#125` 之后多的是读侧那一族）。读懂的
   那一行进了哪个格子、读不懂时问第二遍而不烧模型的修复额度、输入关了要说清是谁答的、以及"等这个人

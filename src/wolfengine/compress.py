@@ -98,7 +98,12 @@ def render_line(e: Event) -> str:
             return f"[{tag}] 法官：本局没有阵营获胜（{p.get('terminal', '')}）。"
         return f"[{tag}] 法官：{TEAM_ZH.get(str(camp), str(camp))}阵营获胜（{p.get('terminal', '')}）。"
     if k == Kind.DEAL:
-        return f"[{tag}] 法官（私发）：你的身份是 {p.get('role')}。"
+        mates = sorted(p.get("teammates") or ())
+        # 形状表给 `deal` 声明了 `teammates`，`game.py` 也在写，可这一行只印到身份为止——狼
+        # 因此不知道自己跟谁一伙。实测每局都有一只狼（先开口的那位，`phases.py` 的 proposer）
+        # 在零队友证据下被问案。写在这一行：离线的四台机器共用这个渲染器，模型 prompt 不走这里。
+        who = "，队友是 " + "、".join(f"{s}号" for s in mates) if mates else ""
+        return f"[{tag}] 法官（私发）：你的身份是 {p.get('role')}{who}。"
     if k == Kind.NIGHT_ACTION:
         return f"[{tag}] {e.actor}号（夜间行动）：{_night_text(p)}"
     if k == Kind.WOLF_CHAT:

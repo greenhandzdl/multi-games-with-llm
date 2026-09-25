@@ -618,6 +618,44 @@ def test_a_code_the_card_has_no_words_for_is_still_shown():
     assert "something_new_the_gate_invented" in lines[2], lines
 
 
+async def test_the_wolf_seat_reads_his_team_above_the_recap(tmp_path):
+    """坐在狼位上的人，卡片得告诉他队友是谁——而且不能只靠局况里那一行发牌（`#133`）。
+
+    发牌行现在会印名册了（`compress.render_line` 的 DEAL 分支），可这一屏的局况只有
+    `SCREEN_TAIL = 12` 条：打到第 13 条事件之后，那张牌就从人眼前滚走了，而他的队友不会因此
+    变少。所以这一格要在页眉上独立成立一次。测试读的是真 `TurnContext`（`_turn` 走的是
+    `agent.take_turn`），座位号从发牌里偷看，不是测试自己指定的。
+    """
+    wolf = _table(_desk(tmp_path, "peek"))[5]
+    _, log, console, _ = await _turn(
+        tmp_path, ["讨论 5 今晚刀他。"], seat=wolf, phase=Phase.NIGHT_WOLF,
+        kind=Kind.WOLF_CHAT, legal=LegalSet(acts=("discuss",), targets=frozenset({5})))
+    deal = [e for e in log.all() if e.kind == Kind.DEAL and e.actor == wolf][0]
+    mates = sorted(deal.payload["teammates"])
+    assert mates, f"这副牌里 {wolf} 号狼没有队友，正证就无从谈起"
+    card = [s for s in console.shown if s.startswith("轮到你了")][0]
+    head = card.splitlines()
+    line = next((ln for ln in head if "队友" in ln), "")
+    assert line, f"卡片上找不到队友：\n{card}"
+    assert head.index(line) <= 1, f"队友该在页眉，不是滚在局况里：\n{card}"
+    for m in mates:
+        assert f"{m}号" in line, f"{m} 号是他队友，那一行没点名：{line}"
+    assert f"{wolf}号" not in line, f"自己不算自己的队友：{line}"
+
+
+async def test_a_villager_seat_is_not_handed_a_team(tmp_path):
+    """反证：平民那一屏不能多出"队友"两个字（`#133`）。
+
+    写侧给非狼座位落的是一空列表（`game.py:134`），所以这一格的红不是"忘了写"而是"写错了对象"——
+    一旦名册无条件印出去，平民就会看到 `你的队友是 。`，那比空白更糟：它是一张骗人的身份卡。
+    `#124` 的金丝雀管的是"看不到的不许印"，这一条管的是"没有的不许编"。
+    """
+    _, _, console, _ = await _turn(tmp_path, ["投票 5"], seat=3)
+    card = [s for s in console.shown if s.startswith("轮到你了")][0]
+    assert "3 号" in card.splitlines()[0], card.splitlines()[0]
+    assert "队友" not in card, f"平民没有队友：\n{card}"
+
+
 async def test_the_seat_number_typed_with_a_targetless_act_reaches_a_reader(tmp_path):
     """真人打「讨论 5 今晚刀他」，那个 5 不能只活在日志里（`#130`）。
 
