@@ -66,10 +66,6 @@ class TurnOutcome:
     context_overflow: bool = False
     failure: str = ""
 
-    @property
-    def prompt_tokens_est(self) -> int:
-        return self.prompt.total_tokens
-
 
 @dataclass(frozen=True)
 class _View:

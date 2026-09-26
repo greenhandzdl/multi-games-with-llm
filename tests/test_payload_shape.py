@@ -233,7 +233,7 @@ def test_the_reader_gate_sees_code_that_a_grep_misses_and_refuses_prose_that_a_g
 def test_a_read_only_counts_when_what_got_subscripted_is_a_payload():
     """第三条控制的反面：这把尺子不能只是"换个词再 grep 一遍"，它得认得别名。
 
-    `compress.py:75` 写的是 `p, k = e.payload, e.kind`，此后整条渲染链都通过别名 `p` 取键；
+    `compress.py:71` 写的是 `p, k = e.payload, e.kind`，此后整条渲染链都通过别名 `p` 取键；
     而 `report.py`/`batch.py`/`metrics.py` 里也有 47 个 base 恰为 `p` 的 Load 点（实测 10:59:19Z，
     其中键名落在形状表里的 24 个**全部**在 compress.py）。所以"像 payload"认的是
     `payload` / `p` / `pl` 三个名字加上任何含 `payload` 的链式表达式——认名字而不是认数据流是

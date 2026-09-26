@@ -67,9 +67,6 @@ class BeliefState:
     def score(self, seat: int) -> float:
         return round(self.suspicion.get(seat, 0.0), 3)
 
-    def ranked(self) -> list[tuple[int, float]]:
-        return [(s, self.score(s)) for s in self.top_suspects(k=len(self.suspicion))]
-
 
 def _decayed(day_of: int, now_day: int) -> float:
     return DAY_DECAY ** max(0, now_day - day_of)

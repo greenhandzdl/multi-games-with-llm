@@ -626,6 +626,127 @@ def test_the_export_list_is_not_a_caller_and_the_only_name_it_would_have_saved_i
         f"——两边不一致就是口径漂移了")
 
 
+def _class_defs_and_reads():
+    """(类体内每个 `def`/property 的 `文件::类.名字` -> (生产链读数, 测试侧读数, 落点行))。`#156` 的尺。
+
+    与 `_module_defs_and_production_reads` 的分别有两层。**什么算读者**沿用那一版：`ast.Attribute` 上的
+    真名字，加 `getattr(obj, "名字")` 那一格字面量（`batch.py` 的 `axis_fields` 靠这一格活着，而那两处
+    写的是三参数的 `getattr(obj, "名字", None)`——本尺的第一版只认两参数，就把这两个名字判成了零读者）。
+    **键的形状**换了：按 `文件::类.名字` 数，不按裸名字——`as_dict` 在
+    `GameResult` 与 `PublicState` 上各有一具，一个有测试读者、一个连读者都没有，按名字数会把这两件事
+    混成一个数（`#85` 的"同名替付账"在类内那一侧的同一形）。
+    """
+    prod: dict[str, int] = {}
+    tests: dict[str, int] = {}
+
+    def tally(tree: ast.AST, bucket: dict[str, int]) -> None:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute):
+                key = node.attr
+            elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                  and node.func.id in DISPATCH and len(node.args) > 1
+                  and isinstance(node.args[1], ast.Constant)
+                  and isinstance(node.args[1].value, str)):
+                key = node.args[1].value
+            else:
+                continue
+            bucket[key] = bucket.get(key, 0) + 1
+
+    defs: dict[str, list[int]] = {}
+    for root, bucket in (("src", prod), ("scripts", prod), ("tests", tests)):
+        for f in sorted(Path(root).rglob("*.py")):
+            if "__pycache__" in f.parts:
+                continue
+            tree = ast.parse(f.read_text(encoding="utf-8"))
+            tally(tree, bucket)
+            if root != "src":
+                continue
+            for cls in (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)):
+                for node in cls.body:
+                    if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        continue
+                    if node.name.startswith("__"):
+                        continue
+                    defs.setdefault(f"{f.name}::{cls.name}.{node.name}", []).append(node.lineno)
+    return {k: (prod.get(k.rsplit(".", 1)[1], 0), tests.get(k.rsplit(".", 1)[1], 0), v)
+            for k, v in defs.items()}
+
+
+def _cited_path_exists(text: str) -> bool:
+    """处置那句话里是否点了一个真实存在的文件——按名字找，不要求写全路径。
+
+    找的是"这句话有落点"，不是"路径写法对"：`tests/test_rules.py` 与 `test_rules.py` 都算。
+    """
+    for p in re.findall(r"[\w/.-]+\.(?:py|md)", text):
+        name = Path(p).name
+        if Path(p).exists():
+            return True
+        if any(f.name == name for root in ("src", "tests", "scripts", "docs")
+               for f in Path(root).rglob(name)):
+            return True
+    return False
+
+
+# 方法/property 层的零生产读者名册：每一格都要写出处置和它落在哪一个文件上（`#156`）。
+# 处置词只有五个：删 / 搬 / 接 / 留 / 待判。"留"是给真有产物理由的（`MANUAL_EXITS` 那一形），
+# 而连测试都不点它名的那一格不许写"留"。
+METHOD_TRIAGE: dict[str, str] = {
+    "state.py::PublicState.as_dict":
+        "搬：唯一读者是 tests/test_rules.py 里『公开投影不含 role 字段』那一格，与 `#155` 的 `frame_text`"
+        " 同形（读者只有测试的东西住测试侧），下一片动",
+    "state.py::GameState.public_state":
+        "待判：唯一读者与上面 `PublicState.as_dict` 那一格住在同一句里（tests/test_rules.py 的"
+        " `st.public_state().as_dict()`），而 src/wolfengine/state.py 的页眉把 PublicState 说成 prompt"
+        " Region B 的唯一来源——装配器 assemble.py 的 `_region_b` 收的是 Percept，生产链里没有一处构造过"
+        " PublicState，这句 docstring 的账另开 `#157`",
+    "info.py::Percept.by_kind":
+        "待判：七处读者全在 tests/test_info_isolation.py 与 tests/test_vote_wave.py；孪生 `tail` 是有生产"
+        "读者的（人那一屏在 human.py 里就调它），`window` 那一格的名字被 plan.window 顶着——按名字数读数"
+        "分不出是哪一具，见下面限界那句",
+    "roles.py::Board.team_counts":
+        "待判：唯一读者是 tests/test_rules.py 那句 3/3/3 的板面核对，胜负判据读的是别处的 team 键空间"
+        "（`#80` 那一族），先确认它不是那判据的第二份实现",
+    "legality.py::Verdict.reason":
+        "待判：src/ 里那几处只读 violations 那个列表，把它们拼成一句的只有这个 property，而它唯一的"
+        "读者是 tests/test_legality.py 的断言——拼句要不要成为产物的一部分是决定，不是清理",
+    "state.py::GameState.teammates_of":
+        "待判：docs/iterations.md 里 `#133` 那一节写明它与 `Percept.teammates()` 不是同一个判据（按"
+        "『存活过滤 vs 念发牌那一刻的名册』），卡片印的是后者；两具哪一具该活下来要先定，不是删得掉的",
+}
+# 限界：测试侧的读数按**名字**数，不按 def 数。同名两具（`as_dict` 曾住在 `GameResult` 与 `PublicState`
+# 各一具）里究竟哪一具有读者这条判不出来——所以『零读者』那一格只敢在**连名字都没人点**时强制『删/搬』，
+# 名字被点过但可能不是点它这一具时，只能由处置那一格自己写清落点。这一具的读者是零（22:39Z 现测：
+# `GameResult.as_dict` 的 `vars(self)` 那行没有任何调用者），已随 `#156` 删掉。
+
+
+def test_the_method_layer_names_every_zero_production_reader_and_each_carries_a_disposition():
+    """`#156`：`#155` 那条只数模块级 `def`，方法 / property 那一层它整个看不见。
+
+    删之前那棵树（HEAD `9aa078b`）上现测（22:36Z）：99 个类内 `def`、86 个名字，按 `文件::类.名字` 数
+    生产链零读者的 13 具——比 `#155` 限界里那句『六处』多出一倍，那一趟的脚本没留读者；22:28Z 重数的
+    是 12 个**名字**，13 具与 12 名的差就是 `as_dict` 住在两具类里。这一片删掉谁都不读的 7 具，剩下的
+    由本条自己数（23:04Z：92 具、80 名、零生产读者 6 具）。这一条不要它们都"有读者"，只要**每一具都有
+    一条登记过的处置**：名册与 `METHOD_TRIAGE` 的键必须两侧相等
+    （多一格＝新长出来的没登记，少一格＝登记的那个名字已经不在这棵树上了），每一格的落点路径必须
+    存在，而**生产链和测试里都没有读者**的那几具不许标"留"——那正是 `#155` 量的第一种腐烂，只是
+    住在类里。
+    """
+    roster = _class_defs_and_reads()
+    dead = {k: v for k, v in roster.items() if v[0] == 0}
+    assert sorted(dead) == sorted(METHOD_TRIAGE), (
+        f"零生产读者的方法与登记的名册不是一份：只在树上 {sorted(set(dead) - set(METHOD_TRIAGE))}，"
+        f"只在名册里 {sorted(set(METHOD_TRIAGE) - set(dead))}")
+    nowhere, sloppy = [], []
+    for name, (reads_p, reads_t, places) in sorted(dead.items()):
+        verdict = METHOD_TRIAGE[name]
+        if reads_p == 0 and reads_t == 0 and not verdict.startswith(("删", "搬")):
+            nowhere.append(f"{name}（落点 {places}）")
+        if not _cited_path_exists(verdict):
+            sloppy.append(f"{name}：{verdict}")
+    assert not nowhere, f"这些方法生产链和测试都不读它，不能登记成『留』：{nowhere}"
+    assert not sloppy, f"这些格的处置没写出落点（或落点那个文件不存在）：{sloppy}"
+
+
 def _own_module_names() -> set[str]:
     """`x.Foo` 的根名里，哪些算"我们自己的模块"。
 
@@ -1100,7 +1221,7 @@ def test_the_wolf_chat_line_shows_the_seat_being_point_at():
 
 
 def test_the_deal_line_says_who_is_on_your_team():
-    """形状表给 `deal` 声明了 `teammates`，写侧也在写（`game.py:134`），渲染层却只印到身份为止。
+    """形状表给 `deal` 声明了 `teammates`，写侧也在写（`game.py:131`），渲染层却只印到身份为止。
 
     这一格和 `#130` 那一格是同一种坏法：落盘了、没人念。区别在于这里的代价是牌桌上的一个事实——
     狼不知道自己跟谁一伙。实测 12 局 mock（`/tmp/probe133.py`，17:02Z）：74 次问狼里 12 次
@@ -1339,7 +1460,7 @@ def test_region_b_carries_every_public_event_id(tmp_path):
     """A working renderer is not a working region: B is built by plan_fold + chrono_bytes,
     and a window of 0 or an over-eager filter empties it without raising anything.
 
-    The loop runs over `chronicle`, not `.public`: a COMPACTION marker is public and is
+    The loop runs over `chronicle`, not over every public event: a COMPACTION marker is public and is
     deliberately *not* in B (it summarises this block, and its fresh seq would rewrite the
     cached prefix). That exception is pinned from the other side by
     `test_a_marker_is_public_but_never_becomes_chronicle`.

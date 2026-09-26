@@ -55,17 +55,6 @@ class Percept:
     def by_kind(self, *kinds: str) -> tuple[Event, ...]:
         return tuple(e for e in self.events if e.kind in kinds)
 
-    @property
-    def public(self) -> tuple[Event, ...]:
-        return tuple(e for e in self.events if e.visibility == "all")
-
-    @property
-    def private(self) -> tuple[Event, ...]:
-        return tuple(e for e in self.events if e.visibility != "all")
-
-    def own(self, *kinds: str) -> tuple[Event, ...]:
-        return tuple(e for e in self.events if e.actor == self.seat and (not kinds or e.kind in kinds))
-
     def role(self) -> str:
         """This seat's own role, read back out of the log.
 

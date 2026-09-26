@@ -53,9 +53,6 @@ class GameResult:
     completion_tokens: int = 0
     degraded: bool = False
 
-    def as_dict(self) -> dict[str, Any]:
-        return {k: (str(v) if isinstance(v, Path) else v) for k, v in vars(self).items()}
-
 
 @dataclass
 class RngStreams:

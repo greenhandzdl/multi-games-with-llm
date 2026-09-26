@@ -646,7 +646,7 @@ async def test_the_wolf_seat_reads_his_team_above_the_recap(tmp_path):
 async def test_a_villager_seat_is_not_handed_a_team(tmp_path):
     """反证：平民那一屏不能多出"队友"两个字（`#133`）。
 
-    写侧给非狼座位落的是一空 `teammates`（`game.py:134`），所以这一格的红不是"忘了写"而是"写错了对象"——
+    写侧给非狼座位落的是一空 `teammates`（`game.py:131`），所以这一格的红不是"忘了写"而是"写错了对象"——
     一旦名册无条件印出去，平民就会看到 `你的队友是 。`，那比空白更糟：它是一张骗人的身份卡。
     `#124` 的金丝雀管的是"看不到的不许印"，这一条管的是"没有的不许编"。
     """

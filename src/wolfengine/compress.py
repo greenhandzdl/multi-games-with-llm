@@ -32,10 +32,6 @@ class FoldPlan:
     folded_days: tuple[int, ...]
     rounds: int
 
-    @property
-    def folded(self) -> bool:
-        return bool(self.folded_days)
-
 
 CAUSE_ZH = {"wolf_kill": "被狼刀", "poison": "被毒", "exiled": "被投票出局", "hunter_shot": "被猎人带走"}
 
@@ -203,7 +199,7 @@ def day_fold_lines(day: int, events: list[Event] | tuple[Event, ...]) -> str:
 def chronicle(percept_events: tuple[Event, ...]) -> tuple[Event, ...]:
     """The chronicle: what region B renders line by line.
 
-    Named apart from `Percept.public` on purpose. A `Kind.COMPACTION` marker is public — every
+    Named apart from a raw visibility filter on purpose. A `Kind.COMPACTION` marker is public — every
     seat should be able to learn that the table was summarised — but it is not chronicle
     material. Two reasons, one cheap and one expensive: the marker's line is a summary *of*
     this block, so letting it in has a summary summarising itself; and it holds a fresh `seq`
