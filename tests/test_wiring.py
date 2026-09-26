@@ -542,9 +542,9 @@ def _module_defs_and_production_reads():
 
     读者只算两种：`Name`/`Attribute` 上的真名字，以及 `getattr(obj, "名字")` 里那一格字符串（按名字
     派发）。`__all__` 的一行字符串与 `row["键名"]` 都不算——出口清单不是调用者，键名与同名函数也是两
-    回事（`#132`）。范围只到模块级：方法/property 同口径另有六处零生产调用者（21:53Z 量：`as_dict`、
-    `by_kind`、`public`、`public_state`、`team_counts`、`teammates_of`），每一处处置前要先读它的孪生与
-    金样本，不是一片能收的账，另开一票。
+    回事（`#132`）。范围只到模块级：方法/property 用同一口径 22:28Z 重量是 **12 处**零生产读者，不是
+    21:53Z 记的六处（那一趟的脚本已在提交后删净，无法复查它少在哪一维，所以这里只说重数出来的那一版），
+    逐条处置另开 `#156`——每一处要先读它的孪生与金样本，不是一片能收的账。
     """
     readers: dict[str, int] = {}
     defs: dict[str, list[str]] = {}
