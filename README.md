@@ -49,32 +49,43 @@ git log -p | rg -n 'sk-[A-Za-z0-9]{20,}'    # 值本身
 
 ```bash
 wolf run --mock --seed 7 --out data --quiet     # 合成替身打牌，纯压状态机
-wolf run --dry-run --games 3 --out data         # 装配全部 prompt 并落盘 + 每局成本清单，零 API 调用
-wolf run --seed 7 --games 1 --god               # 真端点；--god 让打印的时间线含私有事件
+wolf run --dry-run --games 3 --seed 21 --out data    # 装配全部 prompt 并落盘 + 每局成本清单，零 API 调用
+# 这一条的 `--seed` 不是装饰：局号是「秒 + seed」，上面那条刚在 `data` 里写过 7 号，这一条若
+# 沿用默认 seed，挨着敲就会撞上「路径用不了：… already holds a game log」。
+# 真端点那一条留在可粘贴区外面：它要 `100.87.65.60:13000` 上那个判官，见上面〈密钥约定〉。
+# wolf run --seed 7 --games 1 --god             # --god 让打印的时间线含私有事件
 wolf run --mock --seed 3 --max-days 2 --out data --quiet   # 压日数上限（R10）：打到上限即判平局
-wolf run --mock --seed 7 --human 3        # 3 号席交给坐在终端前的人，其余八席仍是替身
+wolf run --mock --seed 7 --human 3 --out data/human   # 3 号席交给坐在终端前的人，其余八席仍是替身
 wolf batch --out data/batch-demo/A-vs-B --configs A,B \
            --set B.temperature=0.6 --games 2 --seed0 1000 --mock
 wolf compare data/batch-demo/A-vs-B --axis temperature   # 退出码：0 结论 / 1 拒绝 / 2 用法错
 wolf gate data/batch-demo/A-vs-B/A                       # 同一批日志再判一次闸门：不重打牌
 ```
 
+这一整块也是被**逐条执行过**的：`test_the_command_menu_lines_run_in_sequence` 把围栏里的每一条
+单独交给 bash、落在同一个空目录里，要求每条有自己的退出码和自己的读数——`compare` 与 `gate` 读的
+就是上面 `batch` 落下的目录，所以"这一节的读法是从上往下"也算在断言里。两格因此是有意为之的：
+需要端点的那一条只能留在注释里（跑它们的是子进程，不在测试的无网夹具保护范围内，所以"块里没有
+拨号的那一条"必须是执行**之前**的断言），而每条举例都得占自己的那个局号。
+
 `--mock` 的桌子**不是数据**：替身按剧本说话，能压崩状态机、压不出模型行为，所有指标都会把
 `actor_kinds` 含 mock 的局标成 `synthetic`（`m1_win_rate` 直接把它们从分母里剔掉并说明）。
 含真人座位（`--human`）的局另有一条：真人不受 seed 控制，永不进配对评测语料——两种桌子各引用
 管自己的那一条，被剔掉的局在每个**产得出它**的出口里都会被点名（`batch` 摘要、`compare` 的拒绝语、
 M1 与 M3 各自的 note 共四处，而批次接不到 `--human`，所以含真人的局只有后三处；见〈人怎么上桌〉）。
-`--dry-run` 落的是 `data/g<seed>.prompts.jsonl`，那是预算工具——它的价值恰恰在于**物理上发不出
-请求**，所以 prompt 大小和区域分配可以离线审。它末尾还印一行"成本合计"（每局调用次数 / prompt
-token / 完成预算），40 局的墙钟因此只剩端点吞吐一个未知数，见〈每局的墙钟乘数〉一节。
+`--dry-run` 是预算工具，价值恰恰在于**物理上发不出请求**：它拿替身把每一局打到终局，再为每一局落
+一份 `data/g<seed>.prompts.jsonl`，prompt 大小和区域分配就在那里面离线审。它**不只**落转储——同一
+个 `--out` 里还多出那几局的合成局日志，局号照旧是「秒 + seed」（上面那条举例因此换了一个 seed）。
+末尾还印一行"成本合计"（每局调用次数 / prompt token / 完成预算），40 局的墙钟因此只剩端点吞吐
+一个未知数，见〈每局的墙钟乘数〉一节。
 
 ## 三分钟离线演示
 
 ```bash
 LOG=$(wolf run --mock --seed 7 --out data --quiet | sed -n 's/.* -> //p')
 # 摘要行的末尾就是刚写下的那一份：`[g00000007] wolf_win … 0.0s -> data/2026…_g00000007.jsonl`。
-# 别用 `ls data/*.jsonl | tail -1` 挑：上面〈命令一览〉那条 `--dry-run --out data` 往同一个目录
-# 落了第二种 `*.jsonl`，而 `g…prompts.jsonl` 按名字永远排在时间戳后面——`tail -1` 选中的就是它。
+# 别用 `ls data/*.jsonl | tail -1` 挑：上面〈命令一览〉那条 `--dry-run` 也写 `--out data`，于是
+# 同一个目录里住着两种 `*.jsonl`，而 `g…prompts.jsonl` 按名字永远排在时间戳后面——`tail -1` 选中的就是它。
 echo "$LOG"
 
 wolf replay "$LOG" --god | head -3      # 上帝视角：连私发发牌都看得见
@@ -198,7 +209,7 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 ## 测试
 
 ```bash
-.venv/bin/pytest                 # 978 passed in 147.98s（07:45Z，`#137` 的电池之后全量重跑），全程离线；上一跑 977 passed in 144.21s（`#136` 的电池）
+.venv/bin/pytest                 # 979 passed in 162.55s（08:21Z，`#138` 的用例落进 `tests/test_cli.py` 之后全量重跑），全程离线；上一跑 978 passed in 147.98s（`#137` 的电池）
 .venv/bin/pytest -k render       # 只跑两个渲染器
 ```
 
@@ -214,7 +225,7 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 `tests/test_cli.py` 一条，四个名字钉的是同一格 `request.assigned_act`）、13:00:19Z 数到 **767**（`#69`
 那四条全在同一个新方向上：写侧的幂等守卫，两个失败方向各要有证人）、13:30:20Z 数到 **775**（`#70`
 那八格也在一根链条上：白名单放行摊平后的那一格、聚合算术四格、机器出口两格）、13:40:38Z 数到
-**776**（`#70` 的电池量出来的那一格：分母那句话原本写了两份、谁都没读，现在是一处实现加一个绝对值）、14:06:11Z 数到 **777**（`#72` 那格：行号闸门的窗口从 ±2 收成被点名的那一行，多出来的那条断言是变异体 E2 先活下来、之后要回来的）、14:24:19Z 数到 **779**（`#71` 那两格：体检脚本里第二份 `cached_tokens` 读法收进 `usage_from()`，一条管行为一条管"只有一个读取点"，后者由变异 M2 单独证明它不是重复）、14:59:14Z 数到 **791**（`#73` 那十二格落在四个新文件里：`tests/test_vote_wave.py` 四条、`tests/test_night_guards.py` 四条、`tests/test_last_words.py` 二条、`tests/test_house_wired.py` 二条——这四个数是 `#73` 那天的**历史读数**，写成汉字才不被"每天核现行条数"那格闸门顶成新数（今天的 `tests/test_vote_wave.py` 现 6 条，`#110`、`#113` 各补了一条进去；`tests/test_night_guards.py` 现 5 条，`#114` 补的那一条钉的是被闸门退回的那份原文）；这一片没改产品代码，改的是"哪句散文有读者"）；16:19Z 数到 **965**（`#131` 的电池顺手数的：791 之后这条链没有逐轮记下去，`#74`–`#130` 那几十轮的格子都堆在这一格里，所以这是一个合并的账，不指认哪一片补了几条）；16:45Z 数到 **970**（`#130` 那五格：`tests/test_legality.py` 两格、`tests/test_wiring.py` 一格、`tests/test_human_seat.py` 两格，另外把 `tests/test_render_live.py` 里钉住整行的那一条改了期望，条数不动）；17:28Z 数到 **973**（`#133` 那三格：`tests/test_wiring.py` 一格、`tests/test_human_seat.py` 两格）；18:02Z 数到 **975**（`#134` 那两格：`tests/test_info_isolation.py` 两条）；06:53Z 数到 **976**（`#135` 那一跑：搬文档的那一刀只加了一条扫描范围的守卫，落在 `tests/test_no_secrets.py`）；07:19Z 数到 **977**（`#136` 补的那条整块执行的用例住在 `tests/test_cli.py`）；07:45Z 数到 **978**（`#137` 的另一条整块执行用例，也在 `tests/test_cli.py`，它把上一格抽块的那个函数改成了按标题取块）；
+**776**（`#70` 的电池量出来的那一格：分母那句话原本写了两份、谁都没读，现在是一处实现加一个绝对值）、14:06:11Z 数到 **777**（`#72` 那格：行号闸门的窗口从 ±2 收成被点名的那一行，多出来的那条断言是变异体 E2 先活下来、之后要回来的）、14:24:19Z 数到 **779**（`#71` 那两格：体检脚本里第二份 `cached_tokens` 读法收进 `usage_from()`，一条管行为一条管"只有一个读取点"，后者由变异 M2 单独证明它不是重复）、14:59:14Z 数到 **791**（`#73` 那十二格落在四个新文件里：`tests/test_vote_wave.py` 四条、`tests/test_night_guards.py` 四条、`tests/test_last_words.py` 二条、`tests/test_house_wired.py` 二条——这四个数是 `#73` 那天的**历史读数**，写成汉字才不被"每天核现行条数"那格闸门顶成新数（今天的 `tests/test_vote_wave.py` 现 6 条，`#110`、`#113` 各补了一条进去；`tests/test_night_guards.py` 现 5 条，`#114` 补的那一条钉的是被闸门退回的那份原文）；这一片没改产品代码，改的是"哪句散文有读者"）；16:19Z 数到 **965**（`#131` 的电池顺手数的：791 之后这条链没有逐轮记下去，`#74`–`#130` 那几十轮的格子都堆在这一格里，所以这是一个合并的账，不指认哪一片补了几条）；16:45Z 数到 **970**（`#130` 那五格：`tests/test_legality.py` 两格、`tests/test_wiring.py` 一格、`tests/test_human_seat.py` 两格，另外把 `tests/test_render_live.py` 里钉住整行的那一条改了期望，条数不动）；17:28Z 数到 **973**（`#133` 那三格：`tests/test_wiring.py` 一格、`tests/test_human_seat.py` 两格）；18:02Z 数到 **975**（`#134` 那两格：`tests/test_info_isolation.py` 两条）；06:53Z 数到 **976**（`#135` 那一跑：搬文档的那一刀只加了一条扫描范围的守卫，落在 `tests/test_no_secrets.py`）；07:19Z 数到 **977**（`#136` 补的那条整块执行的用例住在 `tests/test_cli.py`）；07:45Z 数到 **978**（`#137` 的另一条整块执行用例，也在 `tests/test_cli.py`，它把上一格抽块的那个函数改成了按标题取块）；08:21Z 数到 **979**（`#138` 的又一条整块执行用例，把〈命令一览〉那一块按 README 的顺序逐条敲进同一个空目录，还是住在 `tests/test_cli.py`）；
 墙钟不是账：同一份 767 在 12:55:31Z 那跑 47.04s、13:06:15Z 那跑 114.47s，差的是机器负载（套件里有两条
 在真实时间里等完退避），所以末行那个秒数只用来判断"跑完了没有"，不用来比快慢；
 不要再往这行加 `-q`
@@ -229,7 +240,7 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 和 `tests/test_calibrate_rehearsal.py` 真的开 socket，开的是 127.0.0.1 上自己起的桩）；`#58`–`#60`
 那几格（`--games` 地板的参数化与空普查的退出码、越界的 `--seat`、要一块不存在的板子的 `--set`、
 只有开局记录的文件上的座位视图、`--god` 与 `--seat` 同时给时的次序）住在 `tests/test_cli.py`
-（现 62 条、跑起来 71 个用例，三条各参数化为 4/6/2 个）。往上数这条链的账：691 是
+（现 63 条、跑起来 72 个用例，三条各参数化为 4/6/2 个）。往上数这条链的账：691 是
 2026-09-22T06:02:58Z 数的、701 是 06:49:10Z、704 是 08:06:23Z、759 是 11:51:54Z（`#63`/`#67`
 把 C2 那把尺子和刀的读数接进日志之后），前几格都被后续新增的用例顶掉了，留着
 是因为**它们各自是那一刻的账**，不是抄来的。

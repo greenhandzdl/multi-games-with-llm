@@ -14,6 +14,7 @@ rather than through the prompt builder.
 from __future__ import annotations
 
 import json
+import re
 import html as html_mod
 from pathlib import Path
 from types import SimpleNamespace
@@ -1303,6 +1304,50 @@ def _bash_the_block(tmp_path: Path, block: str, name: str, stdin: str | None):
                           **kw)
 
 
+HUMAN_STDIN = "票 5 先听听\n票 5 我投他\n过 没想好\n"
+
+
+def _readme_statements(block: str) -> list[tuple[str, str]]:
+    """把围栏文本切成 `(种类, 原文)`：`live` 是一条完整命令，`comment` 是整行注释。
+
+    `live` 存的是**原样的那几行**（续行不合成一行）：反斜杠续行是 README 交给读者的形状，
+    测试若拿合并后的单行去执行，证的就是"另一种粘贴方式"能跑，而不是这一块能跑。
+    """
+    statements, pending = [], []
+    for line in block.splitlines():
+        if not line.strip():
+            continue
+        if line.lstrip().startswith("#"):
+            assert not pending, "注释行夹在一条续行的中间，切分器读不懂这个形状"
+            statements.append(("comment", line.strip()))
+            continue
+        pending.append(line)
+        if not line.rstrip().endswith("\\"):
+            statements.append(("live", "\n".join(pending)))
+            pending = []
+    assert not pending, "围栏末尾挂着一条没写完的续行"
+    return statements
+
+
+def _dialer_statements(live: list[str]) -> list[str]:
+    """这一堆命令行里，哪些会把局域网判官拨起来。
+
+    两处都要收着：判据得**看完一整条**逻辑命令再说话——README 的 `batch` 那条用反斜杠续行，
+    `--mock` 落在第二行上，逐行判断会把这条干净的命令当成拨号的那一条（第一版就是这么误伤的）；
+    判据又得把行内注释切掉——`wolf run --god   # 其实有 --mock` 里注释上的 `--mock`
+    不是"这一条不碰端点"的理由。反过来 `LOG=$(wolf run …)` 包在赋值里的必须算，所以看的是
+    这一条里**出现** `wolf run` / `wolf batch`，不是它开头是什么。
+    """
+    dialers = []
+    for text in live:
+        code = " ".join(re.split(r"[ \t]+#.*$", line, maxsplit=1)[0]
+                        for line in text.splitlines())
+        if (("wolf run" in code or "wolf batch" in code)
+                and "--mock" not in code and "--dry-run" not in code):
+            dialers.append(text.strip())
+    return dialers
+
+
 def test_the_readme_demo_block_runs_verbatim(tmp_path, no_network):
     """把人照着 README 敲的那一段整块交给 bash，看它有没有真打到一局日志上。
 
@@ -1359,13 +1404,11 @@ def test_the_human_seat_block_runs_verbatim(tmp_path):
     import shutil
 
     block = _readme_block(HUMAN_HEADING)
-    live = [line.strip() for line in block.splitlines()
-            if line.strip() and not line.strip().startswith("#")]
-    dialers = [line for line in live
-               if "wolf run" in line and "--mock" not in line and "--dry-run" not in line]
+    live = [text for kind, text in _readme_statements(block) if kind == "live"]
+    dialers = _dialer_statements(live)
     assert not dialers, (
         f"这一块是给人整块粘贴的，而这几条会去拨局域网判官：{dialers}")
-    assert any("--human" in line for line in live), \
+    assert any("--human" in text for text in live), \
         "这一块里已经没有一条真把人放上桌的命令了，那这条用例在替一句空话作证"
 
     decoy_dir = tmp_path / "decoy"
@@ -1376,7 +1419,7 @@ def test_the_human_seat_block_runs_verbatim(tmp_path):
     shutil.copyfile(next(iter(sorted(decoy_dir.glob("*_g00000007.jsonl")))), older)
     assert older.stat().st_size > 0
 
-    proc = _bash_the_block(tmp_path, block, "human", "票 5 先听听\n票 5 我投他\n过 没想好\n")
+    proc = _bash_the_block(tmp_path, block, "human", HUMAN_STDIN)
     evidence = (f"--- 块 ---\n{block}\n--- stdout ---\n{proc.stdout}\n"
                 f"--- stderr ---\n{proc.stderr}")
     assert proc.returncode == 0, f"这一块的退出码是 {proc.returncode}：{evidence}"
@@ -1390,3 +1433,70 @@ def test_the_human_seat_block_runs_verbatim(tmp_path):
     assert HUMAN_ABSENT not in proc.stdout, (
         f"3 号那一席看不到别人的发牌行，这一屏里却出现了 {HUMAN_ABSENT!r}："
         f"replay 被指成了上帝视角：{evidence}")
+
+
+# ------------------------------------------- README〈命令一览〉那一块逐条能跑（#138）
+MENU_HEADING = "## 命令一览：只有 `run` 和 `batch` 需要端点"
+# 一条一格，按 README 里出现的顺序对齐（所以条数变了就必须先改这里，见下面的等式断言）。
+# 每格的读数与退出码都来自 2026-09-26T07:58Z 的一次逐条实跑（`/tmp/m138b`）：`run` 与
+# `--dry-run` 那两条在同一秒内落到同一个 `--out data` 时，第二条的 rc 是 2 而不是 0——那
+# 就是这一片要修的 bug，所以这里的 0 是**修完之后**的形状，见 docs/iterations.md 的 `#138`。
+MENU_EXPECTATIONS = [
+    ("_g00000007.jsonl", 0, "run --mock：替身打完的那一屏，末尾点名它写下的文件"),
+    ("成本合计", 0, "run --dry-run：全部 prompt 装配完之后那本成本清单，零 API 调用"),
+    ("draw_day_limit", 0, "run --max-days 2：打到日数上限即判平局（R10）"),
+    ("轮到你了：3 号", 0, "run --human 3：坐在终端前的人拿到了一张卡片"),
+    ("批次 -> ", 0, "batch --mock：配对批次落盘的那一行"),
+    ("SYNTHETIC_TABLE", 1, "compare：合成桌只出拒绝语，退出码 1 是设计而不是失败"),
+    ("NOT_EVALUABLE", 1, "gate：同一批日志再判一次闸门，替身桌不可评估，退出码 1 同上"),
+]
+
+
+def test_the_command_menu_lines_run_in_sequence(tmp_path):
+    """把〈命令一览〉围栏里的每一条举例按 README 的顺序、一条一次 bash 敲进同一个空目录。
+
+    为什么是"一条一次"而不是整块一次：这一节的最后一格是 `gate`，而它对合成批次**故意**返
+    回 1。整块交给 bash 时进程的退出码就是最后那条的退出码，`returncode == 0` 这条断言因此
+    永远不可能既真又有归因力。逐条执行还换来一件整块给不了的东西：每条命令自己的 rc 和自
+    己的读数，谁没答话一眼可见（`#136` 那块整块跑时，六条命令糊成一屏「这不是一局日志」）。
+
+    顺序是有主张的：`compare` 和 `gate` 读的路径正是上面 `batch` 那一条落下的目录。把这两
+    条挪到 `batch` 之前，它们会在空目录里撞上「配置错误」而 rc 变 2——这一格的 1 因此同时
+    在替"这一节的读法是从上往下"作证。
+    """
+    block = _readme_block(MENU_HEADING)
+    statements = _readme_statements(block)
+    live = [text for kind, text in statements if kind == "live"]
+    dialers = _dialer_statements(live)
+    assert not dialers, (
+        f"这一块是给人照着敲的，而这几条会去拨局域网判官：{dialers}")
+    assert len(live) == len(MENU_EXPECTATIONS), (
+        f"这一块现在活着的命令行有 {len(live)} 条，期望表只有 {len(MENU_EXPECTATIONS)} 格；"
+        f"对齐是按顺序做的，增删一条必须先改期望表，否则每一格都在替别人作证：{live}")
+    god_examples = [text for kind, text in statements
+                    if kind == "comment" and "wolf run" in text and "--god" in text]
+    assert len(god_examples) == 1, (
+        f"这一节的表格里 `wolf run` 那一行写着「默认需要端点」，给得出这一句的例子只有注释里"
+        f"那条 `--god`；现在它有 {len(god_examples)} 条。整块不许粘贴是对的，把例子删掉也不对："
+        f"{god_examples}")
+
+    for i, ((marker, want_rc, who), cmd) in enumerate(zip(MENU_EXPECTATIONS, live)):
+        proc = _bash_the_block(tmp_path, cmd, f"menu{i}",
+                               HUMAN_STDIN if "--human" in cmd else None)
+        evidence = (f"--- 第 {i + 1} 条 ---\n{cmd}\n--- stdout ---\n{proc.stdout}\n"
+                    f"--- stderr ---\n{proc.stderr}")
+        assert proc.returncode == want_rc, (
+            f"{who} 那一条退出码是 {proc.returncode}，期望 {want_rc}：{evidence}")
+        assert marker in proc.stdout, f"{who} 没印出来（标记 {marker!r}）：{evidence}"
+
+    landed: dict[tuple[str, str], list[str]] = {}
+    for path in sorted(tmp_path.rglob("*.jsonl")):
+        if (m := re.search(r"_g(\d{8})\.jsonl$", path.name)):
+            landed.setdefault((str(path.parent.relative_to(tmp_path)), m.group(1)),
+                              []).append(path.name)
+    doubled = {k: v for k, v in landed.items() if len(v) > 1}
+    assert not doubled, (
+        f"这一节里有两条举例往同一个目录的同一个 seed 上写局日志：{doubled}。局号是「秒 + seed」，"
+        f"所以它们只是**碰巧**没撞上——挨着敲的时候后一条会退回 rc 2（实测十次里八次，"
+        f"2026-09-26T08:00Z）。逐条跑的那一圈因此量不到这一格：它过得去可能只是跨了一秒。")
+
