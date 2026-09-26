@@ -334,7 +334,11 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 被它监督的那一份——判据抽成 `_state_rule` 住一处，另立一条用例钉"这个形状在这只文件里只许住一处"，账见
 〈背书判据有过两份实现，正控制于是测的是自己〉。
 
-重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（50 条、跑起来 50 个用例，
+`#149` 收的是同一族的另一头：只说位置的指法不算落点，判据要它同句报出票号或尖括号那一形。21:10:45Z 现数
+全语料 17 处命中，2 处是在反引号里说这个字样、12 处本来就带着落点，剩下 3 处什么都没有——那三处都改成行内
+加指针，账见〈指示代词指针第一次被要求同句报出落点〉。
+
+重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（52 条、跑起来 52 个用例，
 两秒内，不发请求）。D1 不是凭空设计的——第一次写这个闸门时确实只走了 `ast.FunctionDef`，于是把
 `test_a_marker_is_public_but_never_becomes_chronicle`（`test_live_path.py` 里的协程）误报成了
 文档过期。**误报也是这个闸门的输出**，所以它的红用例名要留在账上（那张表 D1 那一格记着它误报了谁）。

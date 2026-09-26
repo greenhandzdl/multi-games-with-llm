@@ -1770,3 +1770,65 @@ def test_the_backing_predicate_is_implemented_once_in_this_file():
     assert set(owners) == {"_state_rule"}, (
         f"背书判据的形状落在这些函数里：{owners}——它只许住在 `_state_rule` 一处。"
         "多出来的那一份会让正控制改测自己的拷贝：谓词漂走时它不红")
+
+
+DEMON_PTR = re.compile(r"(?:参见|详见|见|戳|按)[^。\n]{0,12}?(?:上|下|那|这)\s*一?\s*节")
+LANDING = re.compile(r"〈[^〉〈]{2,}〉|`#\d+`|#\d+")
+
+
+def _unanchored_demonstratives(pages: dict[str, str]) -> list[tuple[str, int, str]]:
+    """哪些「见…那一节」在同句里拿不到落点。
+
+    位置不是落点：归档往下追加节，「下一节」指的是写它时的那一节；手册里那句
+    "见上一节"要退的节住在另一本，读者在手册里退无可退（`#149` 记的第一次指错，账见
+    〈手册里"细节在那一节"的指法第一次有人核对指得着〉）。落点取两种现成的形：票号，或者
+    〈标题〉——后者还额外被死指针那道闸看着。
+
+    两条豁免都有语料，不是给判据留后门：
+    - **反引号跨度内的匹配是在说这个形状，不是在用它。** 归档里有一节整节讨论这族字样，
+      它把 `见上一节`、`见下一节` 列成一串扫面对照——不豁免的话它自己就是第一处红。
+    - **只取这一句，不取整段**（`_cited_sentence`）。邻句里的票号不给背书：`#108` 为了同一件
+      事收紧过一次判据，而这里的形状是「……`#98` 之后是 847，见下面那一节的账」这种——句内
+      那个票号恰恰**不是**落点（它指回去年的基线），所以这一条只算"有硬标识"而不核对指向。
+      指针自己那一行被硬换行劈开时仍算同句（`#150` 的教训）。
+    """
+    out: list[tuple[str, int, str]] = []
+    for doc, body in pages.items():
+        lines = body.splitlines()
+        for no, line in enumerate(lines, 1):
+            for m in DEMON_PTR.finditer(line):
+                if any(s.start() <= m.start() and m.end() <= s.end()
+                       for s in BACKTICK.finditer(line)):
+                    continue
+                block = lines[max(0, no - 3):no + 2]
+                sentence = _cited_sentence(block, no - 1 - max(0, no - 3), m.start())
+                if not LANDING.search(sentence):
+                    out.append((doc, no, m.group(0)))
+    return out
+
+
+def test_a_demonstrative_section_pointer_has_to_name_its_landing_spot():
+    bad = _unanchored_demonstratives(_pointer_corpus())
+    assert not bad, (
+        "这些「见…节」只在说位置、没写落点（页:行 原文见元组）；改成同句带票号或〈标题〉："
+        f"{bad}"
+    )
+
+
+def test_the_demonstrative_rule_bites_on_a_bare_pointer_and_grants_its_two_exemptions():
+    """合成语料：五形放过、一形报出，且报出的那一处不因邻句有票号而蒙绿。
+
+    真实语料那条只会红不会绿——把判据改瞎（永远返回 `[]`）它照样过，所以这一条不读语料，
+    钉的是检测能力在。
+    """
+    pages = {
+        "a.md": "前面写着 `#9` 的基线。所以见下一节。\n"
+                "扫面对照列在这一串里（`见上一节`、`见下一节`），它说的是字样本身。\n"
+                "另一处见下一节〈这一局是谁答的〉，标题就是落点。\n"
+                "票号写在同一句里（`#123`，见下一节）算落点。\n"
+                "同句被硬换行劈开也算：`#125`\n的账见下面那一节。\n",
+    }
+    bad = _unanchored_demonstratives(pages)
+    assert [(d, n) for d, n, _t in bad] == [("a.md", 1)], (
+        f"该报的只有第 1 行（邻句票号不给背书），实际报出：{bad}")
+    assert [t for _d, _n, t in bad] == ["见下一节"]
