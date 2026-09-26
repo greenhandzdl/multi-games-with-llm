@@ -1,9 +1,10 @@
-"""文档里"读者会照抄的东西"必须还能用——用例名、命令行、条数、行号、出厂值、收集数、节标题指针都在扫描范围内。
+"""文档里"读者会照抄的东西"必须还能用——用例名、命令行、条数、行号、出厂值、收集数、节标题指针、具数落点都在扫描范围内。
 
 `docs/*.md` 和 `README.md` 用 `` `test_名字` `` 的形式给每个断言指认"是哪条用例在钉它"，又印了一
 批可以直接敲的 `wolf …` 命令，还写了"某个测试文件有几条用例"、"某个源码里的东西在第几行"、"某个配置键
-出厂是多少"和"细节在〈某一节〉"。这七类串都是读者复核时的入口：写完一轮重构、改个用例名、插一行代码、
-给某个参数换个叫法、把某个默认值调一格、把一节改了标题，文档不会报错，只会留下一个点不到的入口。
+出厂是多少"和"细节在〈某一节〉"，能力清单里还按批写着"那一批跑了 N 具变异"。这八类串都是读者复核时的入口：
+写完一轮重构、改个用例名、插一行代码、给某个参数换个叫法、把某个默认值调一格、把一节改了标题、
+把一批电池的具数复述错，文档不会报错，只会留下一个点不到的入口。
 这一片的缺陷是实测抓到的几条——
 
 * `comparison.md` 点名 `test_each_arm_gets_its_own_gate_verdict` 时漏了后半截；
@@ -19,7 +20,8 @@
   文件词干不算证据之后，三处都报得出来（`#72`）。
 
 范围钉在这里（`docs/*.md` + `README.md`，对照 `tests/*.py` 的 `def`、`cli.build_parser()` 的活参数、
-`tests/*.py` 的模块级 `def test_*` 计数、`src/**.py` 的 AST 字面量）：
+`tests/*.py` 的模块级 `def test_*` 计数、`src/**.py` 的 AST 字面量、README 能力清单的具数主张对照
+`docs/*.md` 里同一条 bullet 点到的那一节）：
 
 * 对照 **AST 里的函数名**而不是 `pytest --collect-only` 的输出。一是 subprocess 让测试不再离线
   自足；二是 addopts 已经带 `-q`，再叠一个 `-q` 会把 collect 输出压成每文件计数，一个"36 条全部
@@ -28,6 +30,9 @@
   `[参数]` 后缀的用例，而正则也停在 `[` 之前，所以基础函数名足够。
 * 只认 `test_` 形状，不认一般标识符。文档里的 `` `region_budget_check` `` 这类引用有真价值，但
   "明确不做"清单里也写着将来才有的函数名，那类引用现在必然报红，报红三次就会被整体关掉。
+* 具数落点只认**同一条 bullet 里点到的那一节**，背书只认「N 具+名词」和「N 行的具名表」两种形状；
+  跨 bullet 不算（读者照着有数的那一条查还是查不到）、裸的「N 具」不算（同一节里的裸数可能说的是
+  另一批）、README 不给自己背书（拿手册查手册是自我背书）。这三条是声明的限界，各有一条合成用例钉着。
 
 写文档由此多了五条约束，都是这条扫描连 `README.md` 一起扫的直接后果（README 的"测试"一节把这话
 也说给了人看）：
@@ -1324,10 +1329,13 @@ def test_a_line_naming_mutations_without_a_separator_is_not_a_tally():
 # 「见〈某节标题〉」：README 的能力清单压成指针形之后也只有这一个落点。读者照它搜索，标题被改过
 # 名字（或被作者记错）就落在空处，而这件事不会红——所以这一族扫"指没指到"。
 # 它不管"指对了没有"：那是上面行号那一族的事，指针这里只知道标题文本。
-POINT = re.compile(r"〈([^〉\n]{2,})〉")
+# `[^〉\n]` 那一版把散文的硬换行当成了"这里没有指针"，于是 5 处断行的指针既不进判据也不进计数。
+# 改成允许跨行、但不许再套一个 `〈`：有人写了半截括号时，这一条宁可少吞一段，也不会把整节吸进一次匹配。
+POINT = re.compile(r"〈([^〉〈]{2,})〉")
 HEAD = re.compile(r"^#{2,4}\s+(.*)$")
 # 标题里的标点是排版不是主张：指针常把反引号、引号、冒号、逗号省掉，或把全角换成半角。
-PUNCT = "\"'`“”‘’，,：:、（）()[]【】…—～~ " + "　"
+# `\n` 也在这一份里：跨行的指针折掉换行才是那一节标题，续行的缩进同样一起折掉。
+PUNCT = "\"'`“”‘’，,：:、（）()[]【】…—～~ \n" + "　"
 
 
 def _flat(text: str) -> str:
@@ -1362,11 +1370,10 @@ def _dead_pointers(pages: dict[str, str], heads: list[str]) -> list[tuple[str, i
     norms = [_flat(h) for h in heads]
     bad: list[tuple[str, int, str]] = []
     for page, text in pages.items():
-        for n, line in enumerate(text.splitlines(), 1):
-            for m in POINT.finditer(line):
-                want = _flat(m.group(1))
-                if not want or not any(want in h for h in norms):
-                    bad.append((page, n, m.group(1)))
+        for m in POINT.finditer(text):
+            want = _flat(m.group(1))
+            if not want or not any(want in h for h in norms):
+                bad.append((page, text.count("\n", 0, m.start()) + 1, m.group(1)))
     return bad
 
 
@@ -1399,18 +1406,242 @@ def test_the_pointer_scanner_fires_on_a_dead_title_only():
         "单字标记不进扫面：这是声明的限界，放宽它（`{2,}` 改成 `{1,}`）这条就得红"
 
 
+def test_the_pointer_scanner_reads_a_pointer_broken_by_a_hard_wrap():
+    """被硬换行截断的指针也要扫得到：断在一行中间的〈…〉，读者照搜，刀也照样要落。
+
+    两侧各一条，缺一不可。只写"死的那条要报"，修的人改成"凡跨行的都报"也能绿；只写"活的那条不报"，
+    把这一族整个关黑也一样绿。行号钉在**开括号那一行**：读者按它跳转，落在尾部那行等于没落。
+    """
+    heads = ["配置：密钥的值永远不进文件"]
+    dead = _dead_pointers({"a.md": "见〈这一节从来就\n没有过〉"}, heads)
+    assert [d[2] for d in dead] == ["这一节从来就\n没有过"], \
+        f"跨行的死指针必须报出来——现行扫法逐行匹配 `POINT`，它落在空处：{dead}"
+    assert [d[1] for d in dead] == [1], f"报的行号要是开括号所在那一行，不是尾括号那一行：{dead}"
+    assert _dead_pointers({"a.md": "见〈配置：密钥的\n值永远不进文件〉"}, heads) == [], \
+        "同一形状的活指针不该被误报，不然这一族会把所有跨行括号都喊成死"
+
+
+def test_the_pointer_scanner_sees_every_open_bracket_in_the_real_corpus():
+    """正控制（真实语料）：每本里扫到的指针数必须等于开括号数，也等于闭括号数。
+
+    这一条不等价于"没有死指针"：它管扫面完整。16:55:03Z 现测折叠扫法 67 处（README 33、归档 31、
+    `comparison.md` 3），逐行扫法只有 62——少的 5 处全是被硬换行截断的（README 能力清单里 3 处、归档 2 处）。
+    三数不等还接住另一种损坏：有人写了半截括号（只有 `〈` 没有 `〉`），那既不是指针也不是标题，
+    逐行扫法会静默跳过它。
+    """
+    for name, text in _pointer_corpus().items():
+        found = len(POINT.findall(text))
+        open_, close = text.count("〈"), text.count("〉")
+        assert found == open_ == close, (
+            f"{name}：扫到 {found} 处，开括号 {open_}、闭括号 {close} —— 三数不等说明"
+            "有半截括号，或扫法看不见某种形状"
+        )
+
+
 def test_the_pointer_scanner_is_not_reading_an_empty_corpus():
     """正控制：扫面里必须真有指针，而且 README 和归档两本都要有。
 
     上一条断言的是"没有死指针"，把 `POINT` 改成接不住任何形状（比如把全角尖括号换成半角）它一样绿。
-    地板取 50：判据落地时（15:47:04Z）现测 59 处，讲这一族的散文落盘之后（16:11:32Z）是 62 处
-    （README 30、归档 29、`comparison.md` 3）——涨的 3 处就是这一族自己的指针，压缩那一片还会让它涨，
-    所以地板钉在 50 而不是现值。低于地板说明扫法坏了。
+    地板取 50：判据落地时（15:47:04Z）现测 59 处，讲这一族的散文落盘之后（16:11:32Z）逐行扫法是 62 处
+    （README 30、归档 29、`comparison.md` 3）；`#144b` 把跨行的指针收进扫面后同一棵树复测是 67 处
+    （README 33、归档 31、`comparison.md` 3）——涨的 5 处不是新写的句子，是以前**看不见**的。
+    压缩那一片还会让它涨，所以地板钉在 50 而不是现值。低于地板说明扫法坏了。
     """
     pages = _pointer_corpus()
-    hits = {name: sum(len(POINT.findall(line)) for line in text.splitlines())
-            for name, text in pages.items()}
+    hits = {name: len(POINT.findall(text)) for name, text in pages.items()}
     total = sum(hits.values())
-    assert total >= 50, f"只扫到 {total} 处〈标题〉指针（16:11:32Z 现测 62），多半是扫法坏了：{hits}"
+    assert total >= 50, f"只扫到 {total} 处〈标题〉指针（16:55:03Z 现测 67），多半是扫法坏了：{hits}"
     assert hits["README.md"] and hits["iterations.md"], \
         f"README 与归档是这一族的两个大户，任一方为 0 说明语料被收窄了：{hits}"
+
+
+# ------------------------------------------------------------- 「N 具变异」的落点账
+# 手册能力清单里每一个「N 具变异」都是一句主张：那一批电池跑了 N 具。归档按批记具名表，手册只留
+# 一个数，而这个数**没有任何东西在读**——写错了、或者把两批的和当成一批的具数，读者在手册里查不出来。
+# 行号和指针两族都不管数：指针只保证"点得到一节"，那节里写着几具它不看。所以这一族回查落点。
+CAP_HEADING = "这个仓库现在能做什么、不能做什么"
+# 汉字和半角数字都收，空格可有可无：手册写「6 具变异」，也写「八具手术刀」。
+KNIFE_CLAIM = re.compile(r"(?<!\d)([0-9]+|[一二三四五六七八九十]{1,3})\s?具\s?(?:变异|手术刀|刀)")
+KNIFE_NOUNS = "(?:变异|手术刀|刀)"
+TICKET = re.compile(r"#(\d{1,3})")
+HEAD_LEVEL = re.compile(r"^(#{2,4})\s+(.*)$", re.M)
+# 具名表的第一格是「变异」「具」「刀」之一（`#143` 那张 D 表用「变异」，`#71` 用「具」，`#73` 用「刀」）。
+LEDGER_TABLE = re.compile(r"^\|\s*(?:变异|具|刀)\s*\|[^\n]*\n\|\s*-{3,}[^\n]*\n((?:\|[^\n]*\n?)+)", re.M)
+CN_DIGITS = "零一二三四五六七八九"
+
+
+def _cn_forms(value: int) -> list[str]:
+    """整数的汉字写法（2 另收「两」）——归档里的具数常写成「六具跑完」「八具手术刀」。"""
+    if value < 10:
+        return [CN_DIGITS[value], "两"] if value == 2 else [CN_DIGITS[value]]
+    tens, ones = divmod(value, 10)
+    return [("" if tens == 1 else CN_DIGITS[tens]) + "十" + (CN_DIGITS[ones] if ones else "")]
+
+
+def _to_int(token: str) -> int:
+    if token.isdigit():
+        return int(token)
+    if "十" in token:
+        head, _, tail = token.partition("十")
+        return (1 if not head else CN_DIGITS.index(head)) * 10 + (CN_DIGITS.index(tail) if tail else 0)
+    return CN_DIGITS.index(token)
+
+
+def _capability_bullets() -> list[tuple[int, str]]:
+    """README 那一节的每条 bullet：起始行号 + 拼起来的正文（缩进续行归同一条）。"""
+    lines = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
+    if f"## {CAP_HEADING}" not in lines:
+        raise AssertionError(f"README 里没有「## {CAP_HEADING}」这一节，扫面直接空了")
+    i0 = lines.index(f"## {CAP_HEADING}")
+    out: list[tuple[int, str]] = []
+    cur: list[str] = []
+    start = 0
+    for n in range(i0 + 1, len(lines)):
+        line = lines[n]
+        if line.startswith("## "):
+            break
+        if line.startswith("- "):
+            if cur:
+                out.append((start, "\n".join(cur)))
+            cur, start = [line], n + 1
+        elif line.startswith("  ") and cur:
+            cur.append(line)
+        elif cur:
+            out.append((start, "\n".join(cur)))
+            cur = []
+    if cur:
+        out.append((start, "\n".join(cur)))
+    return out
+
+
+def _ledger_sections() -> list[tuple[str, str, str, str]]:
+    """归档里每一节的 (文件, 标题原文, 归一化标题, 正文)——README 不当落点：拿手册查手册是自我背书。"""
+    out: list[tuple[str, str, str, str]] = []
+    for f in DOCS:
+        if f.name == "README.md":
+            continue
+        text = f.read_text(encoding="utf-8")
+        marks = [(m.start(), len(m.group(1)), m.group(2)) for m in HEAD_LEVEL.finditer(text)]
+        for i, (pos, level, title) in enumerate(marks):
+            end = next((marks[j][0] for j in range(i + 1, len(marks)) if marks[j][1] <= level), len(text))
+            out.append((f.name, title, _flat(title), text[pos:end]))
+    return out
+
+
+def _ledger_rows(body: str) -> list[int]:
+    """那一节的具名表各有几行数据——表的行数本身就是一个具数。"""
+    return [len([ln for ln in m.group(1).splitlines() if ln.strip().startswith("|")])
+            for m in LEDGER_TABLE.finditer(body)]
+
+
+def _states(body: str, value: int) -> str:
+    """这一节有没有把 `value` 这个具数说出来：写成「N 具+名词」（汉字也算），或有一张具名表正好 N 行。
+
+    两条规则都要**紧**：裸的「N 具」不当背书，因为同一节里「8 具」可能说的是另一批（17:02:11Z 实测
+    20 处有落点的主张里，0 处只靠裸数字，所以放宽它不换来任何真主张，只换来错号蒙绿的空间）。
+    """
+    forms = [str(value), *_cn_forms(value)]
+    for form in forms:
+        if re.search(rf"(?<!\d){form}\s?具\s?{KNIFE_NOUNS}", body):
+            return f"写了 {form} 具+名词"
+    if value in _ledger_rows(body):
+        return f"有一张 {value} 行的具名表"
+    return ""
+
+
+def _unbacked_knife_counts(bullets: list[tuple[int, str]] | None = None,
+                           sections: list[tuple[str, str, str, str]] | None = None,
+                           ) -> list[tuple[int, str, list[str]]]:
+    """The check itself: which 「N 具变异」 in the manual has no ledger that states N.
+
+    落点从**同一条 bullet**里取：〈指针〉按归一化标题子串找，`` `#NN` `` 按标题尾部的票号找。
+    跨 bullet 不算——一条写了数没写落点、邻条写了落点，读者仍然查不到这一条的数。
+    """
+    bullets = bullets if bullets is not None else _capability_bullets()
+    sections = sections if sections is not None else _ledger_sections()
+    bad: list[tuple[int, str, list[str]]] = []
+    for start, body in bullets:
+        claims = KNIFE_CLAIM.findall(body)
+        if not claims:
+            continue
+        wants = [_flat(p) for p in POINT.findall(body)]
+        tickets = set(TICKET.findall(body))
+        located = [(name, title, text) for name, title, flat, text in sections
+                   if any(w and w in flat for w in wants) or any(f"#{t}" in title for t in tickets)]
+        for match in KNIFE_CLAIM.finditer(body):
+            value = _to_int(match.group(1))
+            if any(_states(text, value) for _, _, text in located):
+                continue
+            bad.append((start, match.group(0), [f"{name}:{title[:22]}" for name, title, _ in located]))
+    return bad
+
+
+def test_every_knife_count_in_the_capability_list_has_a_ledger_that_states_it():
+    bad = _unbacked_knife_counts()
+    assert not bad, (
+        "这些具数在本手册点到的那一节里没有落点（读者无从复核，元组是 行号 主张 点到的节）："
+        f"{bad}"
+    )
+
+
+def test_the_knife_ledger_check_bites_on_each_of_its_two_rules():
+    """合成语料把判据的每一半各钉一次：两条背书规则、两种定位、一条"跨 bullet 不算"、一条"裸数字不算"。
+
+    真实语料那条跑绿不证明这些半各有用——17:02:11Z 现测 23 处主张里 15 处靠「N 具+名词」、5 处靠
+    具名表行数、0 处只靠裸数字；把任一半改成永真，真实语料那条不红，只有这一条红。
+    三处聚合数（11/68/17）换成各批自己的具数之后 17:10:15Z 复测是 22 处：20 靠名词、2 靠表行数。
+    """
+    sections = [("iterations.md", "第一批电池：`#900`", "第一批电池#900", "判据落地时跑了 7 具变异。"),
+                ("iterations.md", "第二批电池：`#901`", "第二批电池#901",
+                 "| 具 | 改动 | 结果 |\n| --- | --- | --- |\n| K1 | 摘掉判据 | RED |\n"
+                 "| K2 | 摘掉地板 | RED |\n| K3 | 负控制 | GREEN |"),
+                ("iterations.md", "第三批电池：`#902`", "第三批电池#902", "八具手术刀全部具名兑现。")]
+    backed = [(1, "- ✅ 甲：7 具变异见〈第一批电池〉。"),
+              (2, "- ✅ 乙：三具变异（`#901`）都具名。"),
+              (3, "- ✅ 丙：八具手术刀见〈第三批电池…〉。")]
+    assert _unbacked_knife_counts(backed, sections) == [], \
+        f"数字与汉字两种写法、相邻与表行数两条规则、指针与票号两种定位都该算指着：{backed}"
+    wrong = [(1, "- ✅ 甲：8 具变异见〈第一批电池〉。"),
+             (2, "- ✅ 乙：四具变异（`#901`）都具名。")]
+    assert [b[1] for b in _unbacked_knife_counts(wrong, sections)] == ["8 具变异", "四具变异"], \
+        "同一节里写着 7 具而手册写 8 具、表里三行而手册说四具，都必须报——差一格就是腐烂"
+    orphan = [(1, "- ✅ 这条只有数，没有落点：九具变异。"),
+              (2, "- ✅ 落点在邻条：见〈第一批电池〉。")]
+    assert [b[0] for b in _unbacked_knife_counts(orphan, sections)] == [1], \
+        "跨 bullet 的落点不算：读者照着有数的那一条查，仍然查不到"
+    bare = [(1, "- ✅ 那一节只给了裸数，不算背书：9 具变异见〈只提裸数〉。")]
+    sections_bare = [("iterations.md", "只提裸数：`#903`", "只提裸数#903", "那一跑共 9 具，逐具结论一致。")]
+    assert [b[0] for b in _unbacked_knife_counts(bare, sections_bare)] == [1], \
+        "裸「N 具」不做背书（17:02:11Z 实测真语料 0 处需要它），放宽它等于给错号留邻居蒙绿的空间"
+    launder = [(1, "- ✅ 甲：8 具变异见〈第一批电池〉。")]
+    sections_lazy = [("iterations.md", "第一批电池：`#904`", "第一批电池#904", "那一跑共 18 具变异。")]
+    assert [b[1] for b in _unbacked_knife_counts(launder, sections_lazy)] == ["8 具变异"], \
+        "那一节写着 18 具而手册写 8 具时必须报：背书串的左边界不收住，8 就从 18 里数出来，错号靠邻居蒙绿"
+
+
+def test_the_knife_ledger_scanner_is_not_reading_an_empty_corpus():
+    """正控制：扫面里必须真有具数主张，而且两条背书规则在真语料上各有读者。
+
+    把 `KNIFE_CLAIM` 改坏（比如只认「变异」不认「刀」）时"没有红"会变成"没主张"，上一条就绿了。
+    地板取 15：17:01:25Z 现测 23 处主张（汉字与半角两种写法都在），三处聚合数换成各批自己的具数后
+    17:10:15Z 复测 22 处——压掉一半也还在地板上。
+    """
+    bullets = _capability_bullets()
+    claims = [c for _, body in bullets for c in KNIFE_CLAIM.findall(body)]
+    assert len(claims) >= 15, f"只扫到 {len(claims)} 处具数主张（17:10:15Z 现测 22），多半是扫法坏了：{claims}"
+    sections = _ledger_sections()
+    assert all(name != "README.md" for name, _, _, _ in sections), \
+        "背书只从 docs/ 取：拿手册查手册是自我背书，README 那句「N 具」不算另一句的落点"
+    located: list[tuple[str, str, str]] = []
+    for _, body in bullets:
+        wants = [_flat(p) for p in POINT.findall(body)]
+        tickets = set(TICKET.findall(body))
+        located += [(name, title, text) for name, title, flat, text in sections
+                    if any(w and w in flat for w in wants) or any(f"#{t}" in title for t in tickets)]
+    by_noun = sum(1 for token in claims
+                  if any(re.search(rf"(?<!\d){_to_int(token)}\s?具\s?{KNIFE_NOUNS}", t)
+                         or any(re.search(rf"(?<!\d){c}\s?具\s?{KNIFE_NOUNS}", t) for c in _cn_forms(_to_int(token)))
+                         for _, _, t in located))
+    by_table = len(claims) - by_noun
+    assert by_noun and by_table, \
+        f"两条背书规则必须各有读者（汉字写法与阿拉伯写法、具名表行数），现在是 相邻={by_noun} 表={by_table}"
