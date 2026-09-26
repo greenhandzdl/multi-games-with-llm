@@ -6,7 +6,7 @@
 * 写盘的 `request` / `response` 走白名单，`headers` 连键名都不存在；
 * `data/`（真轨迹含完整 prompt）和 `.env` 在 gitignore 里。
 
-范围在这里钉死（`src/` + `tests/fixtures/` + `docs/` + 一份新生成的日志），因为一条"扫全仓
+范围在这里钉死（`src/` + `tests/fixtures/` + `docs/` + `README.md` + 一份新生成的日志），因为一条"扫全仓
 库"的命令在没 `git init` 的目录上会返回 0 且不报错——那是典型的假绿。想查提交历史请用
 README 里那条 `git log -S`，并且**只在 `git init` 之后**执行。
 """
@@ -23,7 +23,7 @@ from wolfengine.config import Config
 from wolfengine.events import EventLog, Kind
 
 ROOT = Path(__file__).resolve().parents[1]
-SCAN = [ROOT / "src", ROOT / "tests" / "fixtures", ROOT / "docs"]
+SCAN = [ROOT / "src", ROOT / "tests" / "fixtures", ROOT / "docs", ROOT / "README.md"]
 SK_SHAPED = re.compile(r"sk-[A-Za-z0-9]{8,}")
 HIGH_ENTROPY = re.compile(r"\b[A-Za-z0-9_\-+/=]{28,}\b")
 # 白名单而非黑名单：允许出现的是我们自己造的长串（折叠摘要里的分隔线、fixture 文本），
@@ -37,12 +37,30 @@ def _text_files() -> list[Path]:
         if base.is_dir():
             out += [p for p in base.rglob("*")
                     if p.is_file() and p.suffix in {".py", ".md", ".json", ".jsonl", ".txt", ".toml", ".html"}]
+        elif base.is_file():
+            out.append(base)
     return out
 
 
 def test_scan_roots_exist():
     """A guard whose target vanished passes silently. This one does not."""
     assert any(b.is_dir() for b in SCAN), "no scan roots — the test below would be vacuous"
+
+
+def test_the_documented_paste_target_is_inside_the_scan():
+    """`SCAN` 是目录清单，于是"哪一类文件没有读者"这件事就藏在它的形状里：`src/`、
+    `tests/fixtures/`、`docs/` 三个目录，而 **README.md 作为一个裸文件路径不在其中**。这份
+    仓库里最容易长出一段终端粘贴的文件恰恰是 README——真跑一次 `batch --real` 之后，粘进
+    文档的就是那一段 stderr，里面带着 `Authorization: Bearer …`。上一跑数过：README 5678 行、
+    全仓最长，而密钥扫描一行都不读它。
+
+    断言只钉"路径进没进扫描集"，不钉"现在有没有密钥形状"：后者现在当然是绿的，绿得正好
+    说明它没在扫。
+    """
+    names = {p.relative_to(ROOT).as_posix() for p in _text_files()}
+    assert "README.md" in names, (
+        f"README 不在密钥扫描里，而它是文档中最长的一份粘贴目标（扫到 {len(names)} 个文件，"
+        f"没有一个叫 README.md）")
 
 
 def test_no_key_shaped_string_anywhere_in_the_project():

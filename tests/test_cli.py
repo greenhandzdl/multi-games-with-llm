@@ -1230,3 +1230,87 @@ def test_the_json_lands_beside_whichever_markdown_was_asked_for(tmp_path):
     assert cli.main(["compare", str(tmp_path), "--axis", "temperature",
                      "-o", str(out / "my.md"), "--json"]) == 1
     assert (out / "my.json").exists(), "JSON 落在了批次目录，而 markdown 在 `-o` 指的地方"
+
+
+# --------------------------------------------------- README 的演示块整块能跑（#136）
+DEMO_HEADING = "## 三分钟离线演示"
+# 一块一条：每条命令只留一句"别人替不了它"的读数。挑标记前先按 `head -3` 的那个窗口逐命令实测
+# 过谁印了什么（`/tmp/percmd136.txt`，2026-09-26T07:10Z）——`[e1] 法官：开局座位` 那种三条命令
+# 都会印的句子在这里没有归因力，K2 那一具刀（flag 打错、只剩另外两条 replay 在说话）就是它放过的。
+# 一处限界要说清楚：`--seat 3` 那条的归因是**窗口相对**的——席位视图是上帝视图的子集，所以
+# `[e4] 法官（私发）` 只在文档写着 `| head -3` 时才是那一行独有的。负控制 C2（把两处窗口放到 4 行）
+# 量的正是这条限界：它照样绿，因为那时 `--god` 也印得出 e4。
+DEMO_MARKERS = {
+    '_g00000007.jsonl': "run 写下的是哪一份（`echo \"$LOG\"` 那一行）",
+    "[e2] 法官（私发）": "replay --god：发牌行只有上帝视角看得见",
+    "[e4] 法官（私发）": "replay --seat 3：这一席自己的那张牌",
+    "复盘 -> ": "export 落的文件",
+    "狼人杀直播": "watch 的那一帧",
+    '"game_id"': "audit 的 JSON",
+}
+
+
+def _readme_demo_block() -> str:
+    """《三分钟离线演示》里那个 ```bash 块，原样，一个字不改。
+
+    测试不抄一份"等价"的命令清单：抄写就是第二份主张，而两份会在下一次改文档时各自演化
+    ——这一片的 bug 恰恰是文档里那句 shell 和目录的真实内容对不上。
+    标题按整行相等找，不按前缀：`find()` 会把 `## 三分钟离线演示x` 也算命中（K4 那具刀量出来的）。
+    """
+    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
+    lines = readme.splitlines()
+    try:
+        at = next(i for i, l in enumerate(lines) if l.strip() == DEMO_HEADING)
+    except StopIteration:
+        raise AssertionError(f"README 里没有整行等于 {DEMO_HEADING!r} 的标题") from None
+    rest = lines[at + 1:]
+    try:
+        opened = next(i for i, l in enumerate(rest) if l.strip() == "```bash")
+    except StopIteration:
+        raise AssertionError(f"{DEMO_HEADING} 这一节后面没有 ```bash 块") from None
+    try:
+        closed = next(i for i in range(opened + 1, len(rest)) if rest[i].strip() == "```")
+    except StopIteration:
+        raise AssertionError("bash 块没有收尾的围栏") from None
+    block = "\n".join(rest[opened + 1:closed]) + "\n"
+    assert block.strip(), "围栏里的块是空的——那这条用例就是在空转"
+    return block
+
+
+def test_the_readme_demo_block_runs_verbatim(tmp_path, no_network):
+    """把人照着 README 敲的那一段整块交给 bash，看它有没有真打到一局日志上。
+
+    现场是 README 上一节自己造出来的：`--dry-run --out data` 与 `run --out data` 共用一个
+    目录，于是那个目录里合法地住着两种 `*.jsonl`。引擎的两个读取器都把转储按名字跳过
+    （`metrics.read_dir` / `batch.read_arm`），演示块里那句 `LOG=` 是同一句判据的第三份
+    抄写——而它此前那份抄错了：`ls data/*.jsonl | tail -1` 挑中的是转储，因为 `g` 排在任何
+    时间戳后面（`test_the_readme_demo_block_runs_verbatim` 在修好前的第一次实跑里，六条命令
+    各印了一句「这不是一局日志」）。
+    """
+    import os
+    import shutil
+    import subprocess
+    import sys
+
+    bin_dir = str(Path(sys.executable).parent)
+    assert shutil.which("wolf", path=bin_dir), (
+        f"`{bin_dir}` 上没有 `wolf`，这一跑等于什么都没执行")
+    (tmp_path / "data").mkdir()
+    assert cli.main(["run", "--dry-run", "--seed", "22", "--out", str(tmp_path / "data")]) == 0
+    assert no_network == []
+    dumps = sorted(p.name for p in (tmp_path / "data").glob("*.prompts.jsonl"))
+    assert dumps, "夹具没能造出「同一目录里两种 jsonl」这个现场，用例就在空转"
+
+    block = _readme_demo_block()
+    script = tmp_path / "demo.sh"
+    script.write_text(block, encoding="utf-8")
+    proc = subprocess.run(["bash", str(script)], cwd=tmp_path, text=True,
+                          capture_output=True, stdin=subprocess.DEVNULL,
+                          env={**os.environ,
+                               "PATH": bin_dir + os.pathsep + os.environ.get("PATH", "")})
+    evidence = (f"--- 块 ---\n{block}\n--- stdout ---\n{proc.stdout}\n"
+                f"--- stderr ---\n{proc.stderr}")
+    assert proc.returncode == 0, f"这一块的退出码是 {proc.returncode}：{evidence}"
+    for marker, who in DEMO_MARKERS.items():
+        assert marker in proc.stdout, f"{who} 没印出来（标记 {marker!r}）：{evidence}"
+    assert "这不是一局日志" not in proc.stdout + proc.stderr, evidence
