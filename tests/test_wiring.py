@@ -697,8 +697,9 @@ METHOD_TRIAGE: dict[str, str] = {
     "state.py::GameState.public_state":
         "待判：唯一读者与上面 `PublicState.as_dict` 那一格住在同一句里（tests/test_rules.py 的"
         " `st.public_state().as_dict()`），而 src/wolfengine/state.py 的页眉把 PublicState 说成 prompt"
-        " Region B 的唯一来源——装配器 assemble.py 的 `_region_b` 收的是 Percept，生产链里没有一处构造过"
-        " PublicState，这句 docstring 的账另开 `#157`",
+        " Region B 的唯一来源——装配器 assemble.py 的 `_region_b` 收的是 Percept。构造点不是零：23:19:13Z"
+        " grep 现测 `src/`+`scripts/` 里 `PublicState` 唯一一处构造就在 `state.py` 的 `public_state()`"
+        " 体内，也就是这一格自己——所以除它以外没有第二条路能造出 PublicState。这句页眉的账另开 `#157`",
     "info.py::Percept.by_kind":
         "待判：七处读者全在 tests/test_info_isolation.py 与 tests/test_vote_wave.py；孪生 `tail` 是有生产"
         "读者的（人那一屏在 human.py 里就调它），`window` 那一格的名字被 plan.window 顶着——按名字数读数"

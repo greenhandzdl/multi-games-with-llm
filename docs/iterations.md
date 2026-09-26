@@ -6769,8 +6769,8 @@ CONFORM、不符=0、还原字节相同。第一轮那两行照原样留在表�
 而 `window` 这一格的名字被 `plan.window`、`p.window` 顶着，按名字数读数根本分不出是哪一具的，这句只能留在
 限界里。`public_state` 的处置原本写着"公开视图那一屏由 render_live 直接从事件算"，回查时撞出更大的一笔：
 `src/wolfengine/state.py` 的**模块页眉**写着 "Region B of the prompt is rendered only from `PublicState`"，
-可 `src/wolfengine/assemble.py:114` 的 `_region_b()` 收的是 `Percept`，`PublicState` 在生产链里没有一处构造点，
-唯一的读者是 `tests/test_rules.py:472` 那一句 `st.public_state().as_dict()`。这是 `#81`/`#82`/`#118` 那一族
+可 `src/wolfengine/assemble.py:114` 的 `_region_b()` 收的是 `Percept`；而 `PublicState` 在 `src`+`scripts` 里
+**唯一一处构造点就坐在 `public_state()` 体内**（23:19:13Z grep 现测），也就是名册里这一格自己。唯一的读者是 `tests/test_rules.py:472` 那一句 `st.public_state().as_dict()`。这是 `#81`/`#82`/`#118` 那一族
 （docstring 认领了一个不存在的读者），处置变更不在清理这一片里，另开 `#157`。
 
 **删完留下的悬空点名要一起收**：`compress.py` 的 `chronicle()` 页眉有一句"Named apart from `Percept.public`
@@ -6820,3 +6820,12 @@ K2/K4/K5 各只红一条（新那条），这就是这条与 `#81`/`#155` 不是
 不顶"，它自己先顶了一次就等于把教训抹掉。第二处：同一篇里我把一条用例名写成了截断形式（后面留了省略号），
 `test_every_test_named_in_the_docs_resolves` 当场报"文档点名的用例在 tests/ 里不存在"。省略号是我的书写
 习惯，闸门只认那是一个名字；要么写全名，要么不提名字。
+
+**追补（23:19:13Z）：上面那句"没有一处构造点"是我写错的，已改。** 错法很具体：`#156` 那把尺数的是**谁调用
+这一具方法**，我从"没人调用 `public_state()`"推到了"`PublicState` 没人构造"——这是两个问题，前一具的构造点
+恰好在后一具的函数体里（`state.py` 的 `public_state()` 就是全树唯一一处 `PublicState(...)`，测试那边一具都没
+直接构造它——23:20:50Z grep 现测：全树 `PublicState(` 只有一处，就是 `state.py:140`；`tests/` 里这个名字只出现在散文与名册里，拿到它的方式是
+`st.public_state()`）。真正的说法是**除这一格自己以外没有第二条路能造出它**，也就是"整具类在产物链上不可达"，
+比"零构造点"弱一档但也更值得记进 `#157`。改的是两处散文（归档这一节与 `METHOD_TRIAGE` 那一格），代码一行
+没动；`#157` 的 description 同步换成现测那一版。**可复用的一条**：否定式全称（"没有一处 X"）在落笔时必须
+点名它由哪一趟扫描驱动、那趟扫描的出口集合是什么——`#156` 的闸门恰好**不**看构造点，所以它替这句话背不了书。
