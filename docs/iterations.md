@@ -3781,9 +3781,9 @@ RED 00:14:28Z（三条新用例先红，红的都是"句子少了一半"那一�
 行数一根没动——被校验过、不可能再和 `act` 不同的东西不必再抄一遍。被退回的那份原文一直都在 `attempts`
 里，`#114` 起这才是"模型自相矛盾"的唯一证物，
 `test_a_self_inconsistent_potion_is_kept_as_the_refused_answer_not_as_a_fact` 把那一整串 JSON 逐字钉住。
-表这边把五个 kind 的作者侧键点名（`events.py:70` 起那五行，`evidence`/`belief`/`meta`/`_idem` 全写出来）。
+表这边把五个 kind 的作者侧键点名（`events.py:70` 起那五行，`evidence`/`belief`/`meta`/`_idem` 全写出来）。`evidence` 那一格后来被 `#132` 收了回去：普查的口径收紧之后它露出原形——五份 payload 里那串编号和同一格里的 `meta.citation_stats` 是同一件事的两支笔，删掉的是抄的那一份。
 
-闸门新文件 `tests/test_payload_shape.py`（现 7 条：`#114` 那 4 条之后 `#115` 又添 2 条、`#119` 再添 1 条），语料是**当前
+闸门新文件 `tests/test_payload_shape.py`（现 9 条：`#114` 那 4 条之后 `#115` 又添 2 条、`#119` 再添 1 条、`#132` 再添 2 条），语料是**当前
 代码写出来的一整局**（复用 `test_golden_game.play_authored`，从盘上读回来），不是旧日志：历史里
 `summary` 那三格是合法存在过的，拿它当反例会让闸门永远红、然后永远被人跳过。那四条的分工是
 "落盘的键都得在表上"、"表上的键都得有人写"、"语料不能空"（13/14 个 kind 在这一局里出现过，缺的那个
@@ -3840,7 +3840,7 @@ README 自己就是 `test_doc_citations.py` 与 `test_no_secrets.py` 的输入�
 * 第三条不进代码：这轮我给自己配的两处"MISS 控制点"是凭记忆写的，不是读来的，删掉不给任何结论用——
   只有真看过的那几行才有资格当对照。
 
-判据最后换成 AST：`test_payload_shape.py:134` 的 `src_load_sites` 只认 `ast.Load` 位置上的下标和
+判据最后换成 AST：`test_payload_shape.py:181` 的 `src_load_sites` 只认 `ast.Load` 位置上的下标和
 `.get`/`.pop`，写侧（`payload[k] = …`、字典字面量的键）与 docstring 都进不来。01:14:53Z 量出
 `night_action.action` 在 src 里 0 个读点；01:15:55Z 量出 `window` 与 `folded_days` 同样 0——三局真日志
 分别折到了 9 条、7 条、9→15 条逐字窗口，产物链上没有任何一句话说得出这件事，`audit` 那块只数标记的
@@ -5496,3 +5496,96 @@ K5 那一具（判据整个不跑）是这一片设计上的一格：它红夹�
 （`984 passed in 68.86s`），那之后落盘的只有 README 自己的三格计数与墙钟句子，10:45:57Z 在最终树上
 复跑仍数到 **984**（`72.38s`，又一格"墙钟不是账"）。产品代码一行没动——`cli.py` 与
 `events.py` 里那三句只是被读，不是被改。
+
+### 载荷普查学会问"你读的是哪本字典"：一张双写表被收了回去（`#132`）
+
+票面上写的是"按键名数读者，看不见这一 kind 的这一格没人读"。动手前先量了两跑（约定：先量样本再
+写方案），两跑合起来把这张票改成了另一件事。
+
+**量的第一跑（10:56:55Z，`data/measure132.py`）**：形状表 14 个 kind、26 个唯一键名，按 kind 展开
+是 55 格，跨 kind 共用的键名 7 个（`text` 跨 7 个 kind、`target` 跨 6 个，五个决策 kind 共用
+`act`/`belief`/`evidence`/`meta`）。把判据换成逐格认领之后，零读者的格子是 **1 格 → 1 格**：
+kind 归因在今天的语料上一条都没多抓到。原因是保守的归因规则（读者所在的函数里一个 `Kind.X` 都没提，
+就算它服务所有 kind），而真正的读者恰好都是泛用的渲染器与度量器。所以这一片**不做** kind 归因，
+把测量留在文档里，而不是把 55 格换成一个今天不开火的口径。
+
+**量的第二跑（10:59:19Z，`data/measure132b.py`）**：换一条口径——不问"有没有人读这个键名"，问
+"被下标的那个对象像不像一份 payload"。零读者立刻从 1 个键名变成 2 个：多出来的那个是 `evidence`。
+它此前不是没人读，是被一个假读者养着：`schema.py:352` 的 `out.get("evidence")` 读的是**模型答出来
+的那个 dict**，跟落盘的五份 payload 没有半点关系，而只数键名的尺子把它算成了读者。同一跑把别名
+的账也量了：src 里 base 恰为 `p` 的 Load 点 47 个，其中键名落在形状表里的 24 个**全部**在
+`compress.py`（`p, k = e.payload, e.kind` 那行散出去的别名），所以"像 payload"必须认这个名字，
+否则 24 处真读者一起被算丢。顺带量的第三件事：判据原来用 `glob("*.py")` 扫 `src/wolfengine`，
+子包整层不在扫面里（26 个文件 vs 递归的 28 个）——今天多出的两个文件贡献 0 个 Load 点，改成
+`rglob` 并**把标签从 basename 换成相对路径**（`#139` 那一课的孪生：两棵 `__init__.py` 会同名）。
+
+**顺着 `evidence` 查到的东西（11:00:47Z）**：它不是"写了没人读"，是**写了两遍**。同一格旁边的
+`meta.citation_stats` 里躺着 `cited` / `valid` / `invented` / `not_visible` / `malformed` 五串编号，
+是 `legality._check_citations` 算出来的，而 `payload.evidence` 是同一个 `action` 上再抄一遍。扫
+`data/**/*.jsonl` 12 份：553 条带 `evidence` 的记录，三份清单各自去重排序后
+`evidence == valid` 553/553、`evidence == cited` 553/553，一条不差——因为它们本来就是同一次
+`check_legality` 的两个出口。非空的那 209 条（11:00:13Z 另跑）说明这格是真在记东西，不是空表。
+读者那一侧却只有一支笔有：`metrics` 两处 + `batch` 一处读 `citation_stats`，产品链上读
+`payload.evidence` 的是 0 处。这一格和 `#110`/`#111`/`#113` 是同一族，那一族的处置一直是**删掉抄的
+那一份**，被抄的那一份留着。于是 `agent._write` 不再抄 `evidence`，形状表里五个 kind 的那一格一起
+收回。指针留在表上：`events.py:70` 那一行 `SPEECH` 的字典里现在少了那一格，五行各自原地改过、
+总行数一格没动。
+
+**两条证人挪了家，不是删了**：`test_the_salvage_never_launders_a_second_kind_of_violation` 和
+`test_an_invented_citation_is_refused_and_the_refusal_is_kept` 原来读 `payload["evidence"]` 来证明
+"编造的编号没被洗进最终动作"。两格都改读 `meta.citation_stats`，且比原来更严：前一处现在同时要求
+`valid == []` **和** `invented == []`（只查抄本只能发现"抄了什么"，查原本能发现"洗进了什么"）。
+K10 那具就是钉这一条的：把 rung4 的复用条件从 `all` 改成 `any`，编造编号会被真的复用进最终动作，
+那条证人必须红。
+
+**已知限制，写在判据旁边而不是这里**："像 payload"认的是 `payload` / `p` / `pl` 三个名字加上任何
+含 `payload` 的链式表达式——认名字，不认数据流。今天它没有放过任何东西，但 `report.py`/`batch.py`
+/`metrics.py` 里那些 `p` 是别的字典（prompt 记录、逐臂统计），下一个撞上新键名的人会被误算。要做
+成数据流得追到调用点，代价是把一条 AST 判据变成半个类型推导器；这一格宁可挂着名字。
+
+#### 变异电池（11:14:18Z 起，61 秒，10 具刀 + 2 具负控制，12 个 stage）
+
+基准：三具证人的子集（`test_payload_shape.py` + `test_agent_turns.py` + `test_golden_game.py`）**66
+passed，0 预存红**才开的电池。刻意跑子集而不是全量：文档闸门那几位的红与本片无关，混在名册里只会
+把归因变成猜（`#106` 那一课）。下面的"红几条"都是子集读数，不是套件半径。
+
+| 刀 | 结果 |
+| --- | --- |
+| K1 把 `evidence` 那一格抄回去（`agent._write` 恢复第二支笔） | RED 2：`test_the_citation_list_is_recorded_once`（抓到双写）+ `test_the_table_names_every_key_that_lands_on_disk`（表里没有这一格了，落盘却多一条）。要求不含 STALE 那一具——它是 K2 的活 |
+| K2 只把形状表里那一格恢复、产品代码不动 | RED 2：`test_the_table_names_no_key_the_engine_stopped_writing`（表点了引擎已停笔的键）+ 无人读取闸门（`evidence` 重新变成零读者）。与 K1 红的是不同的两条，两具各自定位一半 |
+| K3 `is_payload` 恒真（退回"只按键名数"） | RED 2：`test_a_read_only_counts_when_what_got_subscripted_is_a_payload` + 控制用例（`evidence` 的假读者又绿了）。这正是这一片的缺陷本体 |
+| K4 `PAYLOAD_BASES` 只剩 `"payload"`（不认别名 `p`） | RED 3：上一条的 2 条再加 `test_every_declared_key_is_read_by_somebody_or_named_here`——24 处真读者一起被算丢，`teammates` 之类的键重新变成"无人读" |
+| K5 砍掉 `.get`/`.pop` 那一支（只认下标） | RED 3：同 K4。`compress.py` 的 `p.get('summary', '')` 在单引号 + f-string 里，这一支是它唯一的读法 |
+| K6 等价刀（预先声明）：Load 判定放宽成 Load/Store/Del | GREEN：今天表里没有"只被写、从不被读"的 payload 键可放宽，尺子量不到。限界，不是收益 |
+| K7 等价刀（预先声明）：`rglob` 收回 `glob` | GREEN：预先量过——子包多出的两个文件贡献 0 个 Load 点，所以这一格今天不承重。这一具的意义是记下"等谁出现" |
+| K8 等价刀（预先声明）：标签从相对路径退回 basename | GREEN：`src/wolfengine` 今天只有一棵 `__init__.py`，同名还没成灾。`#139` 那一课的预付款 |
+| K9 `"valid": sorted(valid)` 改成 `[]`（原本被抹平，抄本还在） | RED 2：`test_a_private_citation_passes_and_a_public_one_does_not_become_illegal` + `test_m4_citation_rates_have_the_designed_numerators`。证的是证人搬家以后仍然咬得住原本 |
+| K10 rung4 的复用条件 `all(` → `any(`（编造编号被真复用进最终动作） | RED 1：`test_the_salvage_never_launders_a_second_kind_of_violation`。挪家后的那条断言同时要求 `valid == []` 与 `invented == []`，只看抄本的旧写法在这里会漏 |
+| C1/C2 负控制：白名单 `PAYLOAD_BASES` 多一个语料里没人用的名字 `pp`；把 `_write` 里新写的那句注释换个说法 | GREEN，符合：认名字的尺子不该被"多一个名字"改动，判据更不该读注释散文 |
+
+还原：12 段替换后逐文件 `cmp` **全部字节一致**；`find . -name '*.pyc'` 在 `PYTHONDONTWRITEBYTECODE=1`
+下 0 命中（无字节码投毒）。
+
+#### 这一片改到的旧数
+
+`tests/test_payload_shape.py` 七条 → **九条**（新增：抄本那条、"读的是哪本字典"那条），README 里没有
+它的条数格，条数主张住在 `docs/iterations.md` 的〈载荷普查〉那一节；套件总数 984 → **986**，11:22:26Z
+那一跑 `986 passed in 72.69s`，最终树上又数了两跑（11:27:29Z `79.37s`、11:31Z `109.37s`）仍是 986——
+同一份树，散文改动之间秒数动了 36 秒，〈墙钟不是账〉那一格又添一例。落盘的产物代码只有两处，且都是**减**：`agent._write` 少抄一格、
+`events.py` 形状表少五格。`data/**/*.jsonl` 那 12 份是历史语料，里面的 `payload.evidence` 还在盘上，
+读侧现在没人读它——所以这一片之后，旧日志里那一格是"当年写过"，不是"现在还在写"。
+
+#### 这一片顺手撞上的另一件事（记成 `#141`，没动它）
+
+三跑全量里有一跑（11:25:23Z，`1 failed, 985 passed in 100.24s`）红在
+`test_a_finished_batch_prints_its_line_and_exits_0`：rc=1，stdout 印着 `canary INVALID_DRIFT`。
+它单独重跑 4 passed，前后两跑全量都是 986，所以红的是**宿主机负载**不是这一片的改动——但可以复现：
+桩对每个请求 `time.sleep(0.02)`（`tests/test_loopback_endpoint.py:59` 那句注释主张"定长：让 canary 的
+头尾比测的是端点，不是建连"），而 `report.canary_verdict` 拿头尾探针延迟**中位数之比**越不过
+`DRIFT_RATIO=1.5` 当判据，20ms 的底子上只有 10ms 的余量，GIL 争用与调度抖动跨得过去。
+"换权重"（`answer` 变了）和"这台机器此刻很忙"共用同一个终态码，是 plan §8 第 5 条 / R7 预注册过的
+语义，**不是这一片该单方面收的口径**——所以只登记不修：修哪一侧（判据分码，还是夹具让延迟量得出来）
+不在这一格里做。**而且这不是第一次现世**：`#129` 那轮 B1 那具刀在 pass 2 多弄红一条批次收尾用例，
+当时读那批目录里的 `drift.md` 拿到 `异常探针：latency×0.14`、五个探针答案逐字相同，已经定性成
+"canary 延迟通道对负载敏感"并留在文档里。那一轮选择的是不改判据；这一票要回答的是同一件事第二次
+出现以后还走不走同一条路。

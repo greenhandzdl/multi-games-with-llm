@@ -367,7 +367,7 @@ def test_the_save_is_recorded_as_a_potion_not_as_a_resurrection(golden):
 # ------------------------------------------------------------------------ the gates
 def test_a_private_citation_passes_and_a_public_one_does_not_become_illegal(golden):
     """e17 is the seer's own result: visible to seat 7 and to nobody else, and the gate
-    accepts it. This is the whole reason `evidence` holds event ids instead of prose."""
+    accepts it. This is the whole reason the citation cell holds event ids, not prose."""
     _, _, events, _ = golden
     claim = _ev(events, 25)
     stats = claim.payload["meta"]["citation_stats"]
@@ -380,7 +380,7 @@ def test_an_invented_citation_is_refused_and_the_refusal_is_kept(golden):
     the free preference data a later KTO run would want — and a re-run does not exist."""
     _, _, events, _ = golden
     published = _ev(events, 27)
-    assert published.payload["evidence"] == [] and len(published.attempts) == 1
+    assert published.payload["meta"]["citation_stats"]["valid"] == [] and len(published.attempts) == 1
     rejected = published.attempts[0]
     assert rejected["violations"] == ["invented_event_ids:['e9999']"]
     assert '"e9999"' in rejected["raw"]

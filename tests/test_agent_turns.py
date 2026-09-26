@@ -250,7 +250,8 @@ async def test_the_salvage_never_launders_a_second_kind_of_violation(tmp_path):
 
     cfg, agent, actor, outcome, legal = await _take_speech(tmp_path, make=both)
     ev = agent.log.all()[-1]
-    assert ev.payload["evidence"] == [], "编造的 e999 被复用进了正文"
+    stats = ev.payload["meta"]["citation_stats"]
+    assert stats["valid"] == [] and stats["invented"] == [], "编造的 e999 被复用进了正文"
     assert ev.payload["act"] == "accuse", "引擎默认动作应当由指派决定，而不是照抄被拒的那次"
     assert outcome.fell_back and ev.payload["meta"]["fallback"] == 1
     assert any(v.startswith("invented_event_ids") for v in ev.attempts[0]["violations"])

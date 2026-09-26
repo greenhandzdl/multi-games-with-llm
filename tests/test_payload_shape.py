@@ -119,7 +119,38 @@ def test_the_chosen_act_is_the_only_record_of_which_potion_was_spent(written):
     assert not offenders, f"potion 是 act 的第二支笔：{offenders}"
 
 
+def test_the_citation_list_is_recorded_once(written):
+    """引用了哪几条事件编号，落盘的有两支笔：`payload.evidence` 与 `payload.meta.citation_stats`。
+
+    后者是 `legality._check_citations` 算出来的（cited / valid / invented / not_visible /
+    malformed / uncited，`agent._write` 原样抄进 meta），前者是同一个 `action` 上再抄一遍。
+    实测 11:00:47Z 扫 `data/**/*.jsonl`：553 条带 `evidence` 的记录里，把三份清单各自去重排序后
+    `evidence == valid` 553/553、`evidence == cited` 553/553，一条不差——因为它们是同一次
+    `check_legality` 的两个出口，不是两个来源。而读者只有一支笔有（`metrics.m4_citation_integrity`
+    与 `m5_style_diagnostics`、`batch` 的 uncited 聚合读 meta，11:00:47Z 三处），另一支的读者是
+    0 个产品读点（11:00:48Z：唯一的两处 `["evidence"]` 在 schema.py 的 `out` 上，不是 payload）。
+    这一格和 `potion` 那一条是同一个判据：第二支笔不许活过这一关。#110/#111/#113 删掉三份双写
+    走的也是这条路——删的是**抄的那一份**，被抄的那一份留着并补上读者。
+    """
+    offenders = [(e.seq, e.payload["evidence"],
+                  (e.payload.get("meta") or {}).get("citation_stats", {}).get("valid"))
+                 for e in written if "evidence" in e.payload]
+    assert not offenders, f"evidence 是 meta.citation_stats 的第二支笔：{offenders[:6]}"
+
+
 SRC = Path("src/wolfengine")
+
+# 形状表里出现过的键名，全库一份。住在豁免表旁边是因为两边都要它：豁免表按它点名，
+# `src_load_sites` 的控制用例要拿它逐个问"这一格到底有没有读者"。
+DECLARED_KEYS = frozenset({k for keys in declared_shapes().values() for k in keys})
+
+# "被取键的东西像不像一份 payload"认的就是这三个名字，外加任何链上出现 `payload` 的表达式。
+# 认名字是这条判据已知最弱的一层，代价与依据写在下面的控制用例里。
+PAYLOAD_BASES = frozenset({"p", "payload", "pl"})
+
+
+def is_payload(base: str) -> bool:
+    return "payload" in base or base in PAYLOAD_BASES
 
 # Keys the table declares and no product code reads. Pinned to this exact set in both
 # directions: a fourth name appearing reddens the assertion below, and so does leaving a
@@ -131,23 +162,39 @@ UNREAD = {
 }
 
 
-def src_load_sites(key: str) -> list[str]:
-    """AST 里真读了这个键的地方；写侧（`payload[k] = …`、字典字面量的键）不算。
+def payload_read(node) -> tuple[str, str] | None:
+    """这个节点在**读**一个键吗？是则返回 (键名, 被取键那个对象的源码文本)。
 
-    刻意用 AST 而不是 grep：这一轮里 grep 骗了我两次，方向还一致——都是把"没人读"说得太容易。
+    写侧不算：`payload[k] = …` 的 ctx 是 Store，字典字面量里的 `"k": v` 连 Subscript 都不是。
+    `.pop` 算读者——它把值取走了，但"取走"不能替一个从未渲染的键作证，所以它和 `.get` 同权。
+    """
+    if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant) \
+            and isinstance(node.ctx, ast.Load) and isinstance(node.slice.value, str):
+        return node.slice.value, ast.unparse(node.value)
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+            and node.func.attr in ("get", "pop") and node.args \
+            and isinstance(node.args[0], ast.Constant) and isinstance(node.args[0].value, str):
+        return node.args[0].value, ast.unparse(node.func.value)
+    return None
+
+
+def src_load_sites(key: str) -> list[str]:
+    """AST 里真读了这个键的地方，且**被取键的东西得是一份 payload**。
+
+    刻意用 AST 而不是 grep：上一轮里 grep 骗了我两次，方向还一致——都是把"没人读"说得太容易。
     `\\["k"\\]` 漏掉 `p.get('k')`（单引号），而 `k` 出现在 docstring 里又会被当成读者。两条都在
     下面的控制用例里钉住了。
+
+    只认"payload 上取这个键"是 `#132` 加的第二层：上一版数的是键名，于是 `schema.py:352` 那句
+    `out.get("evidence")`——读的是模型答出来的那个 dict，跟落盘的 payload 没有半点关系——替五个
+    kind 的 `evidence` 格子付了账。名字撞对不等于同一格事。
     """
     hits: list[str] = []
-    for f in sorted(SRC.glob("*.py")):
+    for f in sorted(SRC.rglob("*.py")):
         for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant) \
-                    and node.slice.value == key and isinstance(node.ctx, ast.Load):
-                hits.append(f"{f.name}:{node.lineno}")
-            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
-                    and node.func.attr in ("get", "pop") and node.args \
-                    and isinstance(node.args[0], ast.Constant) and node.args[0].value == key:
-                hits.append(f"{f.name}:{node.lineno}")
+            found = payload_read(node)
+            if found and found[0] == key and is_payload(found[1]):
+                hits.append(f"{f.relative_to(SRC.parent)}:{node.lineno}")
     return hits
 
 
@@ -166,17 +213,37 @@ def test_every_declared_key_is_read_by_somebody_or_named_here(written):
 
 
 def test_the_reader_gate_sees_code_that_a_grep_misses_and_refuses_prose_that_a_grep_invents():
-    """两条控制用例，一条证明这把尺子不瞎，一条证明它不轻信。
+    """三条控制用例，一条证明这把尺子不瞎，两条证明它不轻信。
 
     * `compress.py` 读折叠内容写的是 `p.get('summary', '')`——单引号，且在 f-string 里。
       双引号版的 grep 报"零读者"，AST 报得出来。
     * `_night_text` 的 docstring 里有一句 `payload["action"]`，字面量和读法一模一样。
       grep 会把它当成读者（我这轮真的这么被骗过一次），AST 只看代码，所以 `action` 是零。
+    * `schema.py:352` 的 `out.get("evidence")` 是真代码、真键名、真 Load——但 `out` 是模型答
+      出来的那个 dict，不是落盘的 payload。只数键名的尺子会替 payload 的格子付假账（`#132`）。
     """
-    assert any(h.startswith("compress.py") for h in src_load_sites("summary")), \
+    assert any("compress.py:" in h for h in src_load_sites("summary")), \
         "单引号 + f-string 里的 .get 读不到，说明这把尺子又瞎了"
     assert not src_load_sites("action"), \
         "docstring 里的那句 `payload[\"action\"]` 被当成了读者"
+    assert not src_load_sites("evidence"), \
+        "schema.py 读的是模型答出来的那个 dict，不是 payload，它不该替 payload 的格子付账"
+
+
+def test_a_read_only_counts_when_what_got_subscripted_is_a_payload():
+    """第三条控制的反面：这把尺子不能只是"换个词再 grep 一遍"，它得认得别名。
+
+    `compress.py:75` 写的是 `p, k = e.payload, e.kind`，此后整条渲染链都通过别名 `p` 取键；
+    而 `report.py`/`batch.py`/`metrics.py` 里也有 47 个 base 恰为 `p` 的 Load 点（实测 10:59:19Z，
+    其中键名落在形状表里的 24 个**全部**在 compress.py）。所以"像 payload"认的是
+    `payload` / `p` / `pl` 三个名字加上任何含 `payload` 的链式表达式——认名字而不是认数据流是
+    这条判据已知最弱的一格：它今天没有放过任何东西（那 24 处都是真读者），但下一个把 `p`
+    用作别的字典、又恰好撞上表里键名的人会被误算。故写在这里，而不是等它坏了再找。
+    """
+    assert any("compress.py:" in h for h in src_load_sites("teammates")), \
+        "别名 `p` 上的真读者被算丢了"
+    assert all("schema.py" not in h for key in DECLARED_KEYS for h in src_load_sites(key)), \
+        "schema.py 读的是解析出来的答案，不是落盘的 payload"
 
 
 def test_the_two_fallback_copies_are_compared_where_a_reader_can_see_it(written):

@@ -350,7 +350,7 @@ class Agent:
         p = outcome.proposal
         payload: dict[str, Any] = {
             "text": action.speech, "act": action.act, "target": action.target,
-            "evidence": list(action.evidence),
+            # Which event ids were cited is recorded once, in `meta.citation_stats` below.
             "belief": action.belief.model_dump() if action.belief else None,
         }
         payload.update({k: v for k, v in extra.items() if v is not None})
