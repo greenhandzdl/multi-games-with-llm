@@ -1461,7 +1461,11 @@ def test_the_pointer_scanner_is_not_reading_an_empty_corpus():
 # 行号和指针两族都不管数：指针只保证"点得到一节"，那节里写着几具它不看。所以这一族回查落点。
 CAP_HEADING = "这个仓库现在能做什么、不能做什么"
 # 汉字和半角数字都收，空格可有可无：手册写「6 具变异」，也写「八具手术刀」。
-KNIFE_CLAIM = re.compile(r"(?<!\d)([0-9]+|[一二三四五六七八九十]{1,3})\s?具\s?(?:变异|手术刀|刀)")
+# 读取侧允许被硬换行劈开一次（手册里真有两处「N 具」落在行尾），但不许跨空行——
+# 隔着一整行空白的两句不是同一句主张。背书侧（`_states`）不收这一形，量过的代价见那条用例。
+KNIFE_SEP = r"[ \t]*(?:\n[ \t]*)?"
+KNIFE_CLAIM = re.compile(
+    rf"(?<!\d)([0-9]+|[一二三四五六七八九十]{{1,3}}){KNIFE_SEP}具{KNIFE_SEP}(?:变异|手术刀|刀)")
 KNIFE_NOUNS = "(?:变异|手术刀|刀)"
 TICKET = re.compile(r"#(\d{1,3})")
 HEAD_LEVEL = re.compile(r"^(#{2,4})\s+(.*)$", re.M)
@@ -1617,6 +1621,31 @@ def test_the_knife_ledger_check_bites_on_each_of_its_two_rules():
     sections_lazy = [("iterations.md", "第一批电池：`#904`", "第一批电池#904", "那一跑共 18 具变异。")]
     assert [b[1] for b in _unbacked_knife_counts(launder, sections_lazy)] == ["8 具变异"], \
         "那一节写着 18 具而手册写 8 具时必须报：背书串的左边界不收住，8 就从 18 里数出来，错号靠邻居蒙绿"
+
+
+def test_a_knife_count_broken_by_a_hard_wrap_is_still_counted():
+    """断在行尾的那句具数，落点账也看得见——这一形在手册里真实存在，只是以前扫不到。
+
+    19:02:11Z 现测：把能力清单那一节的正文逐条交给判据，严格版数到 23 处主张，允许"数字与名词之间
+    隔一个换行加续行缩进"的版本数到 25 处，两处新增都仍然有落点。落点侧那半判据**不放宽**——同一次
+    扫描量到归档里 0 处具数是只靠跨行拼出来的，所以这一刀只改读取侧。
+    """
+    wrapped = "- ✅ 甲：那一跑九具\n  变异全在归档，见〈第一批电池〉。"
+    assert KNIFE_CLAIM.findall(wrapped) == ["九"], \
+        f"被硬换行截断的具数要像写在同一行那样被数到：{KNIFE_CLAIM.findall(wrapped)}"
+    assert KNIFE_CLAIM.findall("- ✅ 甲：那一跑九\n  具变异全在归档") == ["九"], \
+        "断点落在数字与「具」之间时也算同一句主张（这一条落笔即绿，还账的是电池 K1）"
+    sections = [("iterations.md", "第一批电池：`#905`", "第一批电池#905", "判据落地时跑了 7 具变异。")]
+    bad = _unbacked_knife_counts([(1, wrapped)], sections)
+    assert [b[1].split("具")[0] for b in bad] == ["九"], \
+        "落点写着 7 具而手册写九具时必须报——放宽读取侧之后这个错号才有牙"
+    assert KNIFE_CLAIM.findall("- ✅ 甲：九具\n\n  变异都具名。") == [], \
+        "只许跨一个换行：隔着一整行空白的两句不是同一句主张"
+    cross_backed = ("iterations.md", "第四批电池：`#906`", "第四批电池#906",
+                    "那一跑了十二具\n  变异，全部具名。")
+    assert [b[1] for b in _unbacked_knife_counts(
+        [(9, "- ✅ 丁：十二具变异见〈第四批电池〉。")], [cross_backed])] == ["十二具变异"], \
+        "背书侧不放宽：归档里被硬换行劈开的具数不算把数说出来了（真语料 0 处需要它，而让账写成一块是更好的约定）"
 
 
 def test_the_knife_ledger_scanner_is_not_reading_an_empty_corpus():
