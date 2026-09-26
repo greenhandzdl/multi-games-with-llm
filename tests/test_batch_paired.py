@@ -562,7 +562,7 @@ def test_the_m1_table_shows_the_files_that_held_no_game(tmp_path):
     （`hollow.paths`），渲染器只把它接到行尾——`#101` 量的就是这个字段在此之前没有读者。
 
     不走 `compare` 端到端：只有一臂多出来的文件会先被配对守卫拒掉（两臂 `deal_seed` 集合不同，
-    `batch.py:572`），那条路测的是另一件事，而且它根本到不了这张表。
+    `_pairing_error`（`batch.py:590`），那条路测的是另一件事，而且它根本到不了这张表。
     """
     _paired(tmp_path, _arms(A={}, B={"temperature": 0.6}), games=2)
     _as_real_table(tmp_path)

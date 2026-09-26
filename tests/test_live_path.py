@@ -398,7 +398,8 @@ async def test_an_invented_citation_is_refused_and_the_refusal_is_kept_verbatim(
     """`attempts[]` is the dataset, and this is the only way to see it fill up.
 
     A model that numbers events that never happened is refused even during speech
-    (legality.py:96): the citation is addressed to the engine, not to the other players. The
+    (`invented` at `legality.py:113`): the citation goes to the engine, not to the other
+    players. The
     refused text must survive next to the reason, because rejected-plus-accepted is the
     preference pair the corpus is worth having, and this endpoint cannot be replayed.
     """

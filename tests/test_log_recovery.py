@@ -246,7 +246,7 @@ def test_exactly_one_place_turns_log_damage_into_an_exit_code():
     "每人自己接一遍"这条变体是行为等价的、任何用例都杀不动——所以这一句得钉成结构断言。
 
     这是本文件一直在付的那种债的反面：`#46` 那轮四处各写一份弹循环，正是"边界处理散到每个出口"
-    长出来的形状。`events.py:325` 那一处不算，它是把消息包上文件名的那只手，不在终端这一侧。
+    长出来的形状。`events.py:411` 那一处 `LogDamage` 不算，它是把消息包上文件名的那只手，不在终端这一侧。
     """
     body = Path("src/wolfengine/cli.py").read_text(encoding="utf-8")
     assert body.count("except LogDamage") == 1, (

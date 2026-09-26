@@ -198,11 +198,11 @@ async def test_the_connect_phase_gets_its_own_bound_below_the_seat_deadline(monk
     实测形状（2026-09-25T01:44:20Z，端点黑洞——SYN 无应答，不是 `ConnectError` 那种立刻被拒）：
     13 个回合**全部**记成 `timeout_after_45s`、`result.ok: true`、`fallback: 1`，一局打到第 2 天
     用了 585s、整局预计 ~37 分钟。`agent._ask` 的 deadline 取 `llm_timeout_floor_s`=45s
-    （`actors.py:117-122`），`llm.py:146` 又把同一个 45 当作 `timeout_s` 交给 transport，
-    `transport.py:124` 用裸 float 传下去 = 四个阶段都是 45。于是本文件上面那条
+    （`actors.py:133`），`llm.py:146` 又把同一个 45 当作 `timeout_s` 交给 transport，
+    `transport.py:127` 用裸 float 传下去 = 四个阶段都是 45。于是本文件上面那条
     `test_an_unreachable_endpoint_is_the_endpoints_fault_not_the_models` 所承诺的分类根本到不了：
     `asyncio.wait_for` 与 httpx 的 connect 超时同时响，抢先进入 `except` 的是前者，
-    `EndpointUnavailable`（`llm.py:177`）与 `aborted_endpoint`（`game.py:211`）在这形状下不可达。
+    `EndpointUnavailable`（`llm.py:178`）与 `aborted_endpoint`（`game.py:211`）在这形状下不可达。
 
     7.5 是故意挑的：它既不是 45 的因数也不是任何一个"忘了改"能碰巧写出来的数。钉的是**接线**
     （connect 单独取新字段），不是那个字段的取值——取值由下一条管。

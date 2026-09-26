@@ -127,7 +127,7 @@ SRC = Path("src/wolfengine")
 UNREAD = {
     "action": "night_action 的 `action` 是法官问的那一格（`save_or_poison`），与 `act`（她答的）"
               "不是一件事，#114 因此两格都留。但产物链上没人读它（实测 01:14:53Z：src 里 0 个"
-              "Load 点），唯一的读点是 tests/test_golden_game.py:337 拿它挑狼人那一格。",
+              "Load 点），唯一的读点是 `test_golden_game.py:337` 那行的 `payload` 拿它挑狼人那一格。",
 }
 
 

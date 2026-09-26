@@ -502,7 +502,7 @@ def _stub_batch(tmp_path, *, games: int, mock: bool = False, finish: str | None 
     """一臂（`--configs A`）跑完整批次：`mock=True` 是替身桌，否则九座由桩判官回答。
 
     单臂不是省事：M3★ 判的是"这一臂的桌子塌不塌缩"，它天生就是一臂一个判定。两臂的形状
-    在这里反而是错的——那会先把批次推进 `compare` 的"恰好两个配置臂"那道门（batch.py:472）。
+    在这里反而是错的——那会先把批次推进 `compare` 的"恰好两个配置臂"那道门（batch.py:493）。
     """
     import asyncio
 
@@ -841,7 +841,7 @@ def test_a_round_of_nothing_said_gives_no_opening_reading():
     """空白不是"开头全不一样"，也不是"全塌缩"，是没有读数。
 
     炸点不是这里编出来的：16:02:06Z 一具 `wolf batch --configs A,B` 跑完，批次目录里新加的
-    那份闸门判定把 `metrics.py:75` 的除法顶成 `ZeroDivisionError`（一整轮的发言全是空串），
+    那份闸门判定把 `collapse_round`（`metrics.py:73`）的除法顶成 `ZeroDivisionError`（一整轮的发言全是空串），
     子进程交回 traceback。同一只手在 `compare` 上本来就会炸，只是那条路从来没有用例喂过
     "整轮没人说话"的日志。
     """

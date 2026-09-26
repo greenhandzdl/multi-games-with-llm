@@ -688,7 +688,7 @@ def _strong_names(sentence: str) -> set[str]:
     `batch` 绿着。22:18:41Z 量这一族的范围：整份语料 107 处里落在注释行上的共 4 处，3 处反引号里
     就写着那行出现的名字，规则加上去代价为零，逮到的正是剩下那一处。
 
-    路径形状的 span（`src/wolfengine/metrics.py:251`）剔掉：它指的是文件不是行，留着反而能给注释行里
+    路径形状的 span（`src/wolfengine/metrics.py` 的 251 行）剔掉：它指的是文件不是行，留着反而能给注释行里
     抄了同一条路径的那一行背书。
     """
     names = {s.strip() for s in BACKTICK.findall(sentence)} | _quoted_literals(sentence)
@@ -709,9 +709,9 @@ def _line_citations(bodies: dict[str, str]) -> list[tuple[str, int, str, int, se
     **9** that only passed on a neighbour sentence's name or on a word the sentence never wrote as a
     name. Wrapping is still handled: a sentence may span several physical lines.
 
-    凡是这句话里点过名的 `.py`，它的词干都不算证据（`PY_CITED` 那一减法）：`events.py:410` 与
-    `cli.py:623` 写在同一句里时，`events` 这个词会给两个号同时背书，而它对其中一个才是真名字。
-    代价实测为零——13:51:02Z 数整份语料 50 处引用，去掉这一格会多放行 1 处（`assemble.py:201`
+    凡是这句话里点过名的 `.py`，它的词干都不算证据（`PY_CITED` 那一减法）：`events.py` 的 410 与
+    `cli.py` 的 623 写在同一句里时，`events` 这个词会给两个号同时背书，而它对其中一个才是真名字。
+    代价实测为零——13:51:02Z 数整份语料 50 处引用，去掉这一格会多放行 1 处（`assemble.py` 的 201 行
     靠 `persona` 站着，`persona` 不是这一段点名的文件），去掉后它仍然绿。
     """
     out = []
@@ -755,7 +755,7 @@ def _bad_line_cites(cites) -> list[tuple[str, int, str, str]]:
             continue
         # 窗口就是被点名的那一行，不含上下邻行。取 ±2 时"这一段的某个词在那五行里出现过"就能通过，
         # 而一段话通常有 5~11 个标识符、源文件那五行总有一行提到别的名字——13:48:25Z 实测：真实语料
-        # 里 `cli.py:620` 与 `cli.py:624` 都是这么绿的，而它们想指的 `except LogDamage` 在 623 行。
+        # 里 `cli.py` 的 620 与 624 都是这么绿的，而它们想指的 `except LogDamage` 在 623 行。
         window = rows[line_no - 1]
         # 注释行只接受**写成名字**的证据：那里的英文散文词太多，随便一个词都能给错号背书
         # （`#108`：`DECISIVE` 的号指着它上面的注释，靠句里的 `batch` 绿着）。
@@ -802,10 +802,10 @@ def test_the_line_citation_probe_fires_on_a_number_that_moved_and_only_on_that()
 def test_a_number_one_line_off_is_a_bad_pointer_and_a_file_name_is_not_evidence():
     """两道闸门都收不进"错三行"和"隔壁那句话的文件名"，是本轮实测出来的，不是设想。
 
-    实测（13:48:25Z）：`#50`/`#57` 那两句当时写的是 `cli.py:616` 与 `cli.py:620`，而它们指的
+    实测（13:48:25Z）：`#50`/`#57` 那两句当时写的是 `cli.py` 的 616 与 620，而它们指的
     `except LogDamage` 在 623 行——**两个都绿**。原因是窗口取 ±2（共 5 行）且标识符取整段（±2 行），
-    于是"这一段里有个词在那五行里出现过"就算通过。同一句里还点着 `events.py:410`，那个 `events`
-    因此成了一个万能标识符：13:51:02Z 实测 `cli.py:624`（一句提到 `events.py` 的注释）也能替
+    于是"这一段里有个词在那五行里出现过"就算通过。同一句里还点着 `events.py` 的 410，那个 `events`
+    因此成了一个万能标识符：13:51:02Z 实测 `cli.py` 的 624（一句提到 `events.py` 的注释）也能替
     623 行背书。所以这里钉两格：
 
     * 号错三行必须红（`cli.py:{n-3}`：那是 `parse_args` 那一行，与本句无关）。这一格今天的宽窗口
@@ -883,7 +883,7 @@ def test_a_name_from_the_neighbouring_sentence_is_not_evidence_for_this_pointer(
 def test_a_literal_named_in_the_same_sentence_is_evidence_too():
     """收紧取词范围时，句子里点的是**字面量**而不是标识符的那类主张不能被冤枉。
 
-    形状是真的：README 里写着"`render_live.py:222` 那格改成 `or '无'`"，被指的东西就是一个中文字面量，
+    形状是真的：README 当时把 `render_live.py` 的 222 行那格改成 `or '无'`，被指的东西就是一个中文字面量，
     只认 ASCII 标识符的判据会把这句正确主张说成"这句话没写出可核对的名字"。但收益要按量出来的说：
     22:15:16Z 数整份语料 107 处引用，**只靠字面量站着的是 0 处**，所以这一半今天在真语料上换不来任何
     新读数，它的牙长在构造的夹具上——和 `#105`、`#107` 一样，这一条得写清楚。它仍须装上，是因为
@@ -909,10 +909,10 @@ def test_a_pointer_at_a_comment_line_needs_a_name_written_on_that_line():
     """`#108` 的第二半：号落在**注释行**上时，句子里的散文词不算证据。
 
     收紧到同一句话之后，语料里仍有一处错号是绿的，22:17:28Z 逐 token 核出来：README 指 `DECISIVE`
-    写的是 `metrics.py:251`，那是它上面那行注释，定义在 253——而 251 里正好有英文散文词 "a batch of
+    写的是 `metrics.py` 的 251，那是它上面那行注释，定义在 253——而 251 里正好有英文散文词 "a batch of
     outages"，句子里又写着"batch 的分母"，于是 `batch` 替一个错号背了书。22:18:41Z 量这一族的范围：
-    整份语料 107 处引用里落在注释行上一共 4 处，其中 3 处（`config.py:77`、`agent.py:376`、
-    `cli.py:352`）反引号里就写着那行出现的名字，只有 `DECISIVE` 这一处没有。所以这条规则的代价实测
+    整份语料 107 处引用里落在注释行上一共 4 处，其中 3 处（`config.py` 的 77、`agent.py` 的 376、
+    `cli.py` 的 352）反引号里就写着那行出现的名字，只有 `DECISIVE` 这一处没有。所以这条规则的代价实测
     为零，而它逮到的正是那唯一一处真错号。
     """
     rows = (ROOT / "src/wolfengine/metrics.py").read_text(encoding="utf-8").splitlines()
@@ -981,8 +981,19 @@ def test_a_moved_number_names_the_line_it_wanted_and_a_missing_name_says_so():
     assert "找不到" in gone[0][3] and "差" not in gone[0][3], gone[0][3]
 
 
+def _line_cite_corpus() -> dict[str, str]:
+    """闸门读的语料：markdown 文档 + `tests/` 与 `scripts/` 下的 .py。
+
+    `#126` 把 .py 收进来：测试文件的 docstring 里写的是同一个形状 `文件.py:号`，读者照样照着号去看
+    **现在**那一行，号漂了就误导。文档没有豁免名单，代码也没有。
+    """
+    files = [*DOCS, *sorted((ROOT / "tests").glob("*.py")),
+             *sorted((ROOT / "scripts").glob("*.py"))]
+    return {f.name: f.read_text(encoding="utf-8") for f in files}
+
+
 def test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_beside_it():
-    """README 里那个 `cli.py:88` 是一次插入就烂掉的主张：号还在、文件还在，只有指的语句不在那儿了
+    """README 里那个 `cli.py` 的 88 号是一次插入就烂掉的主张：号还在、文件还在，只有指的语句不在那儿了
     （`#123` 往 `cli.py` 插了四处之后，它漂到了 95）。
 
     这一族的腐烂有过实测记录——README 自己就写过"一个早就漂走的 `test_live_path.py` 行号"，
@@ -990,8 +1001,26 @@ def test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_besid
     里号在插入点下游的那些）全部后移。名字有闸门
     （`test_a_name_cited_in_the_docs_...` 那几条），行号没有，所以这一条来补：号不许只靠"看着像
     对"活着。
+
+    扫描面自 `#126` 起含 `tests/` 与 `scripts/` 的 .py（组成由下一条证人钉住）：08:52:44Z 数全语料
+    190 处引用，其中 .py 侧 21 处。地板取 150——低于 markdown 那一半，所以它只管"正则或范围坏了"。
     """
-    cites = _line_citations({f.name: f.read_text(encoding="utf-8") for f in DOCS})
-    assert len(cites) >= 10, f"只扫到 {len(cites)} 处行号引用，多半是正则或范围坏了"
+    cites = _line_citations(_line_cite_corpus())
+    assert len(cites) >= 150, f"只扫到 {len(cites)} 处行号引用，多半是正则或范围坏了"
     bad = _bad_line_cites(cites)
-    assert not bad, f"文档里的行号引用指错了地方：{bad}"
+    assert not bad, f"文档与代码注释里的行号引用指错了地方：{bad}"
+
+
+def test_the_line_citation_gate_reads_the_python_files_that_cite_line_numbers():
+    """这一族从 `#77` 起只读 markdown，而测试文件的 docstring 里写的是同一个形状。
+
+    `#126` 量的代价（2026-09-26T08:43:59Z，把扫描面扩到 `tests/*.py` + `scripts/*.py` 后拿闸门
+    自己的判据跑一遍）：44 个 .py 里扫到 38 处引用，报红 30 处。一条豁免名单都不给——本文件开头
+    第 43 行早就写着约定：`文件.py:号` 这个形状**只**表示"照这个号去看现在那一行"，复述旧号要写成
+    正则接不住的样子，所以历史叙述改写法，不改闸门。
+    """
+    corpus = _line_cite_corpus()
+    py = {f.name for d in ("tests", "scripts") for f in (ROOT / d).glob("*.py")}
+    assert py, "tests/ 与 scripts/ 里一个 .py 都没有，多半是路径坏了"
+    missing = py - set(corpus)
+    assert not missing, f"行号闸门不读这些文件（里面写的号漂了没人报）：{sorted(missing)}"

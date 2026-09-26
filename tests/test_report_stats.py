@@ -166,7 +166,7 @@ def test_switching_endpoint_or_model_is_never_a_legitimate_axis():
 
 # ------------------------------------------------- the inert list's second reader
 # `batch.apply_overrides` 在门口拒过记账字段，但 `compare` 拿的是 manifest 里记下来的配置
-# （`batch.py:451`：`man["arms"][a]["config"]`），手改 manifest 不经过那道门。文档写着"两处读
+# （`batch.py:500`：`man["arms"][a]["config"]`），手改 manifest 不经过那道门。文档写着"两处读
 # 同一个常量"，所以这一组钉的是**第二个读者在不在**，不是门口那句报错的措辞。
 INERT_CELLS = Config().inert_fields + Config().inert_leaves
 
