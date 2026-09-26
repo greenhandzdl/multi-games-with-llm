@@ -638,7 +638,7 @@ manifest"——那是凭空假设，方向也错了（抽掉 guard 之后通知�
 
 W2 那格 set1/set2 的 SURVIVED 是**看过断言**声明的（上一轮 V2 在这里凭空猜错，改的是声明不是测试）：
 `grep "⚠|lines\[-1\]|not in page"` 在这两套里只命中 `tests/test_cli.py` 的上面那条，而
-`test_render_live.py:126/139` 数的是夹具行数与自报文本条数、212/216 按 `正在：` 过滤，多印一行动不了
+`test_render_live.py:128/141`（`#155` 把 `frame_text` 的 import 搬进来后各 +2）数的是夹具行数与自报文本条数、214/218 按 `正在：` 过滤，多印一行动不了
 它们。同一轮也要记下没做的：**这一轮没有一具去打"单一只"那条结构断言**
 （`test_the_recorded_nothing_sentence_has_one_owner` 在本表里五具全绿），它的形状与 `#52` 的 V3 相同、
 由那一具代过，但它自己这一轮没有靶子，别把它的强度算进上表。
@@ -1490,7 +1490,7 @@ plan §5 那张表列着 B0 和 C1–C4 五格，`#62` 之后 `--set` 只肯接�
 （`src/wolfengine/batch.py:452`）→ 表尾"削过主张卡的 prompt：A 臂 0 个、B 臂 109 个（最狠的一条少发
 14 条指控）"。两格 `card_*` 故意算在 `meta.regions` 那道守卫**之前**：一把没量过的尺子不该顺手抹掉
 两格不需要尺子的读数（`test_a_log_without_the_caps_in_meta_prints_null_not_zero`）。判据落点：
-`tests/test_wiring.py`（现 63 条、跑起来 84 个用例）里那六条，和
+`tests/test_wiring.py`（现 65 条、跑起来 86 个用例）里那六条，和
 `tests/test_batch_paired.py` 里那四条，另有一条在 `test_cli.py` 的 audit 出口。
 
 11 具变异体**全部 CAUGHT**（12:01:58Z→12:04:24Z 串行，`/tmp/mut_run.py`，每具跑完 `cmp` 逐字节还原、
@@ -2374,7 +2374,7 @@ docstring 里；`scripts/` 那一侧今天本来就是干净的，所以那根�
   "一期只留契约"这件事只活在 docstring 和 `docs/views.md` 里。
 
 第一版尺子冒出十五个候选。逐个看属性读数落在谁身上之后只剩一个真的：另外十四处走的是
-`batch.run_batch()`、`render_live.frame_text()` 这种**模块对象**上的调用（`cli.py` 和各测试文件都这么
+`batch.run_batch()`、`render_live.watch()` 这种**模块对象**上的调用（`cli.py` 和各测试文件都这么
 用），它们不是腐烂。所以这条判据不放宽窄，只改一处认定：`x.Foo` 要算读者，`x` 必须是本包自己的模块名
 ——那张表从磁盘上取，不抄名单，仓库里没有叫 `httpx.py` 的文件所以第三方永远进不来。C6 钉的就是这一句：
 种一具**只被本包模块对象的属性**读到的类，两半都不许红。
@@ -2548,7 +2548,7 @@ seq 101 vote_result  {"summary": "票型：3号2票。弃票1人。3号被投票
 根因只有一处：`game.play` 收尾写的是 `winner=winner or "draw"`，把"没有阵营获胜"压成了阵营键空间里的
 一个字符串，渲染器因此无从分辨平局和狼赢。修法**不是**给渲染器加一张 `"draw" → "平局"` 的表（那是给一个
 不该存在的值找翻译），而是让它回到 `null`：写侧 `src/wolfengine/game.py:230`（`winner=winner` 那一行，上面 229 是 `log.append(Kind.GAME_OVER,`），`compress.py:97` 补
-`camp is None` 那一支，`render_live.py:222` 那格改成 `or '无'`。"哪些终局算获胜"这件事仓库里**早就有唯一
+`camp is None` 那一支，`render_live.py:221` 那格改成 `or '无'`。"哪些终局算获胜"这件事仓库里**早就有唯一
 来源**——`metrics.DECISIVE`（`src/wolfengine/metrics.py:253`，batch 的分母就是拿它筛的），它 key 在
 `terminal` 上，所以 `winner` 里不需要任何占位符。事件 schema 那行注释（`src/wolfengine/events.py:82`）
 跟着写成 `str|null`，并且**刻意保持行数不变**：那次注释多了一行，README 里 4 处 `events.py:NNN` 引文
@@ -3685,7 +3685,7 @@ DEATH 逐条比 `cause_zh == CAUSE_ZH[cause]`，37/37 相同、且没有一条�
 钉法两条，另加一处要翻的旧账。`test_the_death_is_stored_as_an_enum_not_as_a_chinese_sentence`
 （`tests/test_golden_game.py` 现 43 条）先要求这一桌 5 条死亡一条不少、再逐条断言 payload 里没有 `cause_zh`，
 最后仍然断言"被狼刀"出现在渲染出的一行里——删的是存的那一份，不是这句人话。
-`test_one_death_says_the_same_sentence_to_every_reader_of_it`（`tests/test_wiring.py` 现 63 条、跑起来 84 个用例）
+`test_one_death_says_the_same_sentence_to_every_reader_of_it`（`tests/test_wiring.py` 现 65 条、跑起来 86 个用例）
 拿表外死法当压力测试：先从时间线里正则抠出那句死法，再要求另外三个出口都含它，并单独断言枚举原文没进状态卡。
 旧日志不受影响：它们带着 `cause`，而读的人现在统一只读 `cause`。测试这边翻的旧账是——`test_golden_game.py`
 里整条 payload 的钉值原本赫然写着 `"cause_zh": "被狼刀"`，也就是**有一条用例在替这份双写作证**，先改它才动得了。
@@ -4649,7 +4649,7 @@ A7 是这一片留下的**登记项而不是缺陷**：那一句严格性判据�
 `tests/test_loopback_endpoint.py`）。单独复跑把它咬住后拿到的失败文本是
 `rc=1 out='批次 -> …（2 局日志，seed0=11，canary INVALID_DRIFT，终态 INVALID_DRIFT）…'`，
 而那份批次目录留下的 `drift.md` 写着 `异常探针：latency×0.14`、中位延迟比 0.137、**五个探针的
-批首答案与批尾答案逐字相同**。`report.py:315` 那条 `latency×` 追加与 `report.py:310` 的 `:answer`
+批首答案与批尾答案逐字相同**。`report.py:284` 那条 `latency×` 追加与 `report.py:279` 的 `:answer`
 是两回事：这条红走的是延迟闸门，不是内容。而 `parse_human_line` 在生产链上只有一个调用者
 （`actors.py:361` 那一行），批次侧没有 HumanActor——一具改人话解析的刀没有路径去动端点延迟。
 所以半径发布为 1，这一条记成"canary 的延迟通道对机器负载敏感"的又一例：同一只手、同一个理由，
@@ -6679,3 +6679,64 @@ CONFORM、不符=0、还原字节相同。第一轮那两行照原样留在表�
 能力清单 40 条复述、具数无落点 0 条。文档自己的账：README 696 行、归档 6681 行；这一段自己不在那 86 处里，
 它一个尖括号都没用——可它确实占了归档的行数，所以行数那一格是它落笔**之后**量的，其余各格量的是它落笔**之前**
 的树。这个缺口关不掉：写读数的这只手不能在句子里把自己也算进去，前几片留的是同一句。
+### 三个"只有自己的用例在养"的名字：闸门第一次把 `tests/` 从读者名册里摘出去（`#155`）
+
+`#81` 那条判据的读者名册里住着 `tests/`。这不是它的错——它问的是"整棵树里有没有人点过这个名"。
+可是有一类腐烂它结构上看不见：`src/` 里一个模块级函数，签名与调用都对、产物链永远走不到它，
+**只有自己的用例在养它**。这一片量的就是那一格，量法换成生产链：只扫 `src/` 与 `scripts/` 两个根，
+只认 `ast.Name` / `ast.Attribute` 上的真名字，外加 `getattr(obj, "名字")` 里那一格字符串（按名字派发）。
+22:08:59Z 现数：`src/` 模块级 `def` 263 个，生产链零读者的 **3 个**——`report.cluster_bootstrap_rate`
+（三个调用全在 `test_report_stats.py`，产物链只走 `_diff` 那一支）、`render_live.frame_text`
+（37 处点名全在测试里：36 处调用 + 该文件页眉一句提及，`watch()` 要画面时直接调 `draw`）、
+`metrics.read_dir`（`src/` 里只剩 `__all__` 那一行，CLI 的目录入口是 `batch.read_arm`）。
+
+**口径这两头是量出来的，不是拍的。** `__all__` 那一行字符串**不算**读者：`read_dir` 就是只被它救活的
+例子，出口清单不会调用任何东西，这与 `#132` 那条"键名与同名函数是两回事"同族。`getattr` 派发**算**：
+`batch.py:90` 与 `batch.py:95` 两处拿 `"axis_fields"` / `"inert_fields"` 按名字派发，把它们判成零读者
+就是假红。所以"字符串一概不算"和"字符串都算"两头都不成立，判据只能取中间那一形。
+
+两条新用例落在 `tests/test_wiring.py`（65 条、跑起来 86 个用例，两条都是新加的）：
+`test_every_module_level_engine_helper_is_called_by_the_product_or_is_a_manual_exit` 问范围
+（产品自己会不会走到它），`test_the_export_list_is_not_a_caller_and_the_only_name_it_would_have_saved_is_declared`
+问读者种类（宽松口径与严格口径的**差额**必须恰好等于 `MANUAL_EXITS`）。第二条的宽松一侧也只扫
+`src`+`scripts`：范围问题留给第一条，这一条只管"字符串算不算读者"，两件事分开才分得清是谁的牙。
+豁免不是免检：`MANUAL_EXITS = {"read_dir": "docs/metrics.md"}` 的两侧都由判据核——`docs/metrics.md` 页首那条复现命令必须真把这个名字写进一条可粘贴的命令里（只认反引号内以 `python -c` 或 `wolf `
+开头的片段，`#142` 收过一批"看着像命令其实没有"的出处）。
+
+**三处各自的处置，和代价。**
+- `cluster_bootstrap_rate`：**删**。产物链（`compare`）用的是配对差那一支，单臂速率版从出厂起只有一个
+  读者——它自己的用例。代价记账：跟着它一起没的还有 `test_report_stats.py` 里两条断言，其中一条钉的是
+  "局内完全相关的构造数据上 `deff` 应当等于局内样本数"这个**理论值**锚（不是回归值）；剩下的
+  `cluster_bootstrap_rate_diff` 仍然报 `deff`，但这一层现在没有理论值锚了。这个缺口写在
+  `test_report_stats.py` 的页眉里，没被写成"已覆盖"。
+- `frame_text`：**搬到 `tests/live_frame.py`**。它存在的唯一理由是给测试用 `soft_wrap=True` 包一层
+  Console，而 `watch()` 自己调 `draw` 时用的是真终端的 Console——产品链从来没有经过它。搬过去后
+  36 处调用点改成裸名 `frame_text(...)`，三处文件的 import 各加一行；`src/wolfengine/render_live.py`
+  因此不再需要 `from io import StringIO`。
+- `read_dir`：**留**，走 `MANUAL_EXITS`。它的读者是手册的复现命令行，那是用户对产品下的单，不是自娱。
+
+**电池（22:09:38Z 起、22:11:37Z 止，只跑 `tests/test_wiring.py` 这一只文件跑起来的那 86 个用例；基线 86 passed
+零红，每具还原后 `cmp` 核过字节相同）。** 8 个 stage：5 具咬住 + 1 具预声明等价 + 2 具负控制。
+红名单每一具都逐条点名，多出的与缺的都会打在这一张表上。
+
+| 具 | 刀 | 实测红 | 归因 |
+|---|---|---|---|
+| K1 | `src/` 里加一个谁都不点它名的模块级 helper | 2 条：新那条 + `#81` 那条 | 范围之外的东西两把尺都看得见 |
+| K2 | 给豁免名单里那个名字接一个生产读者（`cli.py` 里 `_ = metrics.read_dir`） | 1 条：读者种类那条 | 差额从 `[read_dir]` 变成 `[]` |
+| K3 | 摘掉 `metrics.py` 的 `__all__` 里那一行 | 1 条：读者种类那条 | 同一格反方向的牙：豁免不再被需要也要报 |
+| K4 | 把 `docs/metrics.md` 那条命令里的名字改成 `read_dir2` | 1 条：范围那条 | 手册一侧的语料没了，豁免就不成立 |
+| K5 | 把 `scripts/` 从读者扫面摘掉 | **0 条（预声明等价）** | 落笔前量过：唯一生产读者住在 `scripts/` 的名字 0 个（22:08:59Z 那一趟，同一份脚本数的 263 个 def 里） |
+| K6 | `src/` 里加一个"只有一条测试在养"的 helper | 1 条：范围那条 | **这一具是"两条判据不是复制"的证据**：`#81` 那条与读者种类那条都不红 |
+| C1 | 负控制：只给 `report.py` 的一行加注释 | 0 条 | — |
+| C2 | 负控制：把 `DISPATCH` 三元组换个顺序 | 0 条 | — |
+
+**限界（写在判据的 docstring 里，不只写在这儿）。** 只数**模块级** `def`：方法 / property 同口径另有
+六处零生产调用者（21:53Z 量于 HEAD `9e4e79b` 的工作树：`as_dict`、`by_kind`、`public`、`public_state`、
+`team_counts`、`teammates_of`），每一处处置前要先读它的孪生与金样本，不是一片能收的账，另开一票。类整个不在扫面里，
+那是 `#85` 的事。名字对但产物链走不到的函数，这条也看不见——那是 `#74`/`#75` 那一族。
+
+**收尾读数。** 删改挪动了三个 `src/` 文件与三只测试文件之后，文档闸门先重跑（22:19:25Z：三件套 76 passed），
+再跑全量（22:20:54Z：1017 passed，`--junitxml` 侧 `tests=1017 failures=0 errors=0 skipped=0`，84.1s）。
+这两趟之前先补了四处被删改顶红的引用：`batch.py` 里那处 getattr 派发的号、`render_live.py` 里胜出格那行的号、
+`report.py` 里两处 append 的号，以及本节上面"电池"那句里的"86 条"改成"跑起来的那 86 个用例"——把 def 数与
+用例数混在一个词里说的就是我。四处都是改句子改号，没动判据。四方文件合跑 121 passed。

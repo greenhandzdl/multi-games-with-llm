@@ -27,7 +27,6 @@ import sys
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from io import StringIO
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -231,18 +230,6 @@ def draw(console: Console, events: list[Event], meta: dict[str, Any], *,
 
     line(f"本局不可复现：端点没有确定性，本画面读的是已落盘的日志 {meta.get('game_id', '')}"
          f" · {HELP}", style="dim")
-
-
-def frame_text(events: list[Event], meta: dict[str, Any], *, god: bool = False,
-               reveal_seat: int | None = None, width: int = 100) -> str:
-    """The frame as plain text — `soft_wrap` so no line is ever broken. Without it a long
-    sentence would be chopped across two lines, and every "this text is not on screen"
-    assertion in the test suite would pass for the wrong reason."""
-    buf = StringIO()
-    draw(Console(file=buf, soft_wrap=True, width=width, color_system=None,
-                 force_terminal=False, highlight=False),
-         events, meta, god=god, reveal_seat=reveal_seat)
-    return buf.getvalue()
 
 
 # ---------------------------------------------------------------------------------- the loop

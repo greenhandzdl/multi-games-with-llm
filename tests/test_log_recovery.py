@@ -40,6 +40,8 @@ import pytest
 from wolfengine import batch, cli, events, metrics, render_html, render_live
 from wolfengine.events import EventLog, Kind, seats
 
+from live_frame import frame_text
+
 SECRET = "狼队密语：今晚刀7号，别让任何人听见这句话"
 
 
@@ -516,7 +518,7 @@ def test_the_live_header_fills_the_name_slot_instead_of_printing_a_blank():
     """`watch --once 空文件` 的页眉是 `狼人杀直播  · 第1天`——中间那格空着。#48 刚记过这件事的形状：
     "少的那一格恰好是'这一屏说的是哪一局'"。那次的原因是页眉自己解析第一行，这次是根本没有那一行。
     """
-    frame = render_live.frame_text([], {}, god=False)
+    frame = frame_text([], {}, god=False)
     assert NOTICE in frame, f"页眉空着而没有任何一句话解释：{frame[:200]!r}"
     assert "狼人杀直播  ·" not in frame, f"名字那一格还是个空洞：{frame[:120]!r}"
 
@@ -604,10 +606,10 @@ def test_a_frame_with_nothing_visible_does_not_claim_the_file_is_empty(tmp_path)
                text=SECRET)
     evs, meta, _ = EventLog.read_split(path)
     assert evs and meta.get("game_id"), "夹具坏了：这条日志既不是空的也没有开局记录"
-    spectator = render_live.frame_text(evs, meta, god=False)
+    spectator = frame_text(evs, meta, god=False)
     assert BLANK not in spectator, "观众屏空白不等于这局没记下来"
     assert SECRET not in spectator, "顺手钉住：这一屏仍然不许漏私有文本"
-    assert BLANK not in render_live.frame_text(evs, meta, god=True)
+    assert BLANK not in frame_text(evs, meta, god=True)
 
 
 def test_the_exported_page_says_the_game_recorded_nothing(tmp_path):
@@ -618,7 +620,7 @@ def test_the_exported_page_says_the_game_recorded_nothing(tmp_path):
 
 def test_the_live_frame_says_the_game_recorded_nothing():
     """直播页眉有名字（`g-stub`），所以那一格不是空的——空的是整块板面，而没人解释。"""
-    frame = render_live.frame_text([], {"game_id": "g-stub"}, god=False)
+    frame = frame_text([], {"game_id": "g-stub"}, god=False)
     assert BLANK in frame, f"一屏空白而没有任何一句话解释：{frame[:200]!r}"
 
 
@@ -738,7 +740,7 @@ def test_the_live_frame_says_the_numbering_is_broken(tmp_path):
     """直播那一屏读的是同一个文件、同一只手算出来的数，不该是第三个沉默的出口。"""
     path = _edited_log(tmp_path, [0, 1, 2, 2, 3])
     evs, meta, _ = EventLog.read_split(path)
-    assert "重号" in render_live.frame_text(evs, meta, god=True)
+    assert "重号" in frame_text(evs, meta, god=True)
 
 
 def test_the_numbering_sentence_and_the_cut_sentence_both_appear(tmp_path, capsys):

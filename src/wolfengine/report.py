@@ -106,37 +106,6 @@ def _boot(params: random.Random, k: int, reps: int) -> list[int]:
     return [params.randrange(k) for _ in range(reps)]
 
 
-def cluster_bootstrap_rate(clusters: Sequence[tuple[int, int]], *, B: int = 2000,
-                           seed: int = 7, alpha: float = 0.05) -> dict[str, Any]:
-    """CI for a per-utterance rate whose samples cluster by game, and the deff that says so.
-
-    Resampling games (all utterances inside a kept game) is the whole point: with 90 speeches
-    per game sharing one deal, one death order, one context length, a naive binomial over
-    4320 speeches claims an interval ~√deff too narrow. `deff` here is measured against that
-    naive variance and reported, per plan §8 第 4 条.
-    """
-    kept = [(k, n) for k, n in clusters if n > 0]
-    total_n = sum(n for _, n in kept)
-    point = sum(k for k, _ in kept) / total_n if total_n else 0.0
-    if len(kept) < 2:
-        return {"point": round(point, 4), "ci": [None, None], "ci_halfwidth": None,
-                "deff": None, "B": B, "n_clusters": len(kept), "n_utterances": total_n,
-                "note": "少于两局无法按局重采样，不给区间"}
-    rng = random.Random(seed)
-    m = len(kept)
-    draws = [_boot(rng, m, m) for _ in range(B)]
-    rates = sorted(_ratio(kept, d) for d in draws)
-    var_boot = _var(rates)
-    var_naive = point * (1 - point) / total_n
-    lo, hi = _pct(rates, alpha / 2), _pct(rates, 1 - alpha / 2)
-    return {"point": round(point, 4), "ci": [round(lo, 4), round(hi, 4)],
-            "ci_halfwidth": round((hi - lo) / 2, 4),
-            "naive_ci_halfwidth": round(1.959964 * math.sqrt(var_naive), 4),
-            "deff": round(var_boot / var_naive, 2) if var_naive > 0 else None,
-            "B": B, "n_clusters": m, "n_utterances": total_n, "seed": seed,
-            "note": "区间按局重采样（B=%d）；deff 是与 naive binomial 的方差比。" % B}
-
-
 def _var(vals: Sequence[float]) -> float:
     """Sample variance (n−1), not population variance: with B=2000 replicates the difference
     is in the 4th decimal, but `deff` is a ratio a reader checks against 1, so the estimator

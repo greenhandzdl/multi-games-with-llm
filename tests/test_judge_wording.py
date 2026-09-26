@@ -50,10 +50,11 @@ seq 101 vote_result  {"summary": "票型：3号2票。弃票1人。3号被投票
 
 from __future__ import annotations
 
-from wolfengine import compress, game, metrics, phases, render_live
+from wolfengine import compress, game, metrics, phases
 from wolfengine.events import EventLog, Kind
 from wolfengine.state import Phase
 
+from live_frame import frame_text
 from test_day_cap import _draw_at, _play
 from test_vote_wave import ALL_SEATS, _pass, _table, _vote
 
@@ -177,12 +178,12 @@ def test_the_live_frame_shows_no_camp_as_the_winner_of_a_draw(tmp_path):
     """
     drawn = _draw_at(tmp_path, 3, range(1, 12))
     events, meta, _over = _terminal_of(drawn.path)
-    rows = [ln for ln in render_live.frame_text(events, meta).splitlines() if "胜方" in ln]
+    rows = [ln for ln in frame_text(events, meta).splitlines() if "胜方" in ln]
     assert len(rows) == 1, f"'胜方'那一行没了或多了：{rows}"
     who = rows[0].split("胜方：")[-1].strip()
     assert who not in {"wolf", "good", "draw", "None"}, f"平局在直播帧上成了：{rows[0]}"
     assert game.DRAW_DAY_LIMIT in rows[0], rows[0]
     won = _play(tmp_path, 7, 6)
     e2, m2, _o2 = _terminal_of(won.path)
-    row2 = [ln for ln in render_live.frame_text(e2, m2).splitlines() if "胜方" in ln]
+    row2 = [ln for ln in frame_text(e2, m2).splitlines() if "胜方" in ln]
     assert row2 and row2[0].split("胜方：")[-1].strip() == won.winner, row2

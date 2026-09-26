@@ -450,6 +450,11 @@ def _py_refs(def_roots: tuple[str, ...], ref_roots: tuple[str, ...]):
     引用只数 AST 的真引用：`Name`/`Attribute`/装饰器，外加**等于该名字的字符串常量**——后者是为了
     不误伤 `getattr(mod, "x")` 与 `__all__` 这类按名字派发（它们是真读者）。docstring 里的提及
     **不算**：#32 那一族的教训就是"注释留着词、代码早就不用了"照样能骗过子串搜索。
+
+    "字符串算不算读者"是有代价的：`#155` 那条生产链判据把 `__all__` 与字典键排除在外，只认
+    `getattr(obj, "名字")` 那种派发；两边的差额由
+    `test_the_export_list_is_not_a_caller_and_the_only_name_it_would_have_saved_is_declared`
+    逐名点名，不靠推测。
     """
     refs: dict[str, int] = {}
     defined: set[str] = set()
@@ -496,6 +501,129 @@ def test_no_named_helper_in_the_engine_is_left_without_a_reader():
     dead = sorted(n for n in defined
                   if refs.get(n, 0) == 0 and not n.startswith("__") and n != "main")
     assert dead == [], f"这些具名函数零读者（要么接上，要么删掉，别留着认领假读者）：{dead}"
+
+
+DISPATCH = ("getattr", "hasattr", "setattr")
+SPAN = re.compile(r"`([^`\n]*)`")
+COMMAND_HEAD = re.compile(r"^(?:\.venv/bin/)?(?:python(?:\.\d+)? -c |wolf )")
+
+# 生产链不点它名、唯一读者是手册里一条真命令的那些名字。每个都要能在被点名的那本手册里逐字敲出来。
+MANUAL_EXITS = {"read_dir": "docs/metrics.md"}
+
+
+def _manual_command_names() -> dict[str, list[str]]:
+    """(标识符 -> `docs/*.md` + `README.md` 里把它写进一条**可粘贴命令**的那几行)。
+
+    只认反引号里以 `python -c` 或 `wolf ` 开头的片段：手册的复现行是用户对产品下的单，而散文里提到
+    一个函数名不是（`#142` 收过一批"看着像命令其实没有"的出处）。
+    """
+    out: dict[str, list[str]] = {}
+    for f in sorted(Path("docs").glob("*.md")) + [Path("README.md")]:
+        for no, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            for span in SPAN.findall(line):
+                if not COMMAND_HEAD.search(span):
+                    continue
+                for tok in re.findall(r"[A-Za-z_][A-Za-z_0-9]*", span):
+                    out.setdefault(tok, []).append(f"{f}:{no}")
+    return out
+
+
+def _entry_point_names() -> set[str]:
+    """`[project.scripts]` 里 `模块:名字` 的那个名字——它是读者，只是形状不是 Python 里的点名。"""
+    import tomllib
+
+    with open("pyproject.toml", "rb") as fh:
+        data = tomllib.load(fh)
+    return {str(v).rsplit(":", 1)[-1] for v in data.get("project", {}).get("scripts", {}).values()}
+
+
+def _module_defs_and_production_reads():
+    """(src 的**模块级** def 名字 -> 落点, 生产链读者计数)。
+
+    读者只算两种：`Name`/`Attribute` 上的真名字，以及 `getattr(obj, "名字")` 里那一格字符串（按名字
+    派发）。`__all__` 的一行字符串与 `row["键名"]` 都不算——出口清单不是调用者，键名与同名函数也是两
+    回事（`#132`）。范围只到模块级：方法/property 同口径另有六处零生产调用者（21:53Z 量：`as_dict`、
+    `by_kind`、`public`、`public_state`、`team_counts`、`teammates_of`），每一处处置前要先读它的孪生与
+    金样本，不是一片能收的账，另开一票。
+    """
+    readers: dict[str, int] = {}
+    defs: dict[str, list[str]] = {}
+
+    def count(tree: ast.AST) -> None:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute):
+                key = node.attr
+            elif isinstance(node, ast.Name):
+                key = node.id
+            elif (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                  and node.func.id in DISPATCH and len(node.args) > 1
+                  and isinstance(node.args[1], ast.Constant)
+                  and isinstance(node.args[1].value, str)):
+                key = node.args[1].value
+            else:
+                continue
+            readers[key] = readers.get(key, 0) + 1
+
+    for root in ("src", "scripts"):
+        for f in sorted(Path(root).rglob("*.py")):
+            if "__pycache__" in f.parts:
+                continue
+            tree = ast.parse(f.read_text(encoding="utf-8"))
+            if root == "src":
+                for node in tree.body:
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        defs.setdefault(node.name, []).append(f"{f}:{node.lineno}")
+            count(tree)
+    return defs, readers
+
+
+def test_every_module_level_engine_helper_is_called_by_the_product_or_is_a_manual_exit():
+    """`#155`：`#81` 那条闸门的读者名册里有 `tests/`，于是"只有自己的用例在养它"的生产码它能放行。
+
+    现测三处（21:53Z）：`report.cluster_bootstrap_rate`（三个调用全在 `test_report_stats.py`，产物链
+    只走 `_diff` 那一支）、`render_live.frame_text`（三十七处点名都在测试里，`watch()` 直接调 `draw`）、
+    `metrics.read_dir`（src 里只剩 `__all__` 那一行，CLI 的目录入口是 `batch.read_arm`）。前两处已按
+    "要么接上、要么删掉"处置完：`cluster_bootstrap_rate` 删了，连带它那条理论 deff 锚的断言一起没
+    （`test_report_stats.py` 页眉记着这个缺口）；`frame_text` 搬进 `tests/live_frame.py`——读者只有测试
+    的东西就住在测试侧。第三处的读者是手册的复现命令行，那是用户对产品下的单，所以走
+    `MANUAL_EXITS` 点名豁免——豁免的两侧由另一条判据钉，它自己绿不代表没牙（见那条的正文）。
+
+    范围与 `#81` 那条不同不是复制：那条回答"整棵树里有没有人点过这个名"，这一条回答"产品自己会不会
+    走到它"。两把刀量过这个分别（22:11Z）：src 里加一个"只有测试在养"的 helper 时**只红这一条**，
+    `#81` 那条不红；同一个 helper 连测试都不点它名时两条一起红。
+    """
+    defs, readers = _module_defs_and_production_reads()
+    manual = _manual_command_names()
+    entries = _entry_point_names()
+    unexplained = []
+    for name, places in sorted(defs.items()):
+        if name.startswith("__") or name in entries or readers.get(name, 0):
+            continue
+        doc = MANUAL_EXITS.get(name)
+        if doc and any(p.startswith(f"{doc}:") for p in manual.get(name, [])):
+            continue
+        unexplained.append(f"{name}（落点 {', '.join(places)}；手册命令 {len(manual.get(name, []))} 处）")
+    assert unexplained == [], (
+        f"这些模块级 helper 生产链里没人调用：{unexplained}——要么接上，要么删掉，"
+        f"要么把它写进 MANUAL_EXITS 并在手册里留下一条真能敲的命令")
+
+
+def test_the_export_list_is_not_a_caller_and_the_only_name_it_would_have_saved_is_declared():
+    """`__all__` 与字典键替谁付了账，要逐名点名——这一条就是那笔账的名单。
+
+    两边都比：宽松口径（任何等于名字的字符串常量都算读者，`#81` 那条的读法，但把它的 `tests/` 那一半
+    摘掉——这一条只管"字符串算不算读者"，掺进范围问题就分不清是谁的牙）与严格口径（只认派发用的字符串）。
+    差额必须恰好等于 `MANUAL_EXITS`，多一个名字说明有人把豁免藏进出口清单，少一个名字说明那处豁免
+    已经不需要了（接上了、或那行 `__all__` 被摘了）——两种都是这一条该红。
+    本条落笔即绿：它的牙由电池里"把 `read_dir` 接进 `cli.py`"和"摘掉 `__all__` 那一行"两具刀量，
+    不靠它自己绿着充数。
+    """
+    defs, strict = _module_defs_and_production_reads()
+    loose, _ = _py_refs(("src/wolfengine",), ("src", "scripts"))
+    string_paid = sorted(n for n in defs if strict.get(n, 0) == 0 and loose.get(n, 0) > 0)
+    assert string_paid == sorted(MANUAL_EXITS), (
+        f"只靠字符串常量才被算成有读者的是 {string_paid}，点名豁免的是 {sorted(MANUAL_EXITS)}"
+        f"——两边不一致就是口径漂移了")
 
 
 def _own_module_names() -> set[str]:

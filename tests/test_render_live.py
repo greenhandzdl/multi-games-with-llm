@@ -16,7 +16,7 @@ presence twin on the god frame, plus a no-wrap test: if the console chopped a le
 half, "the text is not in the frame" would pass for the wrong reason.
 
 `watch` is the interactive loop and is deliberately thin. The frame it draws is tested through
-the pure `frame_text` / `handle_key` / `tail_events`; the loop itself is pinned on the three
+the pure `handle_key` / `tail_events` plus test-side `live_frame.frame_text`; the loop pins the three
 things only a loop can get wrong — the viewer's own I/O rules above, *when* it redraws, and what
 happens when there is no keyboard at all (a poll with no key, and a stdin that is closed).
 """
@@ -34,6 +34,8 @@ from wolfengine import render_live
 from wolfengine.config import Config
 from wolfengine.compress import render_line
 from wolfengine.events import EventLog, Kind, LogDamage
+
+from live_frame import frame_text
 
 sys.path.insert(0, str(Path(__file__).parent))
 import test_golden_game as G  # noqa: E402
@@ -113,15 +115,15 @@ def test_no_live_path_touches_the_endpoint(gold, monkeypatch):
     monkeypatch.setattr(httpx.AsyncClient, "request", boom)
     monkeypatch.delenv(Config().api_key_env, raising=False)
     _, events, meta = gold
-    render_live.frame_text(events, meta, god=True)
+    frame_text(events, meta, god=True)
     render_live.watch(gold[0].path, one_shot=True, god=True)
 
 
 # ---------------------------------------------------------------------- the two leak directions
 def test_spectator_frame_carries_no_private_event(gold):
     _, events, meta = gold
-    spectator = render_live.frame_text(events, meta)
-    god = render_live.frame_text(events, meta, god=True)
+    spectator = frame_text(events, meta)
+    god = frame_text(events, meta, god=True)
     lines = _private_lines(events)
     assert len(lines) == 22, f"the fixture's private channel changed: {len(lines)}"
     for line in lines:
@@ -132,8 +134,8 @@ def test_spectator_frame_carries_no_private_event(gold):
 def test_spectator_frame_does_not_print_the_stated_belief_slot(gold):
     """The leak no visibility check can catch: 心里想 travels inside a public speech payload."""
     _, events, meta = gold
-    spectator = render_live.frame_text(events, meta)
-    god = render_live.frame_text(events, meta, god=True)
+    spectator = frame_text(events, meta)
+    god = frame_text(events, meta, god=True)
     whys = sorted({d["why"] for e in events
                    for d in (e.payload.get("belief") or {}).get("suspects", [])})
     assert len(whys) == 24
@@ -152,7 +154,7 @@ def test_a_long_line_reaches_the_frame_unbroken(tmp_path):
     el.append(Kind.SPEECH, day=1, phase="day_speech", actor=1, text=long_text,
               act="accuse", target=None, result={"ok": True, "flags": [], "fallback": 0})
     events, meta = EventLog.read_records(log)
-    assert long_text in render_live.frame_text(events, meta)
+    assert long_text in frame_text(events, meta)
 
 
 def test_markup_in_model_text_is_printed_literally(tmp_path):
@@ -166,7 +168,7 @@ def test_markup_in_model_text_is_printed_literally(tmp_path):
               text="[bold]我不是发言，我是排版指令[/]", act="accuse", target=None,
               result={"ok": True, "flags": [], "fallback": 0})
     events, meta = EventLog.read_records(log)
-    frame = render_live.frame_text(events, meta)
+    frame = frame_text(events, meta)
     assert "[bold]我不是发言，我是排版指令[/]" in frame
 
 
@@ -180,15 +182,15 @@ def test_revealing_a_seat_shows_that_seat_and_nobody_else(gold):
     wolf_chat = "[e12] 狼队私聊 1号（指 3号）：刀3号，他发言太像神牌。"
     witch_notice = "[e14] 法官（私发）：今晚3号倒在了狼刀下。"
 
-    assert seer_verdict in render_live.frame_text(events, meta, reveal_seat=7)
-    assert wolf_chat in render_live.frame_text(events, meta, reveal_seat=1)
-    assert witch_notice in render_live.frame_text(events, meta, reveal_seat=5)
+    assert seer_verdict in frame_text(events, meta, reveal_seat=7)
+    assert wolf_chat in frame_text(events, meta, reveal_seat=1)
+    assert witch_notice in frame_text(events, meta, reveal_seat=5)
 
-    others = "".join(render_live.frame_text(events, meta, reveal_seat=s) for s in (1, 5, 9))
+    others = "".join(frame_text(events, meta, reveal_seat=s) for s in (1, 5, 9))
     assert seer_verdict not in others
-    assert wolf_chat not in render_live.frame_text(events, meta, reveal_seat=5)
-    assert witch_notice not in render_live.frame_text(events, meta, reveal_seat=9)
-    plain = render_live.frame_text(events, meta)
+    assert wolf_chat not in frame_text(events, meta, reveal_seat=5)
+    assert witch_notice not in frame_text(events, meta, reveal_seat=9)
+    plain = frame_text(events, meta)
     assert seer_verdict not in plain and wolf_chat not in plain
 
 
@@ -196,7 +198,7 @@ def test_reveal_names_the_seat_it_belongs_to(gold):
     """A private block with no owner on screen is indistinguishable from a leak — the viewer
     needs to see whose head they are reading."""
     _, events, meta = gold
-    assert "7号视角" in render_live.frame_text(events, meta, reveal_seat=7)
+    assert "7号视角" in frame_text(events, meta, reveal_seat=7)
 
 
 def test_the_spectator_pointer_never_names_a_private_actor(gold):
@@ -208,11 +210,11 @@ def test_the_spectator_pointer_never_names_a_private_actor(gold):
     half without proving anything.
     """
     _, events, meta = gold
-    night = next(l for l in render_live.frame_text(
+    night = next(l for l in frame_text(
         [e for e in events if e.seq <= 13], meta).splitlines() if "正在：" in l)
     assert "狼队行动" in night
     assert not re.search(r"\d+号", night), night
-    day = next(l for l in render_live.frame_text(
+    day = next(l for l in frame_text(
         [e for e in events if e.seq <= 27], meta).splitlines() if "正在：" in l)
     assert "发言 8号" in day, day
 
@@ -239,9 +241,9 @@ def test_the_frame_points_at_the_phase_being_played(gold):
     and whose turn is it. Rebuilt from the tail of the event list, not from a phase field
     someone has to remember to update."""
     _, events, meta = gold
-    speech = render_live.frame_text([e for e in events if e.seq <= 27], meta)
+    speech = frame_text([e for e in events if e.seq <= 27], meta)
     assert "第1天" in speech and "正在：发言 8号" in speech, speech[:400]
-    night = render_live.frame_text([e for e in events if e.seq <= 13], meta)
+    night = frame_text([e for e in events if e.seq <= 13], meta)
     assert "正在：狼队行动" in night, night[:400]
 
 
@@ -249,7 +251,7 @@ def test_the_tally_bar_reports_the_counts_in_the_log(gold):
     """Bar widths are decoration; the numbers beside them are the claim. Both come from the
     `vote_result` payload rather than a recount, so the frame and `audit` cannot disagree."""
     _, events, meta = gold
-    frame = render_live.frame_text(events, meta)
+    frame = frame_text(events, meta)
     assert "1号 6票" in frame and "8号 3票" in frame
     assert "3号 4票" in frame and "2号 2票" in frame
 
@@ -258,11 +260,11 @@ def test_the_board_shows_who_is_still_sitting(gold):
     """9 cards, dead ones marked — the one panel a spectator and a colleague at the same screen
     both need, and the reason the frame is not just `tail -f`."""
     _, events, meta = gold
-    frame = render_live.frame_text(events, meta)
+    frame = frame_text(events, meta)
     for s in range(1, 10):
         assert f"{s}号" in frame
     assert frame.count("✕") == 5, "five deaths in this game, marked once each on the board"
-    assert "✕" not in render_live.frame_text([e for e in events if e.seq <= 20], meta)
+    assert "✕" not in frame_text([e for e in events if e.seq <= 20], meta)
 
 
 def test_roles_stay_hidden_until_the_game_actually_ends(gold):
@@ -271,18 +273,18 @@ def test_roles_stay_hidden_until_the_game_actually_ends(gold):
     the roles would spoil the game it is streaming."""
     _, events, meta = gold
     before = [e for e in events if e.kind != Kind.GAME_OVER]
-    assert "身份公开" not in render_live.frame_text(before, meta)
-    assert "身份公开" not in render_live.frame_text(before, meta, god=True)
-    assert "身份公开" in render_live.frame_text(events, meta)
-    assert "7号 预言家" in render_live.frame_text(events, meta)
+    assert "身份公开" not in frame_text(before, meta)
+    assert "身份公开" not in frame_text(before, meta, god=True)
+    assert "身份公开" in frame_text(events, meta)
+    assert "7号 预言家" in frame_text(events, meta)
 
 
 def test_the_frame_is_the_same_text_for_the_same_log(gold):
     """Two polls of an unchanged file must not redraw into a different document — a frame that
     reads the clock flickers, and flicker is what makes a long game unwatchable."""
     _, events, meta = gold
-    a = render_live.frame_text(events, meta)
-    b = render_live.frame_text(events, meta)
+    a = frame_text(events, meta)
+    b = frame_text(events, meta)
     assert a == b
     assert not re.search(r"\b20\d\d-\d\d-\d\d \d\d:\d\d", a)
 
@@ -291,7 +293,7 @@ def test_the_frame_never_prints_the_endpoint_host(gold):
     """base_url is a LAN address. It belongs in config, not in a screen that gets photographed
     and posted."""
     _, events, meta = gold
-    doc = render_live.frame_text(events, meta, god=True)
+    doc = frame_text(events, meta, god=True)
     assert "100.87.65.60" not in doc and "13000" not in doc
     probe = next("\n".join(m["content"] for m in e.request["messages"])
                  for e in events if e.request.get("messages"))

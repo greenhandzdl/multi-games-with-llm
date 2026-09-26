@@ -5,8 +5,10 @@
 是别人会重启的共享资源（R7）。这三件事各自都有一个会假装没事的实现方式，所以每一件都
 钉成断言。
 
-数值全部手算可验：McNemar 是 `math.comb` 精确二项，cluster bootstrap 的 deff 在"局内完全
-相关"的构造数据上应当等于局内样本数（理论值，不是回归值）。
+数值全部手算可验：McNemar 是 `math.comb` 精确二项。曾经还有一句"cluster bootstrap 的 deff
+在局内完全相关的构造数据上应当等于局内样本数"——那条断言挂的是 `cluster_bootstrap_rate`，
+`#155` 把它作为零生产调用者的名字删掉了（见 `docs/iterations.md` 那一节），删的同时这个
+理论值锚点一起没了；剩下的配对差只钉两个 CI 的宽度关系。**这是本层的已知缺口，不是遗漏。**
 """
 
 from __future__ import annotations
@@ -56,31 +58,7 @@ def test_paired_win_rate_drops_undecided_games_from_the_denominator_and_reports_
     assert out["underpowered"] is True
 
 
-# ------------------------------------------------------- cluster bootstrap (per-utterance)
-def test_cluster_bootstrap_recovers_the_theoretical_design_effect():
-    """构造数据：每局 50 条发言，局内**完全**同分布（整局要么全 1 要么全 0），局间 50/50。
-
-    这时 ICC=1，理论 deff = 1 + (m̄-1) = 50，方差被 naive binomial 低估 √50≈7.07 倍。
-    断言的是理论值而不是上次跑出来的数——如果哪天它不等于 50 了，说明重采样写错了。
-    """
-    clusters = [(50, 50) if i % 2 else (0, 50) for i in range(20)]
-    out = report.cluster_bootstrap_rate(clusters, B=2000, seed=7)
-    assert out["point"] == pytest.approx(0.5, abs=1e-9)
-    assert out["deff"] == pytest.approx(50.0, rel=0.12), out["deff"]
-    assert math.sqrt(out["deff"]) == pytest.approx(7.07, rel=0.02)
-    naive_half = 1.959964 * math.sqrt(0.5 * 0.5 / 1000)
-    assert out["ci_halfwidth"] > 5 * naive_half
-
-
-def test_the_bootstrap_is_reproducible_and_b_does_what_it_claims():
-    clusters = [(k, 20) for k in (3, 7, 11, 5, 9, 2, 13, 6)]
-    a = report.cluster_bootstrap_rate(clusters, B=2000, seed=11)
-    b = report.cluster_bootstrap_rate(clusters, B=2000, seed=11)
-    assert a["ci"] == b["ci"], "seeded bootstrap that moves between runs is not evidence"
-    assert a["B"] == 2000 and a["n_clusters"] == 8
-    assert set(a) >= {"point", "ci", "deff", "B", "n_clusters"}
-
-
+# ------------------------------------- cluster bootstrap (配对速率差)
 def test_rate_difference_resamples_pairs_not_sides():
     """两配置逐局配对：每局的差在 +0.1 上下小幅摆动，而局间基线本身剧烈波动。
 
