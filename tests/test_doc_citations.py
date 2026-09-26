@@ -1595,19 +1595,30 @@ def _ledger_rows(body: str) -> list[int]:
             for m in LEDGER_TABLE.finditer(body)]
 
 
-def _states(body: str, value: int) -> str:
-    """这一节有没有把 `value` 这个具数说出来：写成「N 具+名词」（汉字也算），或有一张具名表正好 N 行。
+def _state_rule(body: str, value: int) -> tuple[str, str]:
+    """这一节给 `value` 这个具数背书**靠的是哪条规则**：`(规则, 被认下的那种写法)`。
 
-    两条规则都要**紧**：裸的「N 具」不当背书，因为同一节里「8 具」可能说的是另一批（17:02:11Z 实测
-    20 处有落点的主张里，0 处只靠裸数字，所以放宽它不换来任何真主张，只换来错号蒙绿的空间）。
+    规则取 `noun`（这一节把「N 具+名词」写了出来，汉字与阿拉伯两种写法都算）或 `table`（有一张具名表
+    正好 N 行），没背书返回 `("", "")`。两条规则都要**紧**：裸的「N 具」不当背书，因为同一节里「8 具」
+    可能说的是另一批。放宽它的代价不是"多认下几句真话"而是**换掉账本**：17:02:11Z 实测 20 处有落点的
+    主张里 0 处只靠裸数字，可 20:32:16Z 实测放宽后 5 处靠表行数背书的主张全部易主成裸数背书。
+    **这份判据只许住在这里**：正控制过去在自己体内抄了一份同形状的正则，那条用例于是改测自己的拷贝，
+    谓词漂走时它不红——漂走的代价见 `#153` 那一节。
     """
-    forms = [str(value), *_cn_forms(value)]
-    for form in forms:
+    for form in [str(value), *_cn_forms(value)]:
         if re.search(rf"(?<!\d){form}\s?具\s?{KNIFE_NOUNS}", body):
-            return f"写了 {form} 具+名词"
+            return "noun", form
     if value in _ledger_rows(body):
-        return f"有一张 {value} 行的具名表"
-    return ""
+        return "table", str(value)
+    return "", ""
+
+
+def _states(body: str, value: int) -> str:
+    """背书判决的人话——只由 `_state_rule` 那张牌翻出来，别再抄一份判据。"""
+    rule, form = _state_rule(body, value)
+    if rule == "noun":
+        return f"写了 {form} 具+名词"
+    return f"有一张 {value} 行的具名表" if rule == "table" else ""
 
 
 def _unbacked_knife_counts(bullets: list[tuple[int, str]] | None = None,
@@ -1718,16 +1729,44 @@ def test_the_knife_ledger_scanner_is_not_reading_an_empty_corpus():
     sections = _ledger_sections()
     assert all(name != "README.md" for name, _, _, _ in sections), \
         "背书只从 docs/ 取：拿手册查手册是自我背书，README 那句「N 具」不算另一句的落点"
-    located: list[tuple[str, str, str]] = []
+    rules: list[str] = []
     for _, body in bullets:
         wants = [_flat(p) for p in POINT.findall(body)]
         tickets = set(TICKET.findall(body))
-        located += [(name, title, text) for name, title, flat, text in sections
-                    if any(w and w in flat for w in wants) or any(f"#{t}" in title for t in tickets)]
-    by_noun = sum(1 for token in claims
-                  if any(re.search(rf"(?<!\d){_to_int(token)}\s?具\s?{KNIFE_NOUNS}", t)
-                         or any(re.search(rf"(?<!\d){c}\s?具\s?{KNIFE_NOUNS}", t) for c in _cn_forms(_to_int(token)))
-                         for _, _, t in located))
-    by_table = len(claims) - by_noun
+        located = [(name, title, text) for name, title, flat, text in sections
+                   if any(w and w in flat for w in wants) or any(f"#{t}" in title for t in tickets)]
+        for token in KNIFE_CLAIM.findall(body):
+            for _, _, text in located:
+                rule, _form = _state_rule(text, _to_int(token))
+                if rule:
+                    rules.append(rule)
+                    break
+    by_noun, by_table = rules.count("noun"), rules.count("table")
     assert by_noun and by_table, \
         f"两条背书规则必须各有读者（汉字写法与阿拉伯写法、具名表行数），现在是 相邻={by_noun} 表={by_table}"
+
+
+def test_the_backing_predicate_is_implemented_once_in_this_file():
+    """背书判据只许有一份实现。
+
+    正控制那条用例过去在自己体内抄了一份同形状的正则（两条背书规则各写一遍，判据不在被叫到的函数里），
+    它于是改测自己的拷贝。代价是量出来的：把名词分支改成"认下了却报成表"（判决一格不移动，只换规则的
+    牌子）在 HEAD 那一版上 0 红（`94f0c05`，20:31:11Z–20:31:24Z 那一趟，基线 49 绿），判据抽成一份实现、正控制改成
+    读规则名之后，同一把刀红 1 条（20:30:12Z–20:30:41Z 那一趟）。放宽名词要求那一刀两边都不瞎（HEAD 侧
+    红 2、现侧红 4），差别在现侧多红了正控制自己——20:32:16Z 现测放宽后真语料 5 处表行数背书全部易主。
+    这条用例要的是形状只住一处：形状按运行时拼装，否则这句话自己就命中判据（`#144b` 那条"描述形状别贴
+    原形"）。
+    """
+    src = open(__file__, encoding="utf-8").read().splitlines()
+    shape = re.compile("具" + "[^\\n]{0,10}?" + "".join(["KNIFE_", "NOUNS"]))
+    owners: dict[str, list[int]] = {}
+    cur = "<模块顶层>"
+    for n, line in enumerate(src, 1):
+        hit = re.match(r"def (\w+)", line)
+        if hit:
+            cur = hit.group(1)
+        if shape.search(line):
+            owners.setdefault(cur, []).append(n)
+    assert set(owners) == {"_state_rule"}, (
+        f"背书判据的形状落在这些函数里：{owners}——它只许住在 `_state_rule` 一处。"
+        "多出来的那一份会让正控制改测自己的拷贝：谓词漂走时它不红")
