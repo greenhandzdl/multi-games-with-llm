@@ -1,9 +1,10 @@
-"""文档里"读者会照抄的东西"必须还能用——用例名、命令行、条数、行号、出厂值、收集数都在扫描范围内。
+"""文档里"读者会照抄的东西"必须还能用——用例名、命令行、条数、行号、出厂值、收集数、节标题指针都在扫描范围内。
 
 `docs/*.md` 和 `README.md` 用 `` `test_名字` `` 的形式给每个断言指认"是哪条用例在钉它"，又印了一
-批可以直接敲的 `wolf …` 命令，还写了"某个测试文件有几条用例"、"某个源码里的东西在第几行"和"某个配置键
-出厂是多少"。这六类串都是读者复核时的入口：写完一轮重构、改个用例名、插一行代码、给某个参数换个叫法、
-把某个默认值调一格，文档不会报错，只会留下一个点不到的入口。这一片的缺陷是实测抓到的几条——
+批可以直接敲的 `wolf …` 命令，还写了"某个测试文件有几条用例"、"某个源码里的东西在第几行"、"某个配置键
+出厂是多少"和"细节在〈某一节〉"。这七类串都是读者复核时的入口：写完一轮重构、改个用例名、插一行代码、
+给某个参数换个叫法、把某个默认值调一格、把一节改了标题，文档不会报错，只会留下一个点不到的入口。
+这一片的缺陷是实测抓到的几条——
 
 * `comparison.md` 点名 `test_each_arm_gets_its_own_gate_verdict` 时漏了后半截；
 * `metrics.md` 那句"`wolf run` 没有 `--set`"是**反向**主张，任何"扫有没有过期参数"的机制都看不见
@@ -1316,3 +1317,100 @@ def test_a_line_naming_mutations_without_a_separator_is_not_a_tally():
     """
     assert _tally_tables("| 变异 | 红用例 |\n| --- | --- |\n| D1 … | … |") == [1]
     assert _tally_tables("| 变异 | 说明 |\n这一族还没跑电池，先把要列的东西说一句") == []
+
+
+# --------------------------------------------------------------- 〈标题〉指针
+# `#135`/`#143` 把逐片取证搬去 `docs/iterations.md` 之后，手册里"细节在归档"的入口几乎全写成
+# 「见〈某节标题〉」：README 的能力清单压成指针形之后也只有这一个落点。读者照它搜索，标题被改过
+# 名字（或被作者记错）就落在空处，而这件事不会红——所以这一族扫"指没指到"。
+# 它不管"指对了没有"：那是上面行号那一族的事，指针这里只知道标题文本。
+POINT = re.compile(r"〈([^〉\n]{2,})〉")
+HEAD = re.compile(r"^#{2,4}\s+(.*)$")
+# 标题里的标点是排版不是主张：指针常把反引号、引号、冒号、逗号省掉，或把全角换成半角。
+PUNCT = "\"'`“”‘’，,：:、（）()[]【】…—～~ " + "　"
+
+
+def _flat(text: str) -> str:
+    for ch in PUNCT:
+        text = text.replace(ch, "")
+    return text
+
+
+def _headings(pages: dict[str, str]) -> list[str]:
+    """语料里所有二到四级的节标题——指针指得着的只有这一份清单。"""
+    out: list[str] = []
+    for text in pages.values():
+        for line in text.splitlines():
+            if (m := HEAD.match(line)):
+                out.append(m.group(1).strip())
+    return out
+
+
+def _pointer_corpus() -> dict[str, str]:
+    """被扫的那几本：手册四本加归档——历史里指错地方也一样是指错。"""
+    return {f.name: f.read_text(encoding="utf-8") for f in DOCS}
+
+
+def _dead_pointers(pages: dict[str, str], heads: list[str]) -> list[tuple[str, int, str]]:
+    """The check itself: which 〈…〉 point at nothing a reader can search for.
+
+    判据只有一条形状：指针去掉标点后必须是某一节标题（同样去掉标点）的子串。省略号尾巴在这一条里
+    不需要特例——`〈轴守卫把帮助文本当成了读者…〉` 去掉 `…` 之后本来就是那节标题的子串。**多解不算死**：
+    两处都指到时读者仍然搜得到，这一片管的是"点空"，把消歧立成规矩会把 `〈命令一览〉` 这种本来就
+    读得通的写法改成得更啰嗦。
+    """
+    norms = [_flat(h) for h in heads]
+    bad: list[tuple[str, int, str]] = []
+    for page, text in pages.items():
+        for n, line in enumerate(text.splitlines(), 1):
+            for m in POINT.finditer(line):
+                want = _flat(m.group(1))
+                if not want or not any(want in h for h in norms):
+                    bad.append((page, n, m.group(1)))
+    return bad
+
+
+def test_every_section_pointer_in_the_manuals_points_at_a_real_heading():
+    pages = _pointer_corpus()
+    bad = _dead_pointers(pages, _headings(pages))
+    assert not bad, (
+        "这些〈标题〉指针归一化后不是任何一节标题的子串，读者搜它落空（页:行 原文见元组）："
+        f"{bad}"
+    )
+
+
+def test_the_pointer_scanner_fires_on_a_dead_title_only():
+    """判据的两侧都得有读者：四种指法都算指着，两种点空的都报出来，一条限界按声明放过。
+
+    只跑上一条不足以证明它有用——把 `_dead_pointers` 改瞎（永远返回 `[]`），`assert not bad` 照样绿。
+    这一条不读真实语料，所以文档变好不会削弱它：它钉的是检测能力在。
+    """
+    heads = ["配置：密钥的值永远不进文件",
+             '行号闸门把"顶偏"和"点错东西"报成同一句话，于是变异电池拿它当行为证人：`#77`',
+             "人怎么上桌：`--human 座位`", "人怎么上桌的另一种写法"]
+    alive = "见〈配置：密钥的值永远不进文件〉、〈行号闸门把顶偏和点错东西报成同一句话〉、" \
+            "〈人怎么上桌…〉和〈人怎么上桌〉"
+    assert _dead_pointers({"a.md": alive}, heads) == [], \
+        f"四种指法（连标点抄全、省标点、省略号尾巴）外加两处都指到的歧义都该算指着：{alive}"
+    dead = {"a.md": "见〈这一节从来就没有过〉", "b.md": "见〈，：〉"}
+    assert [d[0] for d in _dead_pointers(dead, heads)] == ["a.md", "b.md"], \
+        "点了不存在的一节、以及去掉标点就剩空串的指针都必须报，不然这一族只会说'都对'"
+    assert _dead_pointers({"a.md": "见〈A〉"}, heads) == [], \
+        "单字标记不进扫面：这是声明的限界，放宽它（`{2,}` 改成 `{1,}`）这条就得红"
+
+
+def test_the_pointer_scanner_is_not_reading_an_empty_corpus():
+    """正控制：扫面里必须真有指针，而且 README 和归档两本都要有。
+
+    上一条断言的是"没有死指针"，把 `POINT` 改成接不住任何形状（比如把全角尖括号换成半角）它一样绿。
+    地板取 50：判据落地时（15:47:04Z）现测 59 处，讲这一族的散文落盘之后（16:11:32Z）是 62 处
+    （README 30、归档 29、`comparison.md` 3）——涨的 3 处就是这一族自己的指针，压缩那一片还会让它涨，
+    所以地板钉在 50 而不是现值。低于地板说明扫法坏了。
+    """
+    pages = _pointer_corpus()
+    hits = {name: sum(len(POINT.findall(line)) for line in text.splitlines())
+            for name, text in pages.items()}
+    total = sum(hits.values())
+    assert total >= 50, f"只扫到 {total} 处〈标题〉指针（16:11:32Z 现测 62），多半是扫法坏了：{hits}"
+    assert hits["README.md"] and hits["iterations.md"], \
+        f"README 与归档是这一族的两个大户，任一方为 0 说明语料被收窄了：{hits}"
