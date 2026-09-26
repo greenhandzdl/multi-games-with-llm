@@ -981,15 +981,24 @@ def test_a_moved_number_names_the_line_it_wanted_and_a_missing_name_says_so():
     assert "找不到" in gone[0][3] and "差" not in gone[0][3], gone[0][3]
 
 
+def _line_cite_files() -> list[Path]:
+    """这一族读的文件清单：markdown 文档 + `tests/`、`scripts/`、`src/` 下的 .py。
+
+    `#126` 收进 tests/scripts，`#139` 收进 src。名单单独成一个函数，是因为"扫了几棵"和"字典剩几个键"
+    不是一件事——同名文件按名字建键会静默少一棵，那条守卫要看的是前者。
+    """
+    return [*DOCS, *sorted((ROOT / "tests").glob("*.py")),
+            *sorted((ROOT / "scripts").glob("*.py")),
+            *sorted((ROOT / "src").rglob("*.py"))]
+
+
 def _line_cite_corpus() -> dict[str, str]:
-    """闸门读的语料：markdown 文档 + `tests/` 与 `scripts/` 下的 .py。
+    """闸门读的语料，键是**相对路径**。
 
     `#126` 把 .py 收进来：测试文件的 docstring 里写的是同一个形状 `文件.py:号`，读者照样照着号去看
     **现在**那一行，号漂了就误导。文档没有豁免名单，代码也没有。
     """
-    files = [*DOCS, *sorted((ROOT / "tests").glob("*.py")),
-             *sorted((ROOT / "scripts").glob("*.py"))]
-    return {f.name: f.read_text(encoding="utf-8") for f in files}
+    return {str(f.relative_to(ROOT)): f.read_text(encoding="utf-8") for f in _line_cite_files()}
 
 
 def test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_beside_it():
@@ -1002,8 +1011,10 @@ def test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_besid
     （`test_a_name_cited_in_the_docs_...` 那几条），行号没有，所以这一条来补：号不许只靠"看着像
     对"活着。
 
-    扫描面自 `#126` 起含 `tests/` 与 `scripts/` 的 .py（组成由下一条证人钉住）：08:52:44Z 数全语料
-    190 处引用，其中 .py 侧 21 处。地板取 150——低于 markdown 那一半，所以它只管"正则或范围坏了"。
+    扫描面自 `#126` 起含 `tests/` 与 `scripts/` 的 .py、自 `#139` 起再含 `src/` 的 .py（组成由下面
+    那两条"读不读这些文件"的证人钉住，本条不钉组成）：08:52:44Z 数全语料 190 处引用、其中 .py 侧
+    21 处，09:35:02Z 加宽后 194 处、.py 侧 23 处（src 侧那 2 处都在同一句注释里）。地板取 150——
+    低于 markdown 那一半，所以它只管"正则或范围坏了"。
     """
     cites = _line_citations(_line_cite_corpus())
     assert len(cites) >= 150, f"只扫到 {len(cites)} 处行号引用，多半是正则或范围坏了"
@@ -1020,7 +1031,38 @@ def test_the_line_citation_gate_reads_the_python_files_that_cite_line_numbers():
     正则接不住的样子，所以历史叙述改写法，不改闸门。
     """
     corpus = _line_cite_corpus()
-    py = {f.name for d in ("tests", "scripts") for f in (ROOT / d).glob("*.py")}
+    py = {str(f.relative_to(ROOT)) for d in ("tests", "scripts") for f in (ROOT / d).glob("*.py")}
     assert py, "tests/ 与 scripts/ 里一个 .py 都没有，多半是路径坏了"
     missing = py - set(corpus)
     assert not missing, f"行号闸门不读这些文件（里面写的号漂了没人报）：{sorted(missing)}"
+
+
+def test_the_line_citation_corpus_has_one_entry_per_file_it_scans():
+    """键要是文件名，`__init__.py` 就让其中一棵**静默消失**：不报错，只是少读一个文件。
+
+    危害是真的而不是假想的（09:29:11Z）：`src/wolfengine/__init__.py` 与 `src/wolfengine/prompts/__init__.py`
+    都在 `#139` 扩进来的那 28 棵里，名字相同。今天这两棵都没有行号引用，所以按名字建键**不会**改变
+    本片的判定——它改变的是"下一片往这些文件里写号时有没有人看着"。这条守卫钉的是字典规模等于扫描
+    规模，电池里把键换回 `f.name` 的那具刀要能红它。
+    """
+    files = _line_cite_files()
+    corpus = _line_cite_corpus()
+    names = [f.name for f in files]
+    dupes = sorted({n for n in names if names.count(n) > 1})
+    assert dupes, "扫描面里已经没有同名文件了，这条守卫就成了空跑——它钉的正是同名那一格"
+    assert len(corpus) == len(files), f"语料只剩 {len(corpus)} 条，扫了 {len(files)} 个文件"
+
+
+def test_the_line_citation_gate_reads_the_product_files_that_cite_line_numbers():
+    """`#126` 收了 `tests/` 与 `scripts/`，`src/` 是这一族唯一还没有读者的 .py。
+
+    代价先量过（09:29:11Z，`/tmp/m139.py`：把 markdown + tests + scripts + src 一起喂给闸门自己的
+    判据）：src 侧 28 个 .py 里只有一处注释写着这个形状，就是 `src/wolfengine/events.py` 末尾那段
+    docstring，它同时点了两个号，**两处都报红**。票面那句"先得量有多少处注释里的号昨天就对不上"的
+    答案是 2——不是 0，也不是几十处，所以这一层扩面是划算的。
+    """
+    corpus = _line_cite_corpus()
+    src = {str(f.relative_to(ROOT)) for f in (ROOT / "src").rglob("*.py")}
+    assert len(src) >= 20, f"src/ 里只数到 {len(src)} 个 .py，多半是路径坏了"
+    missing = src - set(corpus)
+    assert not missing, f"行号闸门不读这些产品文件（里面注释写的号漂了没人报）：{sorted(missing)}"

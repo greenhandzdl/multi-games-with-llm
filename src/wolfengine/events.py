@@ -477,7 +477,9 @@ def roster_notice(meta: dict[str, Any]) -> str:
 
     Owned here, with `meta_notice`/`empty_notice`/`seq_notice`/`torn_notice`, so the three exits
     cannot grow three wordings of one fact. Placed at the end of the module rather than next to
-    that family because `events.py:332` and `events.py:410` are cited by line number in README.
+    that family because the `idempotency_key` early return at `events.py:332` and the outer
+    `LogDamage` wrapper at `events.py:410` are pointed at by line number in ``docs/iterations.md``
+    (8 such cites lived in README when this sentence was written; `#135` moved that prose, 0 left).
     """
     kinds = meta.get("actor_kinds") or []
     if "human" not in kinds:
