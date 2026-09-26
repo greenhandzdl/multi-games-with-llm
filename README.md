@@ -209,7 +209,7 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 ## 测试
 
 ```bash
-.venv/bin/pytest                 # 990 passed in 103.25s（13:22:50Z，`#142` 的四条新证人落盘后最终树全量重跑），全程离线；上一跑 986 passed in 72.69s（`#132`）
+.venv/bin/pytest                 # 993 passed in 59.25s（14:05:20Z，`#143` 全部散文落盘后的最终树全量重跑），全程离线；上一跑 990 passed in 103.25s（`#142`）
 .venv/bin/pytest -k render       # 只跑两个渲染器
 ```
 
@@ -231,14 +231,17 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 一条拿五格夹具分"该认出几条、该报出几条"，一条把真语料里认出的条数钉成地板三处）；11:22:26Z 数到
 **986**（`#132` 那两条住在 `tests/test_payload_shape.py`：一条收掉那张双写表，一条把"读者"的判据从
 键名换成"被下标的对象像不像一份 payload"）；13:23:24Z `--collect-only` 数到 **990**（`#142` 那四条住在
-`tests/test_doc_citations.py`：两条钉工件形状、一条钉"豁免要有形状"、一条钉语料组成）；
+`tests/test_doc_citations.py`：两条钉工件形状、一条钉"豁免要有形状"、一条钉语料组成）；14:00:22Z 数到
+**993**（`#143` 那三条仍住在同一个文件：一条钉手册里账表为零、一条钉归档的地板、一条钉判据认的是形状）；
 墙钟不是账：同一份 767 在 12:55:31Z 那跑 47.04s、13:06:15Z 那跑 114.47s，差的是机器负载（套件里有两条
 在真实时间里等完退避），所以末行那个秒数只用来判断"跑完了没有"，不用来比快慢；`#138` 那跑 979 条走了
 162.55s、`#126` 那跑 980 条走了 66.32s，而 `#139` 那 982 条**同一棵树**连着四跑数到 69.94s、66.88s、
 65.30s、70.43s（66.88s 那一格重复过两次，第三、四跑又变了：这些秒数连"抖了多少"都答不出，只答"跑完了没有"）；
 `#140` 的 984 条两跑 66.99s、68.86s；`#132` 的 986 条三跑 72.69s、79.37s、109.37s（第三跑才是最终树，
 而它与第二跑之间只落了散文）；`#142` 的 990 条三跑 77.33s（变异电池的**同窗基线**那一跑）、144.31s、103.25s（最后一跑才是最终树，
-中间落的都是散文）；
+中间落的都是散文）；`#143` 的 993 条在电池窗口内两跑 60.65s（同窗基线）与 59.15s（七具都按字节还原之后的收尾复查，
+仍在电池那个进程里），窗口外两跑 56.39s、59.25s（后一跑之后落的只有点名它自己的这两行读数）——同一条链上这几秒的差只说明机器当时的负载，
+不说明哪一跑更快；电池里那七具各自的全量半径（54.80s–63.04s）不进这本账，它们量的不是同一棵树；
 不要再往这行加 `-q`
 ——`pyproject.toml` 的 addopts 已经带了一个 `-q`，两个 `-q` 会把末行本身吃掉（09:01:45Z 那次就是这么
 把 `709 passed in 49.95s` 弄没的，只能从进度行的百分比反推）。
@@ -289,51 +292,16 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 一条只写"assert 没有过期引用"的守卫分不清"文档干净"和"扫描器坏了"，所以四类引用各配一条喂假
 数据的对照用例（`_stale` / `_stale_flags` / `_stale_values` 都是纯函数，语料由调用方给）和一条规模
 断言（扫到的文档数 / 引用数 / 命中率 / 子命令数）。三十四座变异分四批跑（每批的驱动脚本都是一次性
-工件、不入库，所以下面这张表本身就是记录；前三轮 7/7 + 7/7 + 7/7 CAUGHT；
+工件、不入库，具名的账本身留在归档里；前三轮 7/7 + 7/7 + 7/7 CAUGHT；
 出厂值那一轮 2026-09-21T23:32Z 重跑过一遍（对着最终字节），13/13 全部按预期、0 次无效运行，
-`docs/comparison.md` 与 `tests/test_doc_citations.py` 按字节还原），红用例具名如下——括号里是"只有这一条能看见它"：
+`docs/comparison.md` 与 `tests/test_doc_citations.py` 按字节还原），红用例各自是哪条记在那张 D 表里——括号里写的就是"只有这一条能看见它"。
 
-| 变异 | 红用例 |
-| --- | --- |
-| D1 名字集只收同步 `def`，不收协程 | `test_every_test_named_in_the_docs_resolves`（误报 `test_live_path` 里的真用例） |
-| D2 `_stale` 改瞎：坏名字不再进结果 | `test_a_renamed_case_is_reported_rather_than_waved_through`（只有这条，主断言空转） |
-| D3 文档范围 glob 打错，扫不到文件 | `test_the_guard_itself_can_fail`（同上） |
-| D4 测试文件 glob 打错，名字集为空 | 三条全红 |
-| D5 引用正则在第一个下划线前就停 | 三条全红 |
-| D6 不再收测试模块名（裸 `test_wiring` 成过期） | `test_every_test_named_in_the_docs_resolves` + 规模 |
-| D7 引用正则退化成永远匹配不上 | 对照 + 规模（主断言空转变绿） |
-| D8 管道之后的参数不再切掉 | `test_every_flag_the_docs_show_is_offered_by_that_subcommand` + 对照（README 那条 `grep -A7` 被算成 audit 的参数） |
-| D9 `#` 注释不再切掉 | 对照（真实语料此刻没有注释带参数，只有合成探针看得见它） |
-| D10 `_stale_flags` 改瞎 | 对照 |
-| D11 围栏只取首行，续行丢光 | 对照 + 规模 |
-| D12 行内代码串那一层整个丢掉 | 对照 |
-| D13 反向主张指错子命令 | `test_the_negative_flag_claims_in_the_docs_are_negatives` |
-| D14 真 parser 改掉 `--calibration` 的名字 | `test_every_flag_the_docs_show_is_offered_by_that_subcommand` + 对照（证明文档↔parser 真的接上了） |
-| D15 计数落点判据整个拿掉（什么"N 条"都算用例数） | `test_a_case_count_written_next_to_a_module_name_matches_that_module`（误伤 `24 条自报文本`）+ 对照 |
-| D16 `_case_claims` 改瞎 | 主断言（规模那条）+ 对照 |
-| D17 枚举只认 `+` 左边那个值 | 对照（真实语料仍全对，只有合成探针看得见少了一半） |
-| D18 总数与枚举的对账改瞎 | `test_a_stated_total_has_to_add_up_to_its_own_enumeration` |
-| D19 **文档**把 15 条写成 16 条（代码一个字不动） | `test_a_case_count_written_next_to_a_module_name_matches_that_module` |
-| D20 落点判据丢掉行末一支 | 对照（探针里以"里 15 条"收尾的那句不再算） |
-| D21 落点判据取反（后面是词才算） | 主断言 + 对照 |
-| D22 出厂值主张丢掉闭合反引号（`temperature=0.7` 被读成 0） | `test_the_value_scanner_reads_claims_and_not_every_equal_sign` |
-| D23 两个锚点都换成 `\b`（围栏里那条 `--set A.regions.c_total=250` 成了主张） | 主断言 + 对照（真实语料当场多出 `calibration.md` / `comparison.md` 两处假引用） |
-| D24 键不存在那一支不再报 | 对照（只有它钉得住） |
-| D25 数不符那一支永不报 | 对照 |
-| D26 `_src_int_literals` 丢掉 dataclass 字段那一支 | 主断言（红在"核到字面量"那道地板：只剩 1 处）+ 对照 |
-| D27 位置参数默认值不再右对齐 | 对照（`min_len` 的 6 记到了签名第一个参数头上） |
-| D28 `_src_names` 丢掉"字符串键"那一支 | 对照（日志字段被误报成点空） |
-| D31 把"核到字面量"的地板从 8 抬到 99 | 主断言（证明那道地板是活的） |
-| D32 扫描范围缩到 `docs/`（README 不再算语料） | 主断言（红在"至少 10 处"那道地板）+ 另两条共享 DOCS 的守卫 |
-| D33 **文档**把 `max_days` 的出厂值写成一个更早的合法值 4（代码一个字不动） | 主断言 |
-| D34 `_src_int_literals` 丢掉模块级赋值那一支 | 对照 |
-| D35 收名字时不再统一大小写（`SPEECH_SOFT_LIMIT` 对不上小写主张） | 对照 |
-| D36 `_src_names` 只收 `ast.Name`（丢掉参数名）——**预期活下来** | 见下面那段：它防的是误报，不是漏报 |
+那三十四具的具名账（每格写着它红了哪条用例）在 `docs/iterations.md`〈手册里那四张具名变异账表搬进了这一份〉一节的 D 表。
 
-重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（34 条、跑起来 34 个用例，
+重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（37 条、跑起来 37 个用例，
 两秒内，不发请求）。D1 不是凭空设计的——第一次写这个闸门时确实只走了 `ast.FunctionDef`，于是把
 `test_a_marker_is_public_but_never_becomes_chronicle`（`test_live_path.py` 里的协程）误报成了
-文档过期。**误报也是这个闸门的输出**，所以它的红用例名要留在这里。
+文档过期。**误报也是这个闸门的输出**，所以它的红用例名要留在账上（那张表 D1 那一格记着它误报了谁）。
 
 D15–D21 数的是第三类可核对的主张：**"某个测试文件有几条用例"**。它抓到的第一条红不在代码里，在
 文档自己身上——`README.md` 里 `pytest tests/test_calibrate_rehearsal.py` 后面那句注释写的比实际
@@ -404,13 +372,7 @@ D36（只收 `ast.Name`、丢掉参数名）也活着，但活的原因不同：
 写错的后果是**一条通过的测试**。而 `Kind.COMPACTION` 的取值就是 `"compaction"`，所以改完行为不变、
 套件照绿——要钉住的正是这种"绿"，K1 就是把一处语料退回字面量。
 
-| 变异 | 红用例（红在哪条断言上） |
-| --- | --- |
-| K1 一处已改好的语料退回字面量 | `test_no_module_compares_an_event_kind_to_a_bare_string`（违规清单；那条行为测试照常绿） |
-| K2 守卫不再扫 `tests/` | 同上，但红在**规模断言**：范围缩回 src/ 一个违规都不留，只留下一个空扫描器 |
-| K3 原始形式不再被收集 | 两条：主断言红在规模，`test_the_kind_guard_sees_both_tiers_on_a_synthetic_file` 红在原始档没收到东西 |
-| K4 第二档"未声明"判定改瞎 | 只有对照那条（真实语料是干净的） |
-| K5 第一档收集改瞎 | 同上 |
+K1–K5 的具名账在同一份归档的那一节。
 
 K4 第一版**活了下来**：判定写在守卫体内，对照用例于是自己复算了一遍 `[… for s in raw if s[2] not
 in KINDS]`，两遍实现里被改瞎的那遍恰好没人调用。把规则抽成 `_undeclared_kinds`、守卫和对照用例都
@@ -433,16 +395,7 @@ PYTHONPATH=src .venv/bin/pytest tests/test_wiring.py -k "kind_to_a_bare or kind_
 `tests/test_actor_contract.py` 用同一个 `_Seat` 把四个旋钮（`kind` / `blocking` / 截止时间 /
 答题耗时）各自独立地拧给三条规则看。8 具变异 2026-09-21 跑过一轮，8/8 CAUGHT，三个被改文件按字节还原：
 
-| 变异 | 红用例 |
-| --- | --- |
-| A1 给 `None` 顺手兜个地板（`or cfg.llm_timeout_floor_s`） | `test_a_seat_that_declares_no_deadline_is_not_given_one_by_the_floor` |
-| A2 截止时间改回按配置取 | 同上 |
-| B1 `wave_size` 不再剔 `blocking` 座位 | `test_the_seat_being_waited_on_is_not_a_worker_slot` + 八座阻塞那条 |
-| B2 允许给出 0 个 worker 名额 | `test_the_seat_being_waited_on_is_not_a_worker_slot`（`Semaphore(0)` 会把那一波锁死） |
-| B3 忽略前缀降档表 | `test_the_wave_is_capped_by_the_prefix_ladder_not_by_the_seat_count` |
-| C1 墙钟无条件生效 | `test_one_seat_of_flesh_takes_the_wallclock_off_the_game` |
-| C2 墙钟整个失效 | `test_the_wallclock_does_kill_a_table_of_nothing_but_models`（正向对照：没有它，上一条分不清规则和死代码） |
-| C3 `all`→`any`：一个模型座位就够格杀局 | `test_one_seat_of_flesh_takes_the_wallclock_off_the_game` |
+A1–C3 八具的具名账在同一份归档的那一节。
 
 A 组有个**等价变异**要写清楚：删掉 `if limit is None` 那一支测不出来，因为
 `asyncio.wait_for(coro, None)` 本来就是无限等。这一条不为分支存在作证，只为"截止时间不从 `Config`
@@ -466,17 +419,7 @@ A 组有个**等价变异**要写清楚：删掉 `if limit is None` 那一支测
 做证**——这轮如果
 只跑到 8/8 CAUGHT 就收工，README 里会留下一句错的论证。
 
-| 变异（`src/wolfengine/metrics.py`） | 新用例 | 旧锚点 `test_m1_refuses_to_score_a_stand_in_table` |
-| --- | --- | --- |
-| W1 丢掉 `+z²/2n` | CAUGHT（7 组 + 区间外那条） | CAUGHT |
-| W2 分母用 `z` 不用 `z²` | CAUGHT（同上） | CAUGHT |
-| W3 根号里丢掉 `z²/4n²` | CAUGHT（7 组） | CAUGHT |
-| W4 根号里忘记除 `n` | CAUGHT（7 组 + 区间外） | CAUGHT |
-| W5 下界夹逼方向写反 | CAUGHT（6 组 + 区间外） | CAUGHT |
-| **W6 根号里只留 `z²/4n²`（漏掉 `p(1-p)/n`）** | **CAUGHT（5 组内点）** | **SURVIVED** |
-| W7 整式退回正态近似（Wald） | CAUGHT（7 组 + 区间外） | CAUGHT |
-| W8 空分母给成一个点 | CAUGHT（只有 `n=0` 那条） | SURVIVED |
-| W9 置信水平 95% → 90% | CAUGHT（7 组） | CAUGHT |
+W1–W9 九具的具名账在同一份归档的那一节，第三列记的是「旧的锚点抓不抓得住」。
 
 9 具变异 2026-09-21 跑过一轮，9/9 CAUGHT，`metrics.py` 按字节还原。已知等价变异：
 把 `min(1.0, …)` 那个上界夹逼整个删掉——Wilson 区间按构造不超过 1，那条 clamp 在正确实现上是恒等
@@ -596,8 +539,9 @@ A 组有个**等价变异**要写清楚：删掉 `if limit is None` 那一支测
   有配套的折扣而不是等人去算。还未知的那半只有 `docs/calibration.md` 的两格吞吐常数。
 - ✅ 文档里"哪个测试文件有几条用例""这一句点的是第几行"都是可核对的主张，不再只靠人重数：
   `tests/test_doc_citations.py` 四套扫描 + 出厂值扫描 + 收集数扫描（用例名、CLI 参数、条数、行号、
-  代码里的字面量、pytest 收集数），共 48 具变异（〈测试〉末尾那张 D 表 34 具 + 行号这一族 L1–L6 六具
-  + `#61` 那一族 C5–C13 八具）。08:28:40Z 那一轮把 **C10 报成等价体**，08:48:51Z 换掉先测办法之后它
+  代码里的字面量、pytest 收集数），共 53 具变异（D 表 34 具 + 行号这一族 L1–L6 六具
+  + `#61` 那一族 C5–C13 八具 + `#143` 那五具（另两具是负控制），四张表都在 `docs/iterations.md`）。
+  08:28:40Z 那一轮把 **C10 报成等价体**，08:48:51Z 换掉先测办法之后它
   有了读者——等价与否不是性质，是"此刻有没有断言在读"的读数，那笔账记在〈条数和收集数〉一节）。
   行号这一族的**语料**自 `#126` 起含 `tests/` 与 `scripts/` 的 .py：那一跑扫到 38 处引用、30 处报红，
   处置全落在句子上（17 处摘掉形状、14 处改号或补一个名字），判据一字未改、豁免一条没给；另计 9 具
@@ -616,7 +560,7 @@ A 组有个**等价变异**要写清楚：删掉 `if limit is None` 那一支测
   〈摆放理由这句话第一次有人核对：src 里三处，措辞与自指要同时出现才算〉。
   补计数那道闸门的当场就抓到两处自己写错的数
   （`# 14 条` 对 15 条，和一个早就漂走的 `test_live_path.py` 行号——后者直接删掉：那时名字有闸门、
-  行号没有，`#59` 之后行号也有了）。取舍与边界写在那两张表下面。
+  行号没有，`#59` 之后行号也有了）。取舍与边界就写在上面那几段里（`条` 换成否定式落点的那道闸，和它只对没有参数化的模块成立这条限界）。
 - ✅ 那道行号闸门自己曾经比它写的句子还松，现在收成了**被点名的那一行**：`file.py:NNN` 若点的是空行
   或隔壁那行不相干的代码，以前靠 ±2 行窗口和整段标识符照样绿。13:38Z 实测语料里就有两处把同一个
   `except LogDamage` 指到两个不同的错号上；三档候选判据（整行 / ±1 / ±2）先按假红代价量过再选，

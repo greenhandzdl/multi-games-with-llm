@@ -5659,3 +5659,122 @@ K6 那一具证明判据不是靠巧合绿（去重与否在现存语料上取�
 `docs/comparison.md`、`docs/metrics.md`、`docs/views.md` 各 5/2/5 处同改；归档一处没摘，只是开头多了
 一句声明、末尾多了本节自己那 7 处例子（177 → 184 提及、137 → 141 命中）。产品代码一行没动——这一片
 改的全是文档与闸门。
+
+### 手册里那四张具名变异账表搬进了这一份（`#143`）
+
+`#135` 立了规矩——每一片的取证不在手册里——可它当时只搬走散文：README〈测试〉一节末尾还坐着四张
+"第 N 具变异红了哪条用例"的账表，64 行、56 条具名变异，全是逐片取证的样子，没有一条是"怎么跑、
+跑出来该看到什么"。这一片把它们搬进来，并且给那条规矩补了第一个读者：判据是表头形状
+（`| 变异` 打头、下一行是分隔行），不是"这一段属于哪一轮"。
+
+#### D 表：文档引用闸门的三十四具（`#32` / `#44` / `#45` / `#61` 那四批）
+
+| 变异 | 红用例 |
+| --- | --- |
+| D1 名字集只收同步 `def`，不收协程 | `test_every_test_named_in_the_docs_resolves`（误报 `test_live_path` 里的真用例） |
+| D2 `_stale` 改瞎：坏名字不再进结果 | `test_a_renamed_case_is_reported_rather_than_waved_through`（只有这条，主断言空转） |
+| D3 文档范围 glob 打错，扫不到文件 | `test_the_guard_itself_can_fail`（同上） |
+| D4 测试文件 glob 打错，名字集为空 | 三条全红 |
+| D5 引用正则在第一个下划线前就停 | 三条全红 |
+| D6 不再收测试模块名（裸 `test_wiring` 成过期） | `test_every_test_named_in_the_docs_resolves` + 规模 |
+| D7 引用正则退化成永远匹配不上 | 对照 + 规模（主断言空转变绿） |
+| D8 管道之后的参数不再切掉 | `test_every_flag_the_docs_show_is_offered_by_that_subcommand` + 对照（README 那条 `grep -A7` 被算成 audit 的参数） |
+| D9 `#` 注释不再切掉 | 对照（真实语料此刻没有注释带参数，只有合成探针看得见它） |
+| D10 `_stale_flags` 改瞎 | 对照 |
+| D11 围栏只取首行，续行丢光 | 对照 + 规模 |
+| D12 行内代码串那一层整个丢掉 | 对照 |
+| D13 反向主张指错子命令 | `test_the_negative_flag_claims_in_the_docs_are_negatives` |
+| D14 真 parser 改掉 `--calibration` 的名字 | `test_every_flag_the_docs_show_is_offered_by_that_subcommand` + 对照（证明文档↔parser 真的接上了） |
+| D15 计数落点判据整个拿掉（什么"N 条"都算用例数） | `test_a_case_count_written_next_to_a_module_name_matches_that_module`（误伤 `24 条自报文本`）+ 对照 |
+| D16 `_case_claims` 改瞎 | 主断言（规模那条）+ 对照 |
+| D17 枚举只认 `+` 左边那个值 | 对照（真实语料仍全对，只有合成探针看得见少了一半） |
+| D18 总数与枚举的对账改瞎 | `test_a_stated_total_has_to_add_up_to_its_own_enumeration` |
+| D19 **文档**把 15 条写成 16 条（代码一个字不动） | `test_a_case_count_written_next_to_a_module_name_matches_that_module` |
+| D20 落点判据丢掉行末一支 | 对照（探针里以"里 15 条"收尾的那句不再算） |
+| D21 落点判据取反（后面是词才算） | 主断言 + 对照 |
+| D22 出厂值主张丢掉闭合反引号（`temperature=0.7` 被读成 0） | `test_the_value_scanner_reads_claims_and_not_every_equal_sign` |
+| D23 两个锚点都换成 `\b`（围栏里那条 `--set A.regions.c_total=250` 成了主张） | 主断言 + 对照（真实语料当场多出 `calibration.md` / `comparison.md` 两处假引用） |
+| D24 键不存在那一支不再报 | 对照（只有它钉得住） |
+| D25 数不符那一支永不报 | 对照 |
+| D26 `_src_int_literals` 丢掉 dataclass 字段那一支 | 主断言（红在"核到字面量"那道地板：只剩 1 处）+ 对照 |
+| D27 位置参数默认值不再右对齐 | 对照（`min_len` 的 6 记到了签名第一个参数头上） |
+| D28 `_src_names` 丢掉"字符串键"那一支 | 对照（日志字段被误报成点空） |
+| D31 把"核到字面量"的地板从 8 抬到 99 | 主断言（证明那道地板是活的） |
+| D32 扫描范围缩到 `docs/`（README 不再算语料） | 主断言（红在"至少 10 处"那道地板）+ 另两条共享 DOCS 的守卫 |
+| D33 **文档**把 `max_days` 的出厂值写成一个更早的合法值 4（代码一个字不动） | 主断言 |
+| D34 `_src_int_literals` 丢掉模块级赋值那一支 | 对照 |
+| D35 收名字时不再统一大小写（`SPEECH_SOFT_LIMIT` 对不上小写主张） | 对照 |
+| D36 `_src_names` 只收 `ast.Name`（丢掉参数名）——**预期活下来** | 见 README 里「活的原因不同」那两句：它防的是误报，不是漏报 |
+
+#### K 表：kind 字面量守卫扩到 `tests/` 的五具（`#33`）
+
+| 变异 | 红用例（红在哪条断言上） |
+| --- | --- |
+| K1 一处已改好的语料退回字面量 | `test_no_module_compares_an_event_kind_to_a_bare_string`（违规清单；那条行为测试照常绿） |
+| K2 守卫不再扫 `tests/` | 同上，但红在**规模断言**：范围缩回 src/ 一个违规都不留，只留下一个空扫描器 |
+| K3 原始形式不再被收集 | 两条：主断言红在规模，`test_the_kind_guard_sees_both_tiers_on_a_synthetic_file` 红在原始档没收到东西 |
+| K4 第二档"未声明"判定改瞎 | 只有对照那条（真实语料是干净的） |
+| K5 第一档收集改瞎 | 同上 |
+
+#### A·B·C 表：§十五 上桌契约的八具（`#34`）
+
+| 变异 | 红用例 |
+| --- | --- |
+| A1 给 `None` 顺手兜个地板（`or cfg.llm_timeout_floor_s`） | `test_a_seat_that_declares_no_deadline_is_not_given_one_by_the_floor` |
+| A2 截止时间改回按配置取 | 同上 |
+| B1 `wave_size` 不再剔 `blocking` 座位 | `test_the_seat_being_waited_on_is_not_a_worker_slot` + 八座阻塞那条 |
+| B2 允许给出 0 个 worker 名额 | `test_the_seat_being_waited_on_is_not_a_worker_slot`（`Semaphore(0)` 会把那一波锁死） |
+| B3 忽略前缀降档表 | `test_the_wave_is_capped_by_the_prefix_ladder_not_by_the_seat_count` |
+| C1 墙钟无条件生效 | `test_one_seat_of_flesh_takes_the_wallclock_off_the_game` |
+| C2 墙钟整个失效 | `test_the_wallclock_does_kill_a_table_of_nothing_but_models`（正向对照：没有它，上一条分不清规则和死代码） |
+| C3 `all`→`any`：一个模型座位就够格杀局 | `test_one_seat_of_flesh_takes_the_wallclock_off_the_game` |
+
+#### W 表：`wilson_ci` 三个锚点的九具（`#35`）
+
+| 变异（`src/wolfengine/metrics.py`） | 新用例 | 旧锚点 `test_m1_refuses_to_score_a_stand_in_table` |
+| --- | --- | --- |
+| W1 丢掉 `+z²/2n` | CAUGHT（7 组 + 区间外那条） | CAUGHT |
+| W2 分母用 `z` 不用 `z²` | CAUGHT（同上） | CAUGHT |
+| W3 根号里丢掉 `z²/4n²` | CAUGHT（7 组） | CAUGHT |
+| W4 根号里忘记除 `n` | CAUGHT（7 组 + 区间外） | CAUGHT |
+| W5 下界夹逼方向写反 | CAUGHT（6 组 + 区间外） | CAUGHT |
+| **W6 根号里只留 `z²/4n²`（漏掉 `p(1-p)/n`）** | **CAUGHT（5 组内点）** | **SURVIVED** |
+| W7 整式退回正态近似（Wald） | CAUGHT（7 组 + 区间外） | CAUGHT |
+| W8 空分母给成一个点 | CAUGHT（只有 `n=0` 那条） | SURVIVED |
+| W9 置信水平 95% → 90% | CAUGHT（7 组） | CAUGHT |
+
+#### 这一片改到的旧数与句子
+
+README 那四个落点各留一行指针，四张表周围解释规则的散文**一行没搬**——「D15–D21 数的是第三类可
+核对的主张」「`_src_names` 收的是能被赋值的名字」那几段讲的是规矩本身，手册正是它们该待的地方。
+被改的句子只有把表当账本用的那几处：`#135` 之前写下的「所以下面这张表本身就是记录」改成指向归档，
+「红用例具名如下」改成「见……一节的 D 表」，D36 那一格的「见下面那段」改成点名 README 里那一段
+（它指的段落留在原地没搬），能力清单里「〈测试〉末尾那张 D 表」去掉限定、补一句"三张表都在
+`docs/iterations.md`"，末尾那句「取舍与边界写在那两张表下面」改成点名那几段讲的是哪两件事——
+表搬走之后，「那两张表下面」已经答不出"是哪两张"了。
+
+`tests/test_doc_citations.py` 三十→三十四→三十七：`#142` 加过四条，这一片再加三条
+（一条钉手册里账表为零、一条钉归档的地板、一条钉判据认的是形状而不是那三个字）。
+
+#### 变异电池（13:50Z 起，7 个 stage：5 具刀 + 2 具负控制）
+
+同窗基线：三道文档闸门 **56 passed**、全量 **993 passed in 60.65s**（红集空）。电池跑的是全量，
+而 `README.md` 与 `docs/metrics.md` 都在被扫的语料里，所以这 7 个 stage 期间没有碰过任何文档或测试。
+每一具都是"窄跑三闸门定判决 + 全量定半径"，`finally` 里按字节还原并复核 sha256：七具全部「还原：字节
+相同」，收尾复查 **993 passed in 59.15s**、红集空。
+
+| 具 | 刀 | 判决 | 基线外红的那几条 | 全量半径 |
+| --- | --- | --- | --- | --- |
+| K1 | 往 `README.md` 末尾追加一张「变异」打头、下一行是分隔行的账表 | CAUGHT | `test_the_manual_carries_no_per_slice_mutation_tally` | 1 failed, 992 passed（58.06s） |
+| K2 | 同一张表追加到另一本页（`docs/metrics.md`）——判据不是只盯 README | CAUGHT | 同 K1 | 1 failed, 992 passed（59.57s） |
+| K3 | 判据丢掉「下一行必须是分隔行」那一半 | CAUGHT | `test_a_line_naming_mutations_without_a_separator_is_not_a_tally` | 1 failed, 992 passed（57.95s） |
+| K4 | 归档地板 20 抬到 999（钉住那条守卫不是空转） | CAUGHT | `test_the_archive_is_where_a_moved_mutation_tally_lands` | 1 failed, 992 passed（57.19s） |
+| K5 | 把 `README.md` 从 `_manual_pages()` 的语料里摘出去 | CAUGHT | `test_the_artifact_scanner_scans_every_manual_page`（`#142` 那条） | 1 failed, 992 passed（54.80s） |
+| C1 | 手册页追加一张合法的「判据 / 位置」表 | CLEAN | 无 | 993 passed（63.04s） |
+| C2 | 手册页追加一句散文，正文里出现「变异」那两个字但没有分隔行 | CLEAN | 无 | 993 passed（60.29s） |
+
+K5 是这一片**留下的假绿，记在这里而不是抹掉**：README 一旦被摘出手册语料，红的只有 `#142` 的组成证人，
+`test_the_manual_carries_no_per_slice_mutation_tally` 当场对 README 沉默——它没有"README 必须在被扫之列"
+这条断言，只有"扫到的每一页都不许有账表"。所以这条判据的覆盖面是 `_manual_pages()` 收到什么就在什么上
+开火，不是"README 一定被扫"。
+

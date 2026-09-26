@@ -1265,3 +1265,54 @@ def test_the_artifact_scanner_scans_every_manual_page():
     assert len(manual) == len(DOCS) - 1, \
         f"被排除在判据之外的应当只有 {ARCHIVE} 一本：{[p.name for p in DOCS if p not in manual]}"
     assert ROOT / "README.md" in manual, "README 被排除了：那正是最需要这条判据的一本"
+
+
+# --------------------------------------------------- 逐片变异账表不许留在手册里
+
+def _tally_tables(text: str) -> list[int]:
+    """具名变异账表的表头行号：以 `| 变异` 开头、下一行是分隔行的那张表。
+
+    认表头而不是认整张表，因为这一族的正文里也会提到"某一具"——只有表格才是逐片取证的那份
+    清单，而 `#135` 立的规矩管的正是清单：手册只回答"怎么跑、跑出来该看到什么、哪些事还答不了"。
+    """
+    lines = text.splitlines()
+    out: list[int] = []
+    for i, ln in enumerate(lines):
+        if not ln.startswith("| 变异"):
+            continue
+        if i + 1 < len(lines) and lines[i + 1].lstrip().startswith("| ---"):
+            out.append(i + 1)
+    return out
+
+
+def test_the_manual_carries_no_per_slice_mutation_tally():
+    """手册里不许坐着"第 N 具变异红在哪条断言上"那种账表——那是归档的形状。
+
+    `#135` 把逐片取证从 README 搬去 `docs/iterations.md` 时只搬走了散文，四张账表留了下来：
+    D 表（文档引用闸门三十四具）、K 表（kind 字面量五具）、A·B·C 表（§十五上桌契约八具）、
+    W 表（wilson_ci 九具）。它们既不是"怎么跑"也不是"该看到什么"，而 `#135` 那条规矩当时没有
+    任何读者——搬家搬多干净全凭下一次记得。这条用例就是那个"下一次"。
+    """
+    bad = [(f.name, _tally_tables(f.read_text(encoding="utf-8"))) for f in _manual_pages()]
+    assert not [site for site in bad if site[1]], \
+        f"这些手册页里还有具名变异账表（行号见括号）：{[s for s in bad if s[1]]}"
+
+
+def test_the_archive_is_where_a_moved_mutation_tally_lands():
+    """判据得能看见那张表搬去了哪儿：归档里的账表只多不少，一条不许在移动中丢掉。
+
+    上一条断言的是"没有"，把归档从语料里抹掉它一样绿——所以这一条钉"有"。地板取 20：现测归档
+    22 张（`#143` 搬进四张之前），低于它说明扫法坏了或被搬的东西消失在了移动里。
+    """
+    tally = _tally_tables((ROOT / "docs" / ARCHIVE).read_text(encoding="utf-8"))
+    assert len(tally) >= 20, f"归档里只剩 {len(tally)} 张账表，多半是扫法坏了或搬运丢了东西"
+
+
+def test_a_line_naming_mutations_without_a_separator_is_not_a_tally():
+    """判据认的是"表头 + 分隔行"这个形状，不是"这一行里出现了那两个字"。
+
+    真实语料里 26 张表头每一张后面都跟着分隔行，所以只看这一族的账无法证明第二个条件在读——
+    `#143` 的电池里那具"摘掉分隔行要求"的刀因此要靠这条合成用例才有读者。
+    """
+    assert _tally_tables("| 变异 | 红用例 |\n| --- | --- |\n| D1 … | … |") == [1]
+    assert _tally_tables("| 变异 | 说明 |\n这一族还没跑电池，先把要列的东西说一句") == []
