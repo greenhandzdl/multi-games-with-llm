@@ -135,4 +135,67 @@ def test_gitignore_covers_traces_and_env():
             assert not line.split("=", 1)[1].strip(), f"{line!r} carries a value"
     assert not SK_SHAPED.search(example)
     # base_url 是局域网地址、模型 id 是公开字符串，两者按约定**可以**入库（plan §11）。
-    assert "WOLF_LLM_BASE_URL=http" in example
+    # 入库的地方是 `config.py` 的字段默认值，不是样例文件：样例里只许出现真有人读的变量名，
+    # 见下面 `test_every_variable_the_example_advertises_has_a_reader`。
+    assert "http://100.87.65.60:13000/v1" in (ROOT / "src" / "wolfengine" / "config.py").read_text(
+        encoding="utf-8"), "端点该以字面量躺在 config.py 里（非密、且不许当处理轴）"
+
+
+# --------------------------------------------------- 样例不许宣传没有读者的变量
+
+ENV_ADVERTISED = re.compile(r"^([A-Z][A-Z0-9_]{3,})\s*=")
+ENV_READ_AT_CALL = re.compile(r"""os\.(?:environ\.get|getenv)\(\s*["']([A-Z][A-Z0-9_]{3,})["']""")
+ENV_NAME_FIELD = re.compile(r"""\b\w*env\w*\s*:\s*str\s*=\s*["']([A-Z][A-Z0-9_]{3,})["']""")
+
+
+def _code_that_touches_the_environment() -> list[Path]:
+    out: list[Path] = []
+    for base in (ROOT / "src", ROOT / "scripts"):
+        out += [p for p in base.rglob("*.py") if "os.environ" in p.read_text(encoding="utf-8")]
+    return out
+
+
+def _env_names_the_code_reads() -> set[str]:
+    """代码真的拿去当配置用的环境变量名。
+
+    两种写法算"读了"：调用点上的字面量（`os.environ.get("X")`），和一个名字里带 `env` 的
+    `str` 字段的默认值（`api_key_env: str = "X"`，取用它的是 `require_key` 里那句
+    `os.environ.get(self.api_key_env)`——间接，但确实是配置）。
+
+    KNOWN_LIMIT：经过一个变量传进去的名字不收。`transport.py` 的清洗表
+    （`for name in ("WOLF_LLM_API_KEY", "MVP_VLM_API_KEY")`）擦的是**值**，不是配置，
+    所以它不该给样例发广告权；哪天它变成配置读法，就得改写成调用点字面量才会被这条看见。
+    """
+    names: set[str] = set()
+    for path in _code_that_touches_the_environment():
+        text = path.read_text(encoding="utf-8")
+        names |= set(ENV_READ_AT_CALL.findall(text))
+        names |= set(ENV_NAME_FIELD.findall(text))
+    return names
+
+
+def test_every_variable_the_example_advertises_has_a_reader():
+    """.env.example 是一页"你可以去 export 这些"的广告——每一条都要有代码真的去取。
+
+    动因是量出来的一件事：样例里 `WOLF_LLM_BASE_URL` / `WOLF_LLM_MODEL` 两行在 `src/` 里
+    0 个读者（端点与模型是 `config.py` 的字段默认值，且同坐 `FORBIDDEN_AXIS`：CLI 既没有
+    旗标也拒 `--set`），照手册去 export 的人得到的是静默无效。上一条 138 行原本反过来钉着
+    "样例里必须有 BASE_URL 那行"，把这句假话钉成了规矩——那条断言已经改成钉"端点字面量在
+    `config.py` 里"，广告这一侧由这条管。
+    """
+    advertised = {m.group(1) for line in (ROOT / ".env.example").read_text(
+        encoding="utf-8").splitlines() if (m := ENV_ADVERTISED.match(line))}
+    assert advertised, "样例里一个变量都没有，那这条就是在空集上自证"
+    unread = sorted(advertised - _env_names_the_code_reads())
+    assert not unread, f"这些变量只有样例在宣传、代码里没人读：{unread}"
+
+
+def test_the_env_reader_corpus_actually_finds_the_key_name():
+    """正控制：语料塌成空集时，上一条会对着空例子发合格证。
+
+    `api_key_env` 走的是字段默认值那一支，`WOLF_LLM_API_KEY` 在调用点上从来不是字面量，
+    所以这一条单独钉得住"扫描还接在 `config.py` 上"。
+    """
+    reads = _env_names_the_code_reads()
+    assert "WOLF_LLM_API_KEY" in reads, f"扫到的只有 {sorted(reads)}——语料或正则坏了"
+    assert (ROOT / ".env.example").read_text(encoding="utf-8").count("WOLF_LLM_API_KEY=") == 1
