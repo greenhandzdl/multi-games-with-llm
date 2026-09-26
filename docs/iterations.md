@@ -3908,7 +3908,7 @@ RED 01:19:55Z（两条先红：读者闸门报的就是 `['action', 'folded_days
 全空，audit 那侧 `prefix_cache.calls=0`、`m7_cost.n_calls=0`、`degraded_game: null`。按这个速度整局要
 ~37 分钟——而它是一段都不必打的。
 
-`test_transport.py:77` 那条 `test_an_unreachable_endpoint_is_the_endpoints_fault_not_the_models` 早就承诺过
+`test_transport.py:78` 那条 `test_an_unreachable_endpoint_is_the_endpoints_fault_not_the_models` 早就承诺过
 这一支（"没有回答回来 ⇒ 端点不健康 ⇒ abort"），它量不到是因为夹具没有连接可超时：
 `httpx.MockTransport` 根本不建连（同一件事在 `test_loopback_endpoint.py` 的开头写过一遍，那次是为了
 收尾的 `RuntimeError`）。真因是一串算术，四格各自都对：
@@ -3922,24 +3922,24 @@ RED 01:19:55Z（两条先红：读者闸门报的就是 `['action', 'folded_days
 
 于是 `is_upstream_error` 那条分类**到不了**：`EndpointUnavailable`（`llm.py:178`）与
 `aborted_endpoint`（`game.py:214`）在这形状下不可达，`max_retries_total` 那一整格预算也没人花。
-`transport.py:139` 那句 "the alternative is a full transcript" 写的正是这一具，而它在修之前只是一句
+`transport.py:146` 那句 "the alternative is a full transcript" 写的正是这一具，而它在修之前只是一句
 注释，不是被量过的行为。
 
-一刀：`transport.py:127` 发出 `httpx.Timeout(timeout_s, connect=self.cfg.connect_timeout_s)`，新字段
+一刀：`transport.py:134` 发出 `httpx.Timeout(timeout_s, connect=self.cfg.connect_timeout_s)`，新字段
 `config.py:117` 出厂 5.0。否掉的两条备选留在账上：抬 `llm_timeout_floor_s` 等于把 plan §6 的 3×median
 语义换成"够容纳三次建连"，而且 abort 要等到 ~139.5s；让 transport 自己算上限，就是把
 `max_retries_per_call`（`llm.py:150`）那格重试预算抄成第二支笔。
 
-三条新用例（`tests/test_transport.py` 现 16 条）：
+三条新用例（`tests/test_transport.py` 那时十六，写成汉字是不把历史读数顶成新数的口径，见 `#73`）：
 
-* `test_transport.py:195` 的 `test_the_connect_phase_gets_its_own_bound_below_the_seat_deadline` 钉**接线**。
+* `test_transport.py:196` 的 `test_the_connect_phase_gets_its_own_bound_below_the_seat_deadline` 钉**接线**。
   看得见它的地方只有一处：`request.extensions["timeout"]`，httpx 收到 `timeout=` 之后真正交给 transport
   的那个对象，长这样 `{'connect': 7.5, 'read': 45.0, 'write': 45.0, 'pool': 45.0}`。7.5 是故意挑的——
   它既不是 45 的因数，也不是任何一个"忘了改"能碰巧写出来的数。
-* `test_transport.py:219` 的 `test_the_default_numbers_let_the_endpoints_verdict_win_the_race` 钉**够不够开**：
+* `test_transport.py:220` 的 `test_the_default_numbers_let_the_endpoints_verdict_win_the_race` 钉**够不够开**：
   出厂值下端点判决的最坏时刻 `3×5.0 + (1.5 + 3) = 19.5s` 必须小于席位 deadline 45s。两个数分别从 `Config`
   和 `LLM.__init__` 的签名上读（`inspect.signature`），因为漂移会来自两侧，而退避常数根本不在 `Config` 里。
-* `test_transport.py:244` 的 `test_the_read_budget_is_unchanged_by_the_connect_bound` 是反方向：把 read 也
+* `test_transport.py:245` 的 `test_the_read_budget_is_unchanged_by_the_connect_bound` 是反方向：把 read 也
   一起收紧就重新把"模型在思考"归类成了"这一回合超时"，那是上面 `test_a_stalled_read_stays_one_turns_problem`
   守着的另一半。
 
@@ -6167,3 +6167,103 @@ B1/B2 被更早的证人接走，而它只数条数、不判指得着指不着�
 全部有落点（18:07:52Z），手册仍是 717 行——这一片对那一份 .md 的每一处改动都走行内替换，因为本节引用的
 那 5 处行号（手册三处、归档两处）只要有一侧变了行数就全漂；改完之后按"散文落盘 → 重跑闸门 → 才写读数"
 的顺序收尾，最后一次的 69 与 1006 才是这一片的账。
+
+
+### 端点回显里的那个名字，终于和发请求用的是同一个（`#147`）
+
+**动因是上一片留下的那句话。** `#146` 收尾时"顺手量到、但不在这片里修"的那一条写的就是这里：
+`transport.py` 的清洗表把要擦的变量名硬编码成一支两份的名单，而真正的键名来自
+`Config.api_key_env`，两者没有联结。这一片来收，理由和当时写的一样——它动的是脱敏链，得先有失败
+测试，不能顺手改。
+
+**先量那个第二名字还剩几个读者。** 18:19:35Z 全仓扫（`src/`、`tests/`、`docs/`、`README.md`、
+`scripts/`、`.env.example`）：产品代码里那一行是它唯一的**出现**处，也就是零读者、零调用者；剩下
+唯一的一处是本页 `#146` 那一节里记载"它有零读者"的那句散文。名单里躺着一个没人配置也没人擦的名字，
+比名单短更糟的是它让人以为名单覆盖了两处来源。这一行随这一片一起删掉。
+
+**RED 分三条，失败的理由各不相同。** 18:14:37Z 第一条红：把键挪到一个第三名字下（`Config` 支持，
+`require_key()` 照着取），发请求照样带上它，而擦值那一步只认名单里那两个名字，于是端点回显的明文
+直接进了 `res.error`。第二条是参数化展开的两格，让改过名字的键在**两条** `except` 分支上各撞一次——
+这一格不是为了多一个读数，是因为那两处的 `error=` 各写了一遍，把联结只补在其中一处，另一处照样绿着
+（电池里 S3、S4 两具分别只红一格，量的就是这件事）。
+
+第三条红在最不像会红的地方。`transport.py` 的非 200 分支先做 `r.text[:300]` 再擦值，于是一枚跨切口的
+值——前面 10 个字符留在切口内、后面 11 个被切掉——不再等于 `replace` 要找的那个整串，谁都没擦掉它，
+而日志里存着明文的前缀。18:18:30Z 这一格的红点名的是**前缀**断言，整串断言当时是绿的：如果把测试写成
+`PLACEHOLDER not in res.error`，旧代码会通过，因为它留下的那 10 个字符不构成整串。这一族记忆里已经
+记过（"报告里带引号的原文会洗白断言"），差别在这里是**截断**洗白，不是引号。所以那条用例里同时有一条
+正控制（`"x" in res.error`：正文还是要记的，不许靠清空 `error` 变绿），它由电池里的 C1 那一具单独证明
+自己会红。
+
+**一处证不出来的联结，留账不删。** 四个 `error=` 调用点里有一处是 `unparseable body: {e}`。18:20:30Z
+实测：`e` 是 `json.JSONDecodeError`，它的 `str()` 只有"line 1 column 2 (char 1)"这一类行列号，body
+进不去——同一份 body 里放着那枚哨兵时，`str(e)` 仍然不含它。也就是说这一处的 `key_env` 参数今天没有
+证人，也不是没写测试，是**造不出证人**（除非伪造一个把 body 抄进消息的异常，而那个异常 httpx 不会抛）。
+按上一片 E2 那一形记：**这一具要留在那儿，但它没有证人**。留着而不是退回默认名，是因为默认名那一侧的
+依据（`redact()` 手里没有 config）恰恰是这一片要收的限界，参数写下去之后，"这一处也认配置"这件事在
+代码里是显式的，而上面那句量过的结论说清了它今天为什么量不到。
+
+**限界跟着挪了一格。** `redact()` 的字符串分支仍取出厂名，它手里确实没有 `Config`；这条以前写在
+`tests/test_no_secrets.py` 那条"样例广告要有读者"的 `KNOWN_LIMIT` 里，引用的正是那份两份名单的字面量。
+字面量没了，那段话就得跟着重写：现在 `WOLF_LLM_API_KEY` 之所以被记成"有读者"，靠的是 `config.py` 里
+那个带 `env` 的字段默认值，清洗表这一侧不再有任何独立名单——广告权只可能来自配置。
+
+**这一片改到的历史读数。** `tests/test_transport.py` 顶部多了一行 `import pytest`，那一支文件的四处
+行号引用（归档三处、测试 docstring 一处）整体后移，行号闸门先红后补；另外归档里那句"现 16 条"被
+计数闸门顶成了新数——那是 `#93` 那天的读数，处置口径同 `#73`：改回汉字（"那时十六"），别再拿今天
+的条数去追一句历史。测试 docstring 里那句点着 `transport.py` 一百二十七行的更麻烦：它说的是**改前**那一行用裸 float
+传下去，而 134 行现在是 `httpx.Timeout(...)`，把号挪过去等于让一句话指着反驳自己的代码。这一处不挪号、
+改句子（"改前那一行"），这是 `#126` 那句"没有一处靠豁免消掉"里"改句子"的那一支。
+
+**这一节自己也被闸门抓了一次，抓在新落的那一段里。** 上面这段第一次落盘时，"点着一百二十七行"那句
+写成了文件名紧跟冒号紧跟号的形——正是这一片判定为死号的那一形，18:27:19Z 报红。它说明闸门读的不是
+翻好的旧账，是刚写下的这一句；处置和别处一样：讲历史里的号就用汉字写，别留点号形。
+
+**电池 `mut147.py`（18:30:08Z 起，七阶段全量口径）。** 基线 1010 passed in 99.90s、新增红 0 具，
+还原后再量一次 `transport.py` 的 sha256 前 12 位与落刀前相同（`f7db1618fbba`）。名册写在落刀之前。
+
+| 变异 | 落在哪一处 | 预期新增红 | 实测 | 全量半径 |
+|---|---|---|---|---|
+| S1 名单退回硬编码两枚 | `_scrub_string` 里那句按配置取值，换回两份名单的 `for` | 4 格 | 5 格（多一具假证人） | 5 failed, 1005 passed（103.15s） |
+| S2 只漏超时那一支 | 第一条 `except` 的 `error=` 退回单参 | 1 格 | 1 格，红 `[slow-read]` | 1 failed, 1009 passed（102.85s） |
+| S3 只漏没建连那一支 | 第二条 `except` 的 `error=` 退回单参 | 1 格 | 1 格，红 `[never-connected]` | 1 failed, 1009 passed（98.62s） |
+| S4 截断在擦值之前 | 非 200 分支回到切过的 `text` 上擦 | 1 格 | 1 格，跨切口那条 | 1 failed, 1009 passed（101.38s） |
+| S5 退掉 unparseable 那处的联结 | 第四处 `error=` 退回单参 | 0 格 | 0 格 | 1010 passed（100.56s） |
+| S6 出厂名改成没人设的名字 | `_scrub_string` 签名上的默认值 | 0 格 | 1 格（预注册少写） | 1 failed, 1009 passed（103.55s） |
+| C1 非 200 的 `error` 清空 | 同一处改成空串（负控制） | 1 格 | 2 格（两条正控制） | 2 failed, 1008 passed（97.76s） |
+
+S2 与 S3 各只红一格，就是"两条 `except` 分支各自要有证人"这件事的量法：合上一条就看不出另一条漏了。
+S5 是这一片唯一"预期与实测都是 0"的阶段，它把上面那句"造不出证人"从推论变成了读数——把第四处的联结
+退掉，整套 1010 条一条不红。
+
+**S1 多出来的那一格是 `#77` 那一族第二次落在电池里。** 红的是
+`test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_beside_it`，理由不是行为变了，
+而是这一具往 `transport.py` 里**多写了一行**，把文档点着的号整体顶偏。它是行数的证人不是行为的证人，
+所以记在这里而不处置：S1 真正要问的那四格全部红了，包括 `#86` 那条"声明了却没人读的入参"守卫——
+名单退回硬编码后，`key_env` 参数正好变成一个没人读的入参。
+
+**两处 MISMATCH 都是预注册少写，不是假证人，方向也各不相同。** S6 红的是既有的
+`test_redact_elides_values_by_key_name_and_by_literal_content`：它一直在替 `redact()` 那条出厂名默认值
+站岗，所以上面"限界跟着挪了一格"那一格写的不是无人看守的代码，只是没有**新增**证人——这一具是 battery
+替我把这句话纠正过来的。C1 多红的那一条是
+`test_the_scrubber_follows_whatever_env_var_the_config_names`，它自己带了一句 `"<elided>" in res.error`，
+把 `error` 清空时它和跨切口那条一起倒：这一片三条用例其实各有正控制，名册里我只给一条记了功。
+
+**顺手收掉 `#149` 里那两处跨文件的指示代词。** 手册能力清单里有两句写的是"见上一节"（`#80` 那具数
+一句、体检工具排练一句），而手册从 484 行到文件尾只有一个标题——它们要退的那一节住在这一页，读者在
+手册里退无可退。两处都改成带尖括号的指针形，于是它们从"没人核的一句话"变成闸门扫得到的一处落点。
+
+**这一族还剩多少，按点名字样量。** 18:48:44Z 拿这一组字样扫 README 与 `docs/*.md`（`见上一节`、
+`见下一节`、`上一节的`、`下一节的`、`上面那节`、`下面那节`、`上面那条`、`下面那条`、`见前文`、
+`见上文`、`见下文`）：18 行，其中 README 4、归档 11、`metrics.md` 2、`comparison.md` 1。这 18 处落在
+同一个命令块、同一张表或同一条 bullet 里，读者就地能解，所以这一片不动它们；闸门仍然没有——`#149`
+开着，等的是"指示代词算不算落点"这一条判据，而那要先有失败测试。
+
+**收尾读数（这一节的电池名册与那两处指针改写都落盘之后）。** 全量 1010 passed in 105.54s（18:50:53Z
+起跑、18:52:41Z 收尾，这一串里最后一次；它前面还有一跑 1010 passed in 88.73s，18:46:47Z→18:48:17Z）；三道文档闸门 69 passed（18:50:03Z、18:50:12Z 两跑——这一节所有散文与手册那三处改动都在它们之前落盘，
+只有这一句里的时间戳在后）；扫面 71 处指针、死指针 0 处（18:46:38Z：README 36、归档 32、`comparison.md` 3——README 比上一片记的 34 涨 2，
+涨的就是这一片补的那两个落点）；能力清单 40 条 bullet 里 22 处具数主张全部有落点（18:46:38Z，与上一片
+同口径）。手册 718 行——这一片对它的三处改动（配置那一段 +1 行、指针两处、末行读数一处）全是行内或
+段内替换，只有 `#147` 那段散文多出一行。
+
+

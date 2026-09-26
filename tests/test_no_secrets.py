@@ -166,9 +166,11 @@ def _env_names_the_code_reads() -> set[str]:
     `str` 字段的默认值（`api_key_env: str = "X"`，取用它的是 `require_key` 里那句
     `os.environ.get(self.api_key_env)`——间接，但确实是配置）。
 
-    KNOWN_LIMIT：经过一个变量传进去的名字不收。`transport.py` 的清洗表
-    （`for name in ("WOLF_LLM_API_KEY", "MVP_VLM_API_KEY")`）擦的是**值**，不是配置，
-    所以它不该给样例发广告权；哪天它变成配置读法，就得改写成调用点字面量才会被这条看见。
+    KNOWN_LIMIT：经过一个变量传进去的名字不收。`transport.py` 擦的是**值**，取值的写法是
+    `os.environ.get(key_env)`，名字由 `Config.api_key_env` 供给（调用点传进来，默认值是出厂名），
+    所以这条看不见它——`WOLF_LLM_API_KEY` 仍然是靠 `config.py` 那个带 `env` 的字段默认值被记成
+    有读者的。以前清洗表里还躺着第二个名字，它既没人配置也没人擦，是这一族的第一次；现在名单
+    只剩一处来源，这条限界的含义也跟着变了：样例的广告权只可能来自配置，不可能来自清洗表。
     """
     names: set[str] = set()
     for path in _code_that_touches_the_environment():

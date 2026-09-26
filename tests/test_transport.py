@@ -21,6 +21,7 @@ Getting that backwards is how a server outage ends up in the corpus as model pas
 from __future__ import annotations
 
 import httpx
+import pytest
 
 from wolfengine.config import Config
 from wolfengine.transport import HttpTransport
@@ -199,7 +200,7 @@ async def test_the_connect_phase_gets_its_own_bound_below_the_seat_deadline(monk
     13 个回合**全部**记成 `timeout_after_45s`、`result.ok: true`、`fallback: 1`，一局打到第 2 天
     用了 585s、整局预计 ~37 分钟。`agent._ask` 的 deadline 取 `llm_timeout_floor_s`=45s
     （`actors.py:133`），`llm.py:146` 又把同一个 45 当作 `timeout_s` 交给 transport，
-    `transport.py:127` 用裸 float 传下去 = 四个阶段都是 45。于是本文件上面那条
+    `transport.py` 改前那一行用裸 float 传下去 = 四个阶段都是 45。于是本文件上面那条
     `test_an_unreachable_endpoint_is_the_endpoints_fault_not_the_models` 所承诺的分类根本到不了：
     `asyncio.wait_for` 与 httpx 的 connect 超时同时响，抢先进入 `except` 的是前者，
     `EndpointUnavailable`（`llm.py:178`）与 `aborted_endpoint`（`game.py:211`）在这形状下不可达。
@@ -272,6 +273,68 @@ async def test_the_key_never_survives_into_the_error_text(monkeypatch):
     # The scheme name may stay (it is not the secret); what must not survive is the material
     # after it. This is the assertion that fails if the scrubber stops reading the environment.
     assert "<elided>" in res.error and f"Bearer {PLACEHOLDER}" not in res.error
+
+
+async def test_the_scrubber_follows_whatever_env_var_the_config_names(monkeypatch):
+    """`require_key()` reads the configured name; the value scrubber must read the same one.
+
+    `transport.py` used to hard-code a pair of names, so a deployment that moves the key to a
+    third name still sent it as `Bearer`, still got the endpoint's echo back, and scrubbed
+    nothing: the literal was only ever looked up for the two names the list already knew. The
+    alternate sentinel below is deliberately *not* the value the fixture puts under the default
+    name, and does not contain it as a substring, so this cannot go green by accident.
+    """
+    alt = "OTHERSENTINELNOTKEY"
+    monkeypatch.setenv("WOLF_OTHER_KEY_ENV", alt)
+
+    def echo(request: httpx.Request):
+        return httpx.Response(400, text=f"bad Authorization: {request.headers['Authorization']}")
+
+    t = _transport(echo, monkeypatch, cfg=Config(api_key_env="WOLF_OTHER_KEY_ENV"))
+    res = await _chat(t)
+    assert (res.ok, res.status) == (False, 400)
+    assert alt not in res.error, f"擦值没跟着 api_key_env，键的明文进了日志：{res.error!r}"
+    assert "<elided>" in res.error
+
+
+@pytest.mark.parametrize("exc", [httpx.ReadTimeout, httpx.ConnectError],
+                         ids=["slow-read", "never-connected"])
+async def test_a_renamed_key_is_erased_by_whichever_except_arm_echoes_it(monkeypatch, exc):
+    """两条 `except` 分支各自有一份擦值调用，所以各自要有证人。
+
+    上面那条走的是"有响应、但响应是坏的"那一条分支；这里两条分别把异常丢进**超时**分支和
+    **什么都没回来**分支——两处的 `error=` 是各写一遍的，把联结只补在其中一处，另一处照样在
+    出厂名下擦值、对改过名字的部署静默失效。
+    """
+    alt = "OTHERSENTINELNOTKEY"
+    monkeypatch.setenv("WOLF_OTHER_KEY_ENV", alt)
+
+    def boom(request: httpx.Request):
+        raise exc(f"while sending {request.headers['Authorization']}")
+
+    t = _transport(boom, monkeypatch, cfg=Config(api_key_env="WOLF_OTHER_KEY_ENV"))
+    res = await _chat(t)
+    assert not res.ok
+    assert alt not in res.error, f"这一分支没跟着 api_key_env：{res.error!r}"
+    assert "<elided>" in res.error
+
+
+async def test_a_key_straddling_the_body_cut_leaves_no_prefix_either(monkeypatch):
+    """The cut used to run *before* the scrubber, so a straddling value left its head behind.
+
+    `r.text[:300]` is applied to the raw body; a value that starts before offset 300 and ends
+    after it no longer equals the string `replace` looks for, and the 10 characters that made it
+    past the cut stayed in `error`. That is why the assertion is on a *prefix* of the value — the
+    whole value is not in there anymore, which is exactly how the old code passed
+    `test_the_key_never_survives_into_the_error_text`'s shape while still leaking half of it.
+    """
+    body = "x" * 290 + PLACEHOLDER + "tail"
+
+    t = _transport(lambda request: httpx.Response(502, text=body), monkeypatch)
+    res = await _chat(t)
+    assert (res.ok, res.status) == (False, 502)
+    assert "x" in res.error, "正控制：正文还是要记的，不许靠清空 error 变绿"
+    assert PLACEHOLDER[:8] not in res.error, f"截断在擦除之前，键的前缀进了日志：{res.error!r}"
 
 
 # ----------------------------------------------------------------------- the cache evidence

@@ -48,11 +48,18 @@ def redact(obj: Any) -> Any:
     return obj
 
 
-def _scrub_string(s: str) -> str:
-    for name in ("WOLF_LLM_API_KEY", "MVP_VLM_API_KEY"):
-        value = os.environ.get(name)
-        if value and value in s:
-            s = s.replace(value, "<elided>")
+def _scrub_string(s: str, key_env: str = Config.api_key_env) -> str:
+    """Erase the value of the variable the key is actually read from.
+
+    The name comes from `Config`, not from a list of names written here: `require_key()` will
+    read whatever `api_key_env` says, so a deployment that renames the variable used to send a
+    key this scrubber never looked up — while the endpoint's echo of it went straight into
+    `error`, and from there into the log. The default is the factory name because `redact()` has
+    no config in hand; every call site that does have one passes it.
+    """
+    value = os.environ.get(key_env)
+    if value and value in s:
+        s = s.replace(value, "<elided>")
     return s
 
 
@@ -131,7 +138,7 @@ class HttpTransport:
             # the remedy already exists upstream: `agent._ask`'s per-seat deadline skips the
             # seat. Aborting a whole game over one slow read would discard 8 good seats.
             return TransportResult(ok=False, latency_s=time.perf_counter() - t0,
-                                   error=_scrub_string(f"{type(e).__name__}: {e}")[:200])
+                                   error=_scrub_string(f"{type(e).__name__}: {e}", self.cfg.api_key_env)[:200])
         except Exception as e:  # noqa: BLE001
             # ConnectError / ConnectTimeout / any NetworkError / ProtocolError: nothing ever
             # came back, so this cannot be a fact about the model's behaviour. `llm.py` turns
@@ -139,7 +146,7 @@ class HttpTransport:
             # ends the game as `aborted_endpoint` — the alternative is a full transcript where
             # every one of the 9 seats was actually played by `legality.default_action`.
             return TransportResult(ok=False, latency_s=time.perf_counter() - t0,
-                                   error=_scrub_string(f"{type(e).__name__}: {e}")[:200],
+                                   error=_scrub_string(f"{type(e).__name__}: {e}", self.cfg.api_key_env)[:200],
                                    is_upstream_error=True)
         dt = time.perf_counter() - t0
         if r.status_code != 200:
@@ -148,7 +155,11 @@ class HttpTransport:
             length_order = r.status_code == 400 and any(
                 w in low for w in ("length", "context", "maximum", "token"))
             return TransportResult(
-                ok=False, latency_s=dt, status=r.status_code, error=_scrub_string(text),
+                ok=False, latency_s=dt, status=r.status_code,
+                # Not `text`: the erase has to run on the uncut body. A value straddling the
+                # 300-char cut no longer matches the whole-string `replace`, and the head of it
+                # would reach the log looking like nothing was leaked.
+                error=_scrub_string(r.text, self.cfg.api_key_env)[:300],
                 is_length_error=length_order,
                 # Nothing else is left over: a gateway's HTML page or an "upstream error" body
                 # arrives with a status that is neither of these two, so it lands here by default.
@@ -160,7 +171,8 @@ class HttpTransport:
             o = r.json()
         except Exception as e:  # noqa: BLE001
             return TransportResult(ok=False, latency_s=dt, status=r.status_code,
-                                   error=_scrub_string(f"unparseable body: {e}")[:200],
+                                   error=_scrub_string(f"unparseable body: {e}",
+                                                       self.cfg.api_key_env)[:200],
                                    is_upstream_error=True)
         u = o.get("usage") or {}
         try:
