@@ -1455,6 +1455,63 @@ def test_the_pointer_scanner_is_not_reading_an_empty_corpus():
         f"README 与归档是这一族的两个大户，任一方为 0 说明语料被收窄了：{hits}"
 
 
+# ------------------------------------------------------------ 「HEAD 那一版」的读数锚
+# 一句读数写"拿 HEAD 那一版量的"，落笔时是真的；下一次提交之后同一句话指的是另一棵树——字没动，
+# 对象换了。`#150` 的收尾读数就被它自己那一笔提交顶过一次。判据只有一条形状：独立成词的 HEAD
+# 所在行，同行必须出现一个 SHA 形状。**词界是判据的一半**：`OFFER_HEADER` 里那个 HEAD 不是这个词。
+HEAD_WORD = re.compile(r"(?<![A-Za-z0-9_])HEAD(?![A-Za-z0-9_])")
+SHA_WORD = re.compile(r"(?<![0-9a-fA-F])[0-9a-f]{7,40}(?![0-9a-f])")
+
+
+def _unanchored_head_lines(pages: dict[str, str]) -> list[tuple[str, int, str]]:
+    """The check itself: which lines lean on `HEAD` without naming the commit they were true of."""
+    bad: list[tuple[str, int, str]] = []
+    for page, text in pages.items():
+        for no, line in enumerate(text.splitlines(), 1):
+            if HEAD_WORD.search(line) and not SHA_WORD.search(line):
+                bad.append((page, no, line.strip()))
+    return bad
+
+
+def test_a_reading_anchored_on_head_must_name_the_commit():
+    """夹具：两种该报的形状都报，三种不该报的都不报——带 SHA 的、锚在父提交的、嵌在标识符里的。
+
+    第 5 行那一格（标识符）落笔即绿，还账的是电池里把词界拆掉那一具：拆掉之后它会连同 `OFFER_HEADER`
+    那两处真语料一起被报成假命中。第 3、4 行同理归"把 SHA 要求拆掉"那一具。
+    """
+    pages = {"a.md": "\n".join([
+        "拿 HEAD 那一版与现在各量一遍。",
+        "在 HEAD 的代码上一行一行打出来。",
+        "这一版 HEAD `0451f43` 才是量过的那一棵。",
+        "现 HEAD 上它已进注释（锚在父提交 `f0414b8^`）。",
+        "`OFFER_HEADER` 把可答段立成一段。",
+        "`git archive HEAD` 出来的整包副本。",
+    ])}
+    bad = _unanchored_head_lines(pages)
+    assert [b[1] for b in bad] == [1, 2, 6], \
+        f"无锚的 HEAD 读数要逐行报出来、带 SHA 的和标识符里的不许报：{bad}"
+
+
+def test_the_head_anchor_scanner_tells_the_word_from_the_identifier():
+    """正控制（真实语料）：这一族既不是空扫，也不是把 `OFFER_HEADER` 那种词也算成 HEAD。"""
+    pages = _pointer_corpus()
+    words = sum(len(HEAD_WORD.findall(line)) for text in pages.values() for line in text.splitlines())
+    anywhere = sum(text.count("HEAD") for text in pages.values())
+    assert anywhere > words, \
+        f"语料里必须真有嵌在标识符里的 HEAD（现测独立成词 {words}、子串 {anywhere}）——相等说明词界没在起作用"
+    assert words >= 5, f"独立成词的 HEAD 只有 {words} 处（19:41:31Z 现测 7），多半是扫法坏了"
+
+
+def test_no_manual_line_leans_on_head_without_naming_a_commit():
+    bad = _unanchored_head_lines(_pointer_corpus())
+    assert not bad, (
+        "这些句子把读数锚在 HEAD 上却没点名提交：下一笔提交之后同一句话指的是另一棵树，而它能核的那条"
+        "命令会静默换对象。修法是在同一行写进量过的那个 SHA（`git log -1 --before=<句子里的时刻> "
+        '--format=%H main` 能把当时的 HEAD 印出来）；报的格式是 文件:行 原文：'
+        f"{[(b[0], b[1], b[2][:60]) for b in bad]}"
+    )
+
+
 # ------------------------------------------------------------- 「N 具变异」的落点账
 # 手册能力清单里每一个「N 具变异」都是一句主张：那一批电池跑了 N 具。归档按批记具名表，手册只留
 # 一个数，而这个数**没有任何东西在读**——写错了、或者把两批的和当成一批的具数，读者在手册里查不出来。

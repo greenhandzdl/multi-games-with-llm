@@ -196,7 +196,7 @@ def test_punctuation_between_the_seat_number_and_the_sentence_is_not_part_of_the
 def test_a_bracket_that_opens_the_sentence_is_not_boundary_punctuation():
     """`_SEPARATORS` 那张表同时干两件事：判"这里是不是边界"和"从哪儿开始切"。引号只配当后一件的反例。
 
-    2026-09-25T13:39Z 实测三态。「指控 3 「他是狼」」在 HEAD 上读出 `'「他是狼'`（丢的是**后**引号——
+    2026-09-25T13:39Z 实测三态。「指控 3 「他是狼」」在 HEAD（`e06ac73`）上读出 `'「他是狼'`（丢的是**后**引号——
     调用点 `rest.strip` 从行尾啃字的老毛病，与本条无关，记在 `#129`）；上一条用例的修法把它顶成
     `'他是狼'`，两个引号一起没了。那不是把边界切干净，是多啃了那个人打的一个字，所以这一条按
     不带后引号的写法断言（`「他是狼`），免得把 `#129` 的账算到这条头上。
