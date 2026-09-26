@@ -1250,24 +1250,24 @@ DEMO_MARKERS = {
 }
 
 
-def _readme_demo_block() -> str:
-    """《三分钟离线演示》里那个 ```bash 块，原样，一个字不改。
+def _readme_block(heading: str = DEMO_HEADING) -> str:
+    """那一节里那个 ```bash 块，原样，一个字不改。
 
     测试不抄一份"等价"的命令清单：抄写就是第二份主张，而两份会在下一次改文档时各自演化
-    ——这一片的 bug 恰恰是文档里那句 shell 和目录的真实内容对不上。
+    ——`#136` 那一片的 bug 恰恰是文档里那句 shell 和目录的真实内容对不上。
     标题按整行相等找，不按前缀：`find()` 会把 `## 三分钟离线演示x` 也算命中（K4 那具刀量出来的）。
     """
     readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
     lines = readme.splitlines()
     try:
-        at = next(i for i, l in enumerate(lines) if l.strip() == DEMO_HEADING)
+        at = next(i for i, l in enumerate(lines) if l.strip() == heading)
     except StopIteration:
-        raise AssertionError(f"README 里没有整行等于 {DEMO_HEADING!r} 的标题") from None
+        raise AssertionError(f"README 里没有整行等于 {heading!r} 的标题") from None
     rest = lines[at + 1:]
     try:
         opened = next(i for i, l in enumerate(rest) if l.strip() == "```bash")
     except StopIteration:
-        raise AssertionError(f"{DEMO_HEADING} 这一节后面没有 ```bash 块") from None
+        raise AssertionError(f"{heading} 这一节后面没有 ```bash 块") from None
     try:
         closed = next(i for i in range(opened + 1, len(rest)) if rest[i].strip() == "```")
     except StopIteration:
@@ -1277,15 +1277,13 @@ def _readme_demo_block() -> str:
     return block
 
 
-def test_the_readme_demo_block_runs_verbatim(tmp_path, no_network):
-    """把人照着 README 敲的那一段整块交给 bash，看它有没有真打到一局日志上。
+def _bash_the_block(tmp_path: Path, block: str, name: str, stdin: str | None):
+    """把一坨 README 文本原样写成脚本、交给真 bash 跑，返回那条子进程。
 
-    现场是 README 上一节自己造出来的：`--dry-run --out data` 与 `run --out data` 共用一个
-    目录，于是那个目录里合法地住着两种 `*.jsonl`。引擎的两个读取器都把转储按名字跳过
-    （`metrics.read_dir` / `batch.read_arm`），演示块里那句 `LOG=` 是同一句判据的第三份
-    抄写——而它此前那份抄错了：`ls data/*.jsonl | tail -1` 挑中的是转储，因为 `g` 排在任何
-    时间戳后面（`test_the_readme_demo_block_runs_verbatim` 在修好前的第一次实跑里，六条命令
-    各印了一句「这不是一局日志」）。
+    这一跑**不在** `no_network` 的保护范围里：那个夹具 patch 的是本进程的 socket 与 transport，
+    而这里发命令的是子进程。所以调用它之前，块里不许留有会拨端点的命令行——那道前置断言写在
+    调用方，不在这里兜底：这里若悄悄替子进程挡网络，就等于把"这一块能不能整块粘贴"改成
+    "这一块在人造的无网环境里能不能粘贴"，是两句不同的话。
     """
     import os
     import shutil
@@ -1295,22 +1293,100 @@ def test_the_readme_demo_block_runs_verbatim(tmp_path, no_network):
     bin_dir = str(Path(sys.executable).parent)
     assert shutil.which("wolf", path=bin_dir), (
         f"`{bin_dir}` 上没有 `wolf`，这一跑等于什么都没执行")
+    script = tmp_path / f"{name}.sh"
+    script.write_text(block, encoding="utf-8")
+    kw = {"input": stdin} if stdin is not None else {"stdin": subprocess.DEVNULL}
+    return subprocess.run(["bash", str(script)], cwd=tmp_path, text=True,
+                          capture_output=True,
+                          env={**os.environ,
+                               "PATH": bin_dir + os.pathsep + os.environ.get("PATH", "")},
+                          **kw)
+
+
+def test_the_readme_demo_block_runs_verbatim(tmp_path, no_network):
+    """把人照着 README 敲的那一段整块交给 bash，看它有没有真打到一局日志上。
+
+    现场是 README 上一节自己造出来的：`--dry-run --out data` 与 `run --out data` 共用一个
+    目录，于是那个目录里合法地住着两种 `*.jsonl`。引擎的两个读取器都把转储按名字跳过
+    （`metrics.read_dir` / `batch.read_arm`），演示块里那句 `LOG=` 是同一句判据的第三份
+    抄写——而它此前那份抄错了：`ls data/*.jsonl | tail -1` 挑中的是转储，因为 `g` 排在任何
+    时间戳后面（这条用例在修好前的第一次实跑里，六条命令各印了一句「这不是一局日志」）。
+    """
     (tmp_path / "data").mkdir()
     assert cli.main(["run", "--dry-run", "--seed", "22", "--out", str(tmp_path / "data")]) == 0
     assert no_network == []
     dumps = sorted(p.name for p in (tmp_path / "data").glob("*.prompts.jsonl"))
     assert dumps, "夹具没能造出「同一目录里两种 jsonl」这个现场，用例就在空转"
 
-    block = _readme_demo_block()
-    script = tmp_path / "demo.sh"
-    script.write_text(block, encoding="utf-8")
-    proc = subprocess.run(["bash", str(script)], cwd=tmp_path, text=True,
-                          capture_output=True, stdin=subprocess.DEVNULL,
-                          env={**os.environ,
-                               "PATH": bin_dir + os.pathsep + os.environ.get("PATH", "")})
+    block = _readme_block()
+    proc = _bash_the_block(tmp_path, block, "demo", None)
     evidence = (f"--- 块 ---\n{block}\n--- stdout ---\n{proc.stdout}\n"
                 f"--- stderr ---\n{proc.stderr}")
     assert proc.returncode == 0, f"这一块的退出码是 {proc.returncode}：{evidence}"
     for marker, who in DEMO_MARKERS.items():
         assert marker in proc.stdout, f"{who} 没印出来（标记 {marker!r}）：{evidence}"
     assert "这不是一局日志" not in proc.stdout + proc.stderr, evidence
+
+
+# ------------------------------------------- README〈人怎么上桌〉那一块整块能跑（#137）
+HUMAN_HEADING = "## 人怎么上桌：`--human 座位`"
+# 一块一条，和 `#136` 那块同一口径，但这里的"一条"要更严：`桌边坐着一个真人` 那一行 `run` 收尾
+# 时也印（实测 `run.out:205`，2026-09-26T07:37Z），所以第一版拿它当 replay 的独证，被 K4 那具刀
+# （把 replay 换成 `true`）当场放过——改成了数到 2：一局里只有"打完的那一屏"和"重看的那一屏"
+# 各说一句。`〔私有〕` 这个后缀只有读取侧印，卡片上不落（`run.out` 里 grep 它是 0 命中）。
+HUMAN_MARKERS = {
+    "轮到你了：3 号": "run --mock --human 3：终端前的人真的拿到了一张卡片",
+    "[e4] 法官（私发）：你的身份是 villager。〔私有〕": 'replay "$HLOG" --seat 3：3 号那一席自己的那张牌',
+    "3号：我投他": "人打的那一行进了这一局，而不是被丢弃后又由引擎替答出一句别人的话",
+}
+# `--god` 的第一屏就是别人的发牌行（实测 seed 7 的 `[e2]/[e3]/[e5]` 三条 wolf），3 号看不到。
+# 拿它的缺席当证人，比拿"3 号那一行出现了"更能钉住视图：出现这一行的视图有两个。
+HUMAN_ABSENT = "[e2] 法官（私发）"
+HUMAN_NOTICE = "桌边坐着一个真人"
+
+
+def test_the_human_seat_block_runs_verbatim(tmp_path):
+    """把人照着〈人怎么上桌〉敲的那一段整块交给 bash，stdin 递三行答案进去。
+
+    这一块的修法是把需要端点的那一条挪进注释——和 `#136` 为 `--calibration` 立的同一条规矩，
+    理由在这里更硬：`_bash_the_block` 跑的是子进程，`no_network` 那层夹具挡不住它，所以
+    "块里没有会拨判官的命令行"必须是执行之前的前置断言，不能靠事后没报错来侥幸。
+
+    夹具往 `data/human` 里先放一局**没有真人**的旧日志（文件名钉成 2000 年，好让 `tail -1`
+    和 `head -1` 分出胜负）。没有这一格，`HLOG=` 那句"挑到你刚打的那一局"就没有对立面：
+    目录里只有一个文件时，`tail -1` 换成 `head -1` 是同一句话（K7 那一具刀量出来的）。
+    """
+    import shutil
+
+    block = _readme_block(HUMAN_HEADING)
+    live = [line.strip() for line in block.splitlines()
+            if line.strip() and not line.strip().startswith("#")]
+    dialers = [line for line in live
+               if "wolf run" in line and "--mock" not in line and "--dry-run" not in line]
+    assert not dialers, (
+        f"这一块是给人整块粘贴的，而这几条会去拨局域网判官：{dialers}")
+    assert any("--human" in line for line in live), \
+        "这一块里已经没有一条真把人放上桌的命令了，那这条用例在替一句空话作证"
+
+    decoy_dir = tmp_path / "decoy"
+    assert cli.main(["run", "--mock", "--seed", "7", "--quiet",
+                     "--out", str(decoy_dir)]) == 0
+    (tmp_path / "data" / "human").mkdir(parents=True)
+    older = tmp_path / "data" / "human" / "20000101T000000Z_g00000007.jsonl"
+    shutil.copyfile(next(iter(sorted(decoy_dir.glob("*_g00000007.jsonl")))), older)
+    assert older.stat().st_size > 0
+
+    proc = _bash_the_block(tmp_path, block, "human", "票 5 先听听\n票 5 我投他\n过 没想好\n")
+    evidence = (f"--- 块 ---\n{block}\n--- stdout ---\n{proc.stdout}\n"
+                f"--- stderr ---\n{proc.stderr}")
+    assert proc.returncode == 0, f"这一块的退出码是 {proc.returncode}：{evidence}"
+    for marker, who in HUMAN_MARKERS.items():
+        assert marker in proc.stdout, f"{who} 没印出来（标记 {marker!r}）：{evidence}"
+    n_notice = proc.stdout.count(HUMAN_NOTICE)
+    assert n_notice == 2, (
+        f"这一句该出现两次（打完的那一屏 + 重看的那一屏），实测 {n_notice} 次——"
+        f"少了就是 HLOG 挑到的不是刚打的那一局（夹具里那局没有真人的旧日志在等着被选中）："
+        f"{evidence}")
+    assert HUMAN_ABSENT not in proc.stdout, (
+        f"3 号那一席看不到别人的发牌行，这一屏里却出现了 {HUMAN_ABSENT!r}："
+        f"replay 被指成了上帝视角：{evidence}")
