@@ -49,7 +49,7 @@ wolf compare data/temp09-vs-06 --axis temperature                   # → compar
 这样的属性访问算，注释行不算；读取点住在 `Config` 自己的方法里也算，但那个方法必须被别的模块
 调用过——`token_budget_for` 正是这种"唯一的读取点在 `config.py`"的形状，而按文件排除整个
 `config.py` 的旧判据把它误报成了标签（假红的代价不是报错，是逼人把名单**改回内联**好让套件变绿——
-那正好是 `test_purity.py` 禁的那个形状）。5 具变异 `/tmp/mut_axisguard.py` 两向都证过：零读取的字段
+那正好是 `test_purity.py` 禁的那个形状）。5 具变异两向都证过：零读取的字段
 要红、只在没人调的方法里读的也要红、在被调用的方法里读的不许红。
 
 同一件事还有一层嵌套的（`config.INERT_LEAVES`，顶层那格是 `config.INERT_FIELDS`，`Config` 上留了
@@ -70,7 +70,7 @@ wolf compare data/temp09-vs-06 --axis temperature                   # → compar
 `src/` 里唯一的读者是
 `REGION_CAP_KEYS = {"A": "a_hard", ...}` 这个字符串键，只按属性访问找就会把有人读的格子判成记账格
 （Q3 实测红在双向对账那条上，报的是 `regions.a_hard`、`regions.b1` 一起被拖进零读取名单）。5 具变异
-`/tmp/mut62.py`（09:29:15Z→09:29:55Z，set0 `tests/test_batch_paired.py`、set1 `tests/test_cli.py` +
+（09:29:15Z→09:29:55Z，set0 `tests/test_batch_paired.py`、set1 `tests/test_cli.py` +
 `tests/test_report_stats.py`）9/10 合预期。合的那四具各指到一条具名红用例上；不合的是 Q2（把顶层名单
 并进嵌套名单），两套都 SURVIVED，而我按 CAUGHT 预期它——因为 `inert_fields` 里的名字永远不是点号
 路径，双向对账那条又只读 `inert_leaves`，这个并集在这份语料里没有读者。等价不是性质，是"此刻有没有
@@ -222,12 +222,12 @@ wolf compare data/temp09-vs-06 --axis temperature                   # → compar
   > （最狠的一条少发 14 条指控）`——`B.regions.c_total=250` 那一臂压在那一桌 335 的地板以下，所以"最狠的一条"就是
   > 砍到只剩查验记录的那一条。整批没有这一格时（`#67` 之前的日志）改说"主张卡被动过没有 = 没有读数，
   > 不是 0"，一臂有一臂没有时 `—` 只盖在缺的那一臂上（`test_only_one_arm_having_the_knife_count_is_named_rather_than_summed`）。
-  > 本切片 14 具变异体**全部 CAUGHT**（2026-09-21 串行跑，`/tmp/mut_arm.py`，具名红用例逐具记在
+  > 本切片 14 具变异体**全部 CAUGHT**（2026-09-21 串行跑，具名红用例逐具记在
   > 跑批输出里）：5 具改减法语（两份上限照样减、缺尺子的局数写成 0、臂内取 `min`、越界局数数的
   > 是"有读数"、没证人等于零分歧），4 具改渲染与接线（缺尺子被说成两份上限、少印 C 那一列、
   > `None` 格直接 `str()`、两臂都拿 A 臂的日志减），5 具改那句跨臂汇总的范围（两臂都没证人时说成
   > 一致、`silent` 恒空、分歧总数写死 0、只有一局对不上时不报、把"零分歧"当成"没读数"）。
-  > 加上搬家后原地重跑的 `metrics.region_budget_check` 那 9 具（`/tmp/mut_regions.py`，全部照旧
+  > 加上搬家后原地重跑的 `metrics.region_budget_check` 那 9 具（全部照旧
   > CAUGHT），本切片一次 23 具。
   > **三条用例是补在分支之后的**（`no_witness_at_all`、`one_disagreement_prints`、以及
   > `nobody_cross_checked` 的 null 那一半）：写它们的时候分支已经在树上了，没有 RED 可看。
@@ -249,7 +249,7 @@ wolf compare data/temp09-vs-06 --axis temperature                   # → compar
   一局也要能出报告：端点半夜挂掉时，一份写着"不足"的报告比一份 KeyError 有用。
   复现：`PYTHONPATH=src .venv/bin/pytest tests/test_batch_paired.py -k "pairing_gain or identical_arms"`
   ——比值身份、小于 1 时那句解释、以及 `—` 不含数字，三个方向各一条。这切片 5 具变异体
-  （`/tmp/mut_gain.py`，全部 CAUGHT，具名红用例逐具记在跑批输出里）：拿 naive 宽度冒充非配对
+  （全部 CAUGHT，具名红用例逐具记在跑批输出里）：拿 naive 宽度冒充非配对
   宽度、比值写反、缺读数写成 `0.0`、表里那格印成 `deff`、报告里那句解释被删回"就是配对设计
   换来的东西"。
 

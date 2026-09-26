@@ -44,12 +44,12 @@ wolf watch   <file> [--god] [--seat N]   # 同一批判定，终端里 tail
 `string.Template` 加 `html.escape`（复盘文件会被打开在第三方的机器上，发言文本是不可信输入）。
 
 `--seat` 与 `--god` 同时给时，坐进某一位优先，`--god` 不再往上抬。07:55:40Z 在同一份日志上敲了四种
-给法（`/tmp/seat_precedence.out`）：只给 `--god` 的是 104 行、sha 前 12 位 `8918d0e775a1`；只要句子里
+给法（一轮临时探针，脚本和输出都不入库）：只给 `--god` 的是 104 行、sha 前 12 位 `8918d0e775a1`；只要句子里
 出现了 `--seat 3`——放在 `--god` 前、放在后面、或者根本不给 `--god`——输出都是同一份 81 行
 `dd111ac69f24`。这一格只能这样量：判定点只有一处，`cli.py:254` 那句 `if as_seat is not None` 排在
 `god` 那一支前面——给了座位就按那位玩家的可感知集合渲染，`god` 无从往上加。这句话钉在用例
 `test_sitting_at_a_seat_wins_over_the_god_view_on_the_same_file`（`tests/test_cli.py`）上：把两支换序
-只有它红（P1，08:03:54Z，`/tmp/mut60.out`）。在那之前这一支没有任何读者——仓库里 `god=True` 的十几处
+只有它红（P1，08:03:54Z）。在那之前这一支没有任何读者——仓库里 `god=True` 的十几处
 全在别的文件、且只给一个参数，换序也不会红，而这条命令是**默认会被人在同一行里两个开关都给出去**的。
 
 ## 观众模式挡的是两种泄漏，`visibility` 只能看见一种
@@ -282,13 +282,13 @@ rich 有两条坑，都各有一条测试钉着：
 | 前缀放宽成 `speech`（弃票也说成超长）/ 把字符数印进标记 / 两处来源不去重 | T6、T7、T8 → `...markers_needs_its_own_flag...`（T8 另抓 `test_the_gate_is_visible_not_silently_applied`） |
 
 W 那三行是 2026-09-21 把守卫从 4 个名字扩到 8 个、并把"确实在用那一份"从子串改成 AST 导入名
-之后跑的（`/tmp/mut_wiring.py`，只跑 `tests/test_wiring.py -k share_one_definition` 这一条参数化
+之后跑的（电池脚本一次性、不入库；只跑 `tests/test_wiring.py -k share_one_definition` 这一条参数化
 用例，三具全部 CAUGHT 且具名如上；跑完按 `cmp` 校验 `render_live.py` 与 `metrics.py` 字节还原）。
 
-T 那四行是同一轮给 `〔发言超长〕` 补断言时跑的（`/tmp/mut_toolong.py`，8 具全部 CAUGHT，具名如上；
+T 那四行是同一轮给 `〔发言超长〕` 补断言时跑的（8 具全部 CAUGHT，具名如上；
 跑完 `cmp` 校验 `legality.py` 与 `render_html.py` 字节还原）。
 
-harness 自己也有一条**必须算红**的教训：`/tmp/mut_toolong.py` 第一跑报了 5 具 `SURVIVED`，看着像
+harness 自己也有一条**必须算红**的教训：那一轮的电池第一跑报了 5 具 `SURVIVED`，看着像
 断言没牙，实际是我把单条测试集写成了平铺的 list（`["tests/x.py", "-k", "…"]` 被当成三个测试集逐个
 跑），pytest 每次都在 `pytest -k` 这种残缺命令上退出码 4、一行用例都没跑。**退出码非零被当成了红、
 没跑起来被当成了绿**，两个方向都错。现在 harness 先识别 `no tests ran` / 缺文件这类输出并判

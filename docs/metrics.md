@@ -55,8 +55,9 @@
 `test_the_interval_stays_inside_the_unit_interval_where_the_normal_approximation_leaves` 同时钉住
 "正态近似确实越界"这个前提，前提不成立时这条自己会红；
 `test_an_empty_denominator_is_the_whole_interval_rather_than_a_division_error` 钉 `n=0`。9 具变异
-照 `/tmp/mut_wilson.py`（2026-09-21，9/9 CAUGHT；W6 与 W8 只有新用例抓得到、旧锚点那栏 SURVIVED，
-`src/wolfengine/metrics.py` 按字节还原）。
+`test_an_empty_denominator_is_the_whole_interval_rather_than_a_division_error` 钉 `n=0`。9 具变异
+2026-09-21 跑过一轮，9/9 CAUGHT；W6 与 W8 只有新用例抓得到、旧锚点那栏 SURVIVED，
+`src/wolfengine/metrics.py` 按字节还原。
 
 `descriptive` 这个旗子读的就是这条区间的半宽：`wilson_ci(20, 40)` 实测 ±14.8pp，48 局时 ±13.6pp。
 
@@ -276,7 +277,7 @@ append，冲洗只随"又多折了一天"发生，上界就是 `max_days`（plan
 > `test_c_under_cap_hands_over_the_whole_card`（没超预算就不许动刀）才被抓回。一条守卫要两侧都有用例，
 > 只测它触发的那一侧等于没测。
 >
-> `#63`/`#67` 两片另算 11 具（`Z1`–`Z11`，`/tmp/mut_run.py` 12:01:58Z→12:04:24Z 串行一次跑完；
+> `#63`/`#67` 两片另算 11 具（`Z1`–`Z11`，一轮电池 12:01:58Z→12:04:24Z 串行跑完；
 > 每具跑完 `cmp` 逐字节还原，11/11 CAUGHT，且 11/11 先过 `import` 一关——没有一具是靠语法错误"被抓"的）。
 > 分散在装配器 / 度量 /
 > 批次三台机器上：`_region_c` 的触发条件不看 `c_belief`、缩卡循环把尺子拿成 `c_total`（最少那一刀的

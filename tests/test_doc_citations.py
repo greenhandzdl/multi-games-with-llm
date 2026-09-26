@@ -1178,3 +1178,90 @@ def test_a_placement_reason_in_the_product_code_still_has_the_citation_it_claims
     assert len(claims) >= 3, f"只扫到 {len(claims)} 条摆放理由，多半是判据或语料坏了"
     bad = _bad_placements(_line_cite_corpus())
     assert not bad, f"这些句子拿号当摆放理由，可它们点名的出处里已经没有号了：{bad}"
+
+
+# 这个形状要拆开写：新判据扫的是 markdown，而本文件既要在夹具里拼出它、又要在正文里谈它，
+# 整串留在源码里就会让"讲这一族的句子"变成这一族的第 33 条（`#140` 的自噬那一格的形状）。
+VOLATILE = "/" + "tmp"
+_ARTIFACT = re.compile(
+    rf"{VOLATILE}/[^\s、，。）（`\"']*(?:\.(?:py|out|log)|/\*)(?![^\s、，。）（`\"'])")
+ARCHIVE = "iterations.md"
+
+
+def _artifact_paths(text: str) -> list[str]:
+    """"某一轮跑出来、又被写进文档当复现出处"的临时工件。
+
+    认 `.py`（电池脚本本身）、`.out` / `.log`（它印出来的台账）、以及 `/tmp/某目录/*`（宣称还留在
+    那里的备份）。**不认**命令自己生成又自己读的临时目录——`--out /tmp/clipin` 和
+    `/tmp/clipin/A/*.jsonl` 那两类是今天还能敲的命令行，不是指不到东西的出处，把它们算进来会让
+    文档不敢再写"怎么复核"，而那正是这一片要保住的东西。
+    """
+    return _ARTIFACT.findall(text)
+
+
+def _manual_pages() -> list[Path]:
+    """给人照抄的那几本：`README.md` + `docs/*.md`，减去那本按日期追加的历史归档。"""
+    return [f for f in DOCS if f.name != ARCHIVE]
+
+
+def test_the_artifact_scanner_tells_a_dead_pointer_from_a_scratch_dir():
+    """判据先要站在它自己划的那条线上：三类工件形状认得出，两类命令行形状放过。
+
+    这条用例写完即绿（正则是在真语料上逐条验过才抄进来的，11:46:37Z），它的牙由电池还账：
+    `#142` 的 K1 摘掉尾部那道负向预查——`/tmp/clipin/A/*.jsonl` 会当场变成一个"命中"，文档里
+    五条 `wolf audit …` 全成假缺陷；K2 摘掉通配符那一支——`#142` 数到的 `mutbackups` 那一格
+    会静默漏掉。两具都必须红这一条，别红在下一条。
+    """
+    hits = _artifact_paths(f"见 `{VOLATILE}/mut_x.py`、`{VOLATILE}/mut_x.out`、"
+                           f"`{VOLATILE}/run.log` 和备份 `{VOLATILE}/mutbackups/*`")
+    assert len(hits) == 4, f"四类工件形状该全认出来：{hits}"
+    assert _artifact_paths(f"`wolf batch --out {VOLATILE}/clipin && "
+                           f"wolf audit {VOLATILE}/clipin/A/*.jsonl`") == [], \
+        "命令自己生成自己读的临时目录被当成了死出处：判据越界，文档将不敢再写复核命令"
+
+
+def test_the_archive_is_excluded_only_while_it_says_its_scripts_are_gone():
+    """那一本 136 条历史指针不被检查，前提是它自己写明那些脚本已经没了。
+
+    豁免没有形状就是洞：`#142` 把归档挡在判据之外，理由不是"历史可以撒谎"，是"历史已经声明过
+    它指的是当时跑过的东西"。这句话就是那个声明的唯一读者——它被删掉，下一句"归档里那条指针
+    大概还能点"就没有任何东西反驳。逐字要求见 `_archive_declares_its_artifacts_gone`。
+    """
+    text = (ROOT / "docs" / ARCHIVE).read_text(encoding="utf-8")
+    assert _artifact_paths(text), "归档里一条工件指针都没有，那这条豁免是空转的洞"
+    assert _archive_declares_its_artifacts_gone(text), \
+        f"`docs/{ARCHIVE}` 没有声明那些脚本是一次性工件：豁免失去了它的依据"
+
+
+def _archive_declares_its_artifacts_gone(text: str) -> bool:
+    """开头那一节里要有一句"这些脚本随重启消失、留下的是表里的账"。"""
+    head = text[:2000]
+    return (VOLATILE in head and "一次性" in head
+            and any(k in head for k in ("重启", "消失", "不复存在")))
+
+
+def test_the_manual_never_points_at_an_artifact_that_evaporates():
+    """手册里 32 条"复现照某脚本"指到的东西全部不存在（11:43–11:46Z 逐条 `test -f` 量的）。
+
+    `#142` 数到 README 20、`docs/comparison.md` 5、`docs/views.md` 5、`docs/metrics.md` 2，
+    合计 32 条；README 那 17 个脚本名逐个验过全都不在。句式是「N 具变异照 某个脚本（…CAUGHT）」，
+    而那一轮真正的证据是紧跟其后的那张表——账留下了，来路指不到。同族前例是 `#118`（注释里一条
+    没实测过的出处）与 `#91`（"已入库"而那个目录是 gitignored）。
+    """
+    bad = [(f.name, p) for f in _manual_pages()
+           for p in _artifact_paths(f.read_text(encoding="utf-8"))]
+    assert not bad, f"这些复现出处指到了一次性工件：{bad}"
+
+
+def test_the_artifact_scanner_scans_every_manual_page():
+    """语料组成：手册==目录里的 markdown 全部减去那一本归档。
+
+    把判据收窄（把某一本人册也排除掉）时，上一条用例**不红**——它断言的是"没有"，越收窄越像绿。
+    这条钉的是"每一本都在被读"，`#126` 用的是同一招。地板取 4：现测手册 4 本（README + 三本参考
+    文档），低于它说明 glob 或文件名变了。
+    """
+    manual = _manual_pages()
+    assert len(manual) >= 4, f"手册语料只剩 {len(manual)} 本，多半是扫法坏了"
+    assert len(manual) == len(DOCS) - 1, \
+        f"被排除在判据之外的应当只有 {ARCHIVE} 一本：{[p.name for p in DOCS if p not in manual]}"
+    assert ROOT / "README.md" in manual, "README 被排除了：那正是最需要这条判据的一本"
