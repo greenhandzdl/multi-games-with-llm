@@ -1001,6 +1001,58 @@ def _line_cite_corpus() -> dict[str, str]:
     return {str(f.relative_to(ROOT)): f.read_text(encoding="utf-8") for f in _line_cite_files()}
 
 
+PLACE_PHRASE = re.compile(r"按行号引|按行号点|pointed at by line number|cited by line number|"
+                          r"by line number in")
+DOC_NAMED = re.compile(r"(?:docs/)?[\w.\-]+\.md|README")
+
+
+def _placement_claims(corpus: dict[str, str]) -> list[tuple[str, int, list[str], str]]:
+    """代码里"文档按号点着我，所以这段摆在这儿"那一类句子：(文件, 行号, 句里点名的出处, 原句)。
+
+    措辞之外还要求句子里有**自指**（自己文件的 `名.py:` 或「本文件」），只扫 .py：散文里谈这件事的
+    行是叙述，不是"我为什么写在这一行"。这句话自己也被同一条判据管着，所以本文件的夹具字符串都写成
+    跨行相邻字面量——任何一格只要在一行里同时出现措辞与自指，它就会把自己算成第 4 条摆放理由。
+
+    已知限制，不打算修：判据是**按行**的，措辞与自指被硬换行拆到两行时它看不见。要修就得把整段读成
+    一句，而那样会把相邻两句接成一条假依据——代价比这一格漏掉的更常见。
+    """
+    out = []
+    for path, text in sorted(corpus.items()):
+        if not path.endswith(".py"):
+            continue
+        stem = Path(path).name
+        for no, line in enumerate(text.splitlines(), 1):
+            if not PLACE_PHRASE.search(line):
+                continue
+            if f"{stem}:" not in line and "本文件" not in line:
+                continue
+            out.append((path, no, sorted(set(DOC_NAMED.findall(line))), line.strip()))
+    return out
+
+
+def _claim_sources(named: list[str], path: str, corpus: dict[str, str]) -> list[str]:
+    """这句话声称的出处落在语料的哪些键上：点名按名字找，泛指"文档"=除自己以外的全部。"""
+    if not named:
+        return [k for k in sorted(corpus) if k != path]
+    return [k for k in sorted(corpus)
+            if k != path and any(k == n or Path(k).name == n or k.endswith("/" + n)
+                                 or (n == "README" and Path(k).name == "README.md") for n in named)]
+
+
+def _bad_placements(corpus: dict[str, str]) -> list[tuple[str, int, list[str], str]]:
+    """摆放理由落空的那些：它点名的每一个出处里，都已经没有一处指向本文件的号了。"""
+    bad = []
+    for path, no, named, line in _placement_claims(corpus):
+        stem = Path(path).name
+        for src in (named or ["文档"]):
+            keys = _claim_sources([src] if named else [], path, corpus)
+            hits = sum(1 for k in keys for m in LINE_CITE.finditer(corpus[k])
+                       if Path(m.group(1)).name == stem)
+            if not hits:
+                bad.append((path, no, named, f"{src} 里已经没有任何一处指向 {stem} 的行号了：{line}"))
+    return bad
+
+
 def test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_beside_it():
     """README 里那个 `cli.py` 的 88 号是一次插入就烂掉的主张：号还在、文件还在，只有指的语句不在那儿了
     （`#123` 往 `cli.py` 插了四处之后，它漂到了 95）。
@@ -1066,3 +1118,63 @@ def test_the_line_citation_gate_reads_the_product_files_that_cite_line_numbers()
     assert len(src) >= 20, f"src/ 里只数到 {len(src)} 个 .py，多半是路径坏了"
     missing = src - set(corpus)
     assert not missing, f"行号闸门不读这些产品文件（里面注释写的号漂了没人报）：{sorted(missing)}"
+
+
+def _fixture_cite(stem: str, no: int) -> str:
+    """夹具里的 `名.py:号`：这五个字符不能在**源文本**里以活形状出现。
+
+    本文件自己就在行号闸门的语料里（`#126` 收的），所以照点形状写假文件名会被判成"src/tests/scripts
+    里没有这个文件"——10:07:11Z 这一跑就是它红了三格。拼起来只在运行时成形状，判据不受影响。
+    """
+    return f"{stem}.py:{no}"
+
+
+def test_a_fixture_that_claims_a_doc_backs_its_place_is_tested_against_that_doc():
+    """`#139` 的缺席刀 K7 产出的这一格：把一句摆放理由改成已被证伪的那份，28 条证人当时全绿。
+
+    判据要能分四种情况，所以夹具四句话各钉一格：点名了出处而那份里已经没有号（该报）、点名了出处
+    且号还在（不该报）、只泛指"文档"而任意一处文档里还有号（不该报）、泛指而哪一份里都没有号（该报）。
+    泛指那一格是 `cli.py` 里那两句的实际形状，点名那一格是 `events.py` 那一句的形状——它当初就是靠
+    README 这个名字活着的；最后那一格是"泛指"这半判据唯一的反例，摘掉对泛指的支持时它和前三格都不红。
+
+    第四格 `docs/other.md` 里**有**指向 `thing.py` 的号，但那不是那句话点名的出处。这一格钉的是"出处
+    按名字算"——把它放宽成"语料里任意一处"时，该报的那条就报不出来了（10:12:05Z 实测：没有这一格时
+    那具刀在夹具与真语料两侧都不红，是一具等价刀）。
+    """
+    corpus = {
+        "src/wolfengine/thing.py": "x\ny\nz\nw\n    the `def thing` at "
+                                   f"`{_fixture_cite('thing', 9)}` is pointed at"
+                                   " by line number in README\n",
+        "src/wolfengine/kept.py": f"    `def kept` at `{_fixture_cite('kept', 1)}` is pointed at"
+                                  " by line number in ``docs/notes.md``\n",
+        "src/wolfengine/generic.py": "    文档按行号" "引本文件下游的语句，所以它住在文件尾\n",
+        "src/wolfengine/orphan.py": "    文档按行号" "点本文件里的一处号，可哪一份里都没有\n",
+        "README.md": "这里一个号都没有\n",
+        "docs/notes.md": f"见 `{_fixture_cite('kept', 1)}` 与 `{_fixture_cite('generic', 1)}`。\n",
+        "docs/other.md": f"这一份里还留着 `{_fixture_cite('thing', 9)}`，可它不是被点名的那一份\n",
+    }
+    claims = _placement_claims(corpus)
+    assert len(claims) == 4, f"夹具里该认出 4 条摆放理由，实际 {len(claims)}：{claims}"
+    bad = _bad_placements(corpus)
+    assert {Path(p).name for p, *_ in bad} == {"thing.py", "orphan.py"}, f"该报的是点名与泛指各一条：{bad}"
+    thing = [b for b in bad if "thing.py" in b[0]]
+    assert len(thing) == 1, f"点名那条要单独认得出：{bad}"
+    # 出处必须点名在**引文之外**：报告尾巴上挂着原句，而原句里就写着 "README"——整串子串判据会被
+    # 它蒙过去（10:2xZ 电池 K4 那一具就是这么活下来的：把 `{src}` 从报告里删掉，28 条证人全绿）。
+    assert thing[0][3].split("：")[0].startswith("README"), \
+        f"报告得点名它说过的出处，而不是让引文替它点名：{thing[0][3]}"
+
+
+def test_a_placement_reason_in_the_product_code_still_has_the_citation_it_claims():
+    """三句话拿"文档里按号点着它"当自己摆放位置的理由，而没有任何断言在读那个"还点着"。
+
+    `#139` 量到的代价就是这一格的形状（09:29:39Z）：README 里原本有 8 处点了 `events.py`，`#135`
+    把那段散文搬走之后归零，那句依据从那天起就是假的，闸门一路绿到有人**用眼睛**读它。地板取 3——
+    10:03:43Z 实测全仓就这 3 条（`cli.py` 两处、`events.py` 一处），低于它就说明正则或扫法坏了。
+    markdown 不在扫的范围里：那里同样有 2 行写着这类措辞（本文件 `#139` 那一节的叙述），但它们是
+    **谈这件事**而不是**为自己摆在这句话而摆**，判据只收 .py 里带自指的那一类。
+    """
+    claims = _placement_claims(_line_cite_corpus())
+    assert len(claims) >= 3, f"只扫到 {len(claims)} 条摆放理由，多半是判据或语料坏了"
+    bad = _bad_placements(_line_cite_corpus())
+    assert not bad, f"这些句子拿号当摆放理由，可它们点名的出处里已经没有号了：{bad}"
