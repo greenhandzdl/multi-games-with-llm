@@ -682,11 +682,10 @@ def test_no_module_level_engine_constant_is_left_without_a_reader():
     名单为空"是真话——所以地板取 80（01:26:57Z 现测 94 个名字、96 条落点，含双下划线那一格；同一趟
     另写了一份不共用这把尺的 ast 复算，两侧名字集相同）。
 
-    双下划线那一格豁免着**两具真零读者的名字**（01:33:36Z 摘掉豁免实测：`__all__`、`__version__`）。
-    前者是出口清单，`#155` 已经定过性——清单不是调用者。后者是本包 `__init__.py` 顶上的
-    `__version__ = "0.1.0"`，而 `pyproject.toml` 的 `version = "0.1.0"` 是同一件事的第二份抄本，两格
-    今天相等而没有任何东西在核对。接进包元数据或删掉都是处置变更，另开 `#161`，所以这里是**限界**
-    而不是"已查无缺陷"。
+    双下划线那一格豁免着的真零读者名字，01:33:36Z 实测是两具（`__all__`、`__version__`）：前者是出口
+    清单，`#155` 已经定过性——清单不是调用者，豁免是对的。后者那一具 `#161` 删掉了（它是 `pyproject.toml`
+    那句 `version` 的第二份抄本，两格今天相等而没有任何东西在核对，且零生产读者），所以这一格现在豁免的
+    只有 `__all__`。版本号"只住一处"这件事不再靠这段散文兜着，由下面那两条用例钉着。
     """
     consts, unreached = _unreached_consts()
     assert len(consts) >= 80, f"模块级常量只数到 {len(consts)} 个，多半是收集坏了"
@@ -696,6 +695,41 @@ def test_no_module_level_engine_constant_is_left_without_a_reader():
         f"这些模块级常量生产链里没人读：{extra}（落点见名册）；"
         f"这些点名豁免已经不需要了：{stale}——接上了或删掉了就把它从 CONST_EXITS 摘掉。"
         f"要么接上、要么删掉，别留着让它装作产品的一部分")
+
+
+def _version_homes(corpus: dict[str, str]) -> list[str]:
+    """哪些文件自己给版本号做了一次赋值——`__version__` 与 `VERSION` 两种写法都算抄第二份。"""
+    home = re.compile(r"""^[A-Za-z_]*version[A-Za-z_]*\s*=\s*["']""", re.M | re.I)
+    return sorted(name for name, text in corpus.items() if home.search(text))
+
+
+def test_the_version_string_has_exactly_one_home_in_the_repo():
+    """`#161`：`__init__.py` 顶上曾有 `__version__ = "0.1.0"`，那是 `pyproject.toml` 那句的第二份抄本。
+
+    两格当时相等，而没有任何东西在核对——`#160` 的 K3 摘掉双下划线豁免时它现形，零生产读者。这一条钉的
+    是"只住一处"，不是"出厂版本必须等于 0.1.0"：那个值归 `pyproject.toml` 自己管，本包不复制它。
+    """
+    corpus = {str(p): p.read_text(encoding="utf-8")
+              for p in sorted(Path("src/wolfengine").rglob("*.py"))}
+    assert len(corpus) >= 10, f"src 只数到 {len(corpus)} 个模块，多半是扫面坏了"
+    homes = _version_homes(corpus)
+    assert not homes, f"版本字符串在 src/ 里有第二份：{homes}，而出厂口径只该住在 pyproject.toml"
+
+
+def test_the_version_scanner_fires_on_a_second_copy_and_not_on_prose():
+    """判据两侧都有读者：两种抄法都报，注释、属性读取与函数定义都不报。
+
+    删掉 `__version__` 之后真语料上是零命中，所以"这条闸门有用"只能由这一格喂假数据来证——不然它
+    可以是一把永远不开火的枪。
+    """
+    hits = _version_homes({
+        "a/__init__.py": '__version__ = "0.1.0"\n',
+        "b/m.py": "VERSION = '2'\n",
+        "c/m.py": '# __version__ = "0.1.0" 这一句是注释\n',
+        "d/m.py": "v = cfg.version\n",
+        "e/m.py": "def get_version() -> str:\n    return '1'\n",
+    })
+    assert hits == ["a/__init__.py", "b/m.py"], hits
 
 
 def test_the_constant_probe_counts_a_definition_itself_as_no_reader(tmp_path):
