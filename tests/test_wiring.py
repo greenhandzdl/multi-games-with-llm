@@ -830,6 +830,120 @@ def test_the_helper_probe_counts_injection_and_decoration_as_readers():
     assert len(roster) == 7, f"名册数到 {roster}，这一格的夹具面应该有七具非 test_ 定义"
 
 
+def test_no_test_side_helper_is_reachable_only_from_dead_code():
+    """`#166`：把 `#165` 自己写下的第一条限界变成断言——只被死代码点名的那一批。
+
+    03:53:14Z 现测：同一批 46 个文件里 314 具 helper（`#165` 在 03:28:01Z 量到 312，多的两具就是这一片
+    自己新写的判据），从入口（每条模块级用例，加上每个文件的顶层语句本身）做传递闭包之后，
+    **到不了的 0 具**。名字口径说"都有读者"，可达性口径也说"都有活读者"，两把尺今天 agreeing；这一格要钉
+    的是下一簇长出来的那一刻：删掉一条用例而它调的那具 helper 还互相调用着，`#165` 会整簇放行（读者名单
+    非空），只有这一格会红。
+
+    入口把"模块级语句本身"算进去不是宽纵：pytest 收集一个文件就会执行它的顶层，`BOARD = _board()` 这一行
+    是真的会跑的代码。第一次探针没建这个结点，于是四处**假死**（`_board`、`_blob`、`A`、
+    `looks_like_gateway_error`）——它们的调用点全在顶层，量出来是 4 具到不了，逐条 grep 后一句都站不住。
+    """
+    trees = {str(f): ast.parse(f.read_text(encoding="utf-8"))
+             for root in ("tests", "scripts") for f in sorted(Path(root).rglob("*.py"))}
+    roster, unreachable = _unreachable_test_helpers(trees)
+    assert len(roster) >= 250, f"名册只数到 {len(roster)} 具，多半是扫面坏了"
+    assert unreachable == [], f"这些 helper 只有死代码会调到，从任何入口都到不了：{unreachable}"
+
+
+def _unreachable_test_helpers(trees: dict[str, ast.Module]) -> tuple[list[str], list[str]]:
+    """(名册, 从任何入口都到不了的 helper)，两边都是 `"文件: 名字"` 的排序表。
+
+    读者集合与 `#165` 逐字相同（被调用 / 被当实参递出 / 被装饰器点名 / 被某个函数按参数名注入），差别只在
+    **读者的读者**也要算：一具 helper 只有被"到不了的具"点名，它自己也到不了。注入这一维在这里必须降成
+    一条从**请求方**出发的边——`#165` 把它当全局豁免（名字出现在任何参数表里就放行），所以一具只被死簇
+    请求的 fixture 在那边是活的。按裸名字解析，跨文件的同名会互相顶替，因此这只会漏报、不会误报。
+
+    入口两种：模块级的 `test_*` 定义，和每个文件的顶层语句本身（`"文件: <module>"` 那个结点）。后者不是
+    宽纵——pytest 收集一个文件就执行它的顶层。`03:52:43Z` 现测：曾有的第三种入口（脚本
+    `if __name__ == "__main__"` 那块点到的具）**删掉后两个语料逐字不变**，因为那块本来就是顶层语句、
+    已经挂在 `<module>` 结点的边上了——一条没有读者的判据分支，被自己的电池（K3 全绿）当场抓了回来。
+    类体与被调用的方法不在结点集里（与 `#165` 同口径：只数模块级的 `def`）。
+    """
+    edges: dict[str, set[str]] = {}
+    by_name: dict[str, list[str]] = {}
+    entries: set[str] = set()
+    for file, mod in trees.items():
+        top = f"{file}: <module>"
+        edges.setdefault(top, set())
+        entries.add(top)
+        for stmt in mod.body:
+            key = top
+            if isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef)) and stmt.col_offset == 0:
+                key = f"{file}: {stmt.name}"
+                by_name.setdefault(stmt.name, []).append(key)
+                edges.setdefault(key, set())
+                if stmt.name.startswith("test_"):
+                    entries.add(key)
+            edges[key] |= _names_read(stmt)
+    live = set(entries)
+    frontier = sorted(entries)
+    while frontier:
+        for name in edges.get(frontier.pop(), ()):
+            for key in by_name.get(name, ()):
+                if key not in live:
+                    live.add(key)
+                    frontier.append(key)
+    helpers = {k for k in edges
+               if not k.endswith(": <module>") and not k.rsplit(": ", 1)[1].startswith("test_")}
+    return sorted(helpers), sorted(helpers - live)
+
+
+def _names_read(node: ast.AST) -> set[str]:
+    """一个结点里被"读"到的裸名字：调用位、实参位、装饰器位、参数名（注入），与 `#165` 一致。"""
+    out: set[str] = set()
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Call):
+            fn = sub.func
+            out.add(fn.attr if isinstance(fn, ast.Attribute) else fn.id)
+            for arg in list(sub.args) + [k.value for k in sub.keywords]:
+                if isinstance(arg, ast.Name):
+                    out.add(arg.id)
+        elif isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for d in sub.decorator_list:
+                out.add(d.func.id if isinstance(d, ast.Call) and isinstance(d.func, ast.Name)
+                        else d.func.attr if isinstance(d, ast.Call) else
+                        d.id if isinstance(d, ast.Name) else d.attr)
+            for a in list(sub.args.args) + list(sub.args.posonlyargs) + list(sub.args.kwonlyargs):
+                out.add(a.arg)
+    return out
+
+
+def test_the_reachability_probe_names_a_cluster_the_name_probe_forgives():
+    """`#166` 的夹具：同一棵树喂两把尺，宽的那把必须报出窄的那把放行的那一形。
+
+    真语料上两把都是 0 处，所以这格是这条判据唯一的牙。夹具里 `helper_a`/`helper_b` 互为读者、
+    `only_by_dead` 只被这个死簇按参数名注入，三具在 `#165` 的口径下全都有读者——`helper_b` 有人调、
+    fixture 有人注入，只有 `lonely` 和那条"从别处 import 进来却没调用"的 `helper_a` 露出来。可达性口径
+    把它们连根报掉。`s/tool.py` 那一档证明的是**顶层语句算入口**这一维：`entry_from_main` 只被
+    `if __name__ == "__main__"` 那块调到，而那块就是文件自己的顶层代码——撤掉 `<module>` 入口的那具刀
+    （K1）会让这两具和真语料上那四处假死一起回到名单里。
+    """
+    corpus = {
+        "t/live.py": "@pytest.fixture\ndef only_by_dead():\n    return 1\n"
+                     "\ndef helper_a(x):\n    return helper_b(x)\n"
+                     "\ndef helper_b(only_by_dead, x):\n    return only_by_dead + x\n"
+                     "\ndef lonely():\n    return 3\n"
+                     "\ndef test_real():\n    return 1\n",
+        "t/entry.py": "from live import helper_a\n\nMODULE_LEVEL = 5\n"
+                      "\ndef test_reads_module_level():\n    return MODULE_LEVEL\n",
+        "s/tool.py": "def entry_from_main():\n    return unused_tool()\n"
+                     "\ndef unused_tool():\n    return 2\n"
+                     '\nif __name__ == "__main__":\n    entry_from_main()\n',
+    }
+    trees = {name: ast.parse(src) for name, src in corpus.items()}
+    roster, unreachable = _unreachable_test_helpers(trees)
+    assert unreachable == ["t/live.py: helper_a", "t/live.py: helper_b",
+                           "t/live.py: lonely", "t/live.py: only_by_dead"], unreachable
+    assert len(roster) == 6, f"名册数到 {roster}，这一格的夹具面应该有六具非 test_ 定义"
+    assert _unreached_test_helpers(trees)[1] == ["t/live.py: helper_a", "t/live.py: lonely"], (
+        "窄的那把尺今天报了四具——它已经不窄了，这条断言的对照面要重新量")
+
+
 def test_the_constant_probe_counts_a_definition_itself_as_no_reader(tmp_path):
     """夹具：定义那一行自己不是读者，只有测试在养的名字也不算生产读者。
 
