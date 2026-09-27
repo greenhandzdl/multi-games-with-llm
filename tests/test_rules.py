@@ -350,8 +350,9 @@ class TestLegalActions:
 
         抽得到、闸门不发的 act 是一局里赢不了的回合：被重问一次、要求它给出一个它永远
         给不出的答案，然后落成 fallback——在报告里读起来像"这个模型不听话"，实际上是
-        引擎要了个不可能的东西。词表有两处来源（`SPEECH_ACTS` 与 `_act_weights` 的键），
-        所以两边都钉。
+        引擎要了个不可能的东西。词表只有一处来源（`_act_weights` 的键），所以期望值写在这
+        一条里：`persona` 里曾有一行手抄的六元组，生产链没人读它，它能和键各漂各的（`#160`
+        删掉了那一行，两边都钉这件事由下面的字面量期望继续钉）。
         """
         st = mk_state(BASE)
         st.phase = Phase.DAY_SPEECH
@@ -359,7 +360,7 @@ class TestLegalActions:
         drawn = {k for k, v in persona._act_weights(persona.PersonaParams(), 1).items()
                  if v > 0}
         assert drawn <= granted, f"指派表里有闸门不发的 act：{sorted(drawn - granted)}"
-        assert set(persona.SPEECH_ACTS) == drawn
+        assert drawn == {"accuse", "defend", "align", "probe", "pivot", "listen"}
 
     def test_an_escalated_seat_is_never_assigned_an_act_that_cannot_name_anyone(self):
         """弃票满两轮时 phases.py 挂上 `forced_nominate` 要求点名，指派必须同向。

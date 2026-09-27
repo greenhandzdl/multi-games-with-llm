@@ -24,7 +24,8 @@ import pytest
 from wolfengine import (assemble, belief, compress, events, info, legality, persona,
                         render_html, render_live, roles, rules, schema, state)
 from wolfengine.config import Config, RegionBudget
-from wolfengine.events import KINDS, Event, EventLog, Kind, seats
+from wolfengine.events import Event, EventLog, Kind, seats
+from declared_kinds import KINDS
 
 
 # --------------------------------------------------------------------------- helpers
@@ -537,17 +538,41 @@ def _entry_point_names() -> set[str]:
     return {str(v).rsplit(":", 1)[-1] for v in data.get("project", {}).get("scripts", {}).values()}
 
 
-def _module_defs_and_production_reads():
-    """(src 的**模块级** def 名字 -> 落点, 生产链读者计数)。
+def _module_defs_and_production_reads(
+    src_roots: tuple[str, ...] = ("src",),
+    read_roots: tuple[str, ...] = ("src", "scripts"),
+):
+    """(src 的**模块级** def 名字 -> 落点, 生产链读者计数, src 的模块级常量名 -> 落点)。
 
     读者只算两种：`Name`/`Attribute` 上的真名字，以及 `getattr(obj, "名字")` 里那一格字符串（按名字
     派发）。`__all__` 的一行字符串与 `row["键名"]` 都不算——出口清单不是调用者，键名与同名函数也是两
     回事（`#132`）。范围只到模块级：方法/property 用同一口径 22:28Z 重量是 **12 处**零生产读者，不是
     21:53Z 记的六处（那一趟的脚本已在提交后删净，无法复查它少在哪一维，所以这里只说重数出来的那一版），
     逐条处置另开 `#156`——每一处要先读它的孪生与金样本，不是一片能收的账。
+
+    第三格 `#160` 收进来：模块级**赋值左边**的名字。这一族从 `#81` 起只认 `def`、`#156` 认方法、
+    `#159` 认类、`#83` 认 import，`X = (...)` 这一形一直没进过名册。
+    读者那一张表现在**扣掉了模块级赋值的左端**：常量的落点行自己就是一个 `ast.Name`，不扣的话每一具
+    常量都自带一个读者，探测永不发光。两把尺在同一棵树上的差是实测过的（01:08:24Z）：不扣报 **0 处**
+    零读者，扣了报 **3 处**（`events.KINDS`、`metrics.SEAT_REF`、`persona.SPEECH_ACTS`）。函数不受
+    这一格影响——`def` 的名字不是 `ast.Name`，所以 `#155` 那条判据的读数一格没动。
     """
     readers: dict[str, int] = {}
+    written: dict[str, int] = {}
     defs: dict[str, list[str]] = {}
+    consts: dict[str, list[str]] = {}
+
+    def bind(target: ast.expr, node: ast.stmt, f: Path) -> None:
+        """模块级赋值的左端：记一次落点，也记一次"它不是读者"。"""
+        if isinstance(target, (ast.Tuple, ast.List)):
+            names = [e for e in target.elts if isinstance(e, ast.Name)]
+        elif isinstance(target, ast.Name):
+            names = [target]
+        else:
+            return
+        for t in names:
+            written[t.id] = written.get(t.id, 0) + 1
+            consts.setdefault(t.id, []).append(f"{f}:{node.lineno}")
 
     def count(tree: ast.AST) -> None:
         for node in ast.walk(tree):
@@ -564,17 +589,22 @@ def _module_defs_and_production_reads():
                 continue
             readers[key] = readers.get(key, 0) + 1
 
-    for root in ("src", "scripts"):
+    for root in read_roots:
         for f in sorted(Path(root).rglob("*.py")):
             if "__pycache__" in f.parts:
                 continue
             tree = ast.parse(f.read_text(encoding="utf-8"))
-            if root == "src":
+            if root in src_roots:
                 for node in tree.body:
                     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         defs.setdefault(node.name, []).append(f"{f}:{node.lineno}")
+                    elif isinstance(node, ast.Assign):
+                        for t in node.targets:
+                            bind(t, node, f)
+                    elif isinstance(node, ast.AnnAssign):
+                        bind(node.target, node, f)
             count(tree)
-    return defs, readers
+    return defs, {k: v - written.get(k, 0) for k, v in readers.items()}, consts
 
 
 def test_every_module_level_engine_helper_is_called_by_the_product_or_is_a_manual_exit():
@@ -592,7 +622,7 @@ def test_every_module_level_engine_helper_is_called_by_the_product_or_is_a_manua
     走到它"。两把刀量过这个分别（22:11Z）：src 里加一个"只有测试在养"的 helper 时**只红这一条**，
     `#81` 那条不红；同一个 helper 连测试都不点它名时两条一起红。
     """
-    defs, readers = _module_defs_and_production_reads()
+    defs, readers, _ = _module_defs_and_production_reads()
     manual = _manual_command_names()
     entries = _entry_point_names()
     unexplained = []
@@ -618,12 +648,90 @@ def test_the_export_list_is_not_a_caller_and_the_only_name_it_would_have_saved_i
     本条落笔即绿：它的牙由电池里"把 `read_dir` 接进 `cli.py`"和"摘掉 `__all__` 那一行"两具刀量，
     不靠它自己绿着充数。
     """
-    defs, strict = _module_defs_and_production_reads()
+    defs, strict, _ = _module_defs_and_production_reads()
     loose, _ = _py_refs(("src/wolfengine",), ("src", "scripts"))
     string_paid = sorted(n for n in defs if strict.get(n, 0) == 0 and loose.get(n, 0) > 0)
     assert string_paid == sorted(MANUAL_EXITS), (
         f"只靠字符串常量才被算成有读者的是 {string_paid}，点名豁免的是 {sorted(MANUAL_EXITS)}"
         f"——两边不一致就是口径漂移了")
+
+
+def _unreached_consts(
+    src_roots: tuple[str, ...] = ("src",),
+    read_roots: tuple[str, ...] = ("src", "scripts"),
+) -> tuple[dict[str, list[str]], list[str]]:
+    """常量层的探测本体：(名册, 零生产读者的名字)。两条判据共用这一具，夹具不许另写一份。"""
+    _, readers, consts = _module_defs_and_production_reads(src_roots, read_roots)
+    unreached = sorted(n for n, places in consts.items()
+                       if not n.startswith("__") and readers.get(n, 0) <= 0)
+    return consts, unreached
+
+
+CONST_EXITS: dict[str, str] = {}
+
+
+def test_no_module_level_engine_constant_is_left_without_a_reader():
+    """`#160`：`#81`→`#159` 那一族数过函数、方法、类、import，唯独没数过**模块级赋值左边的名字**。
+
+    这一格不是补一个"更完整"的名单，是收一处真话：`metrics.SEAT_REF` 与 `persona.SPEECH_ACTS` 都从
+    初始提交 `aa0d646` 活到今天，中间那一整轮死名清理（`#81` 九处死函数、`#83` 导入、`#85` 同名类、
+    `#155` 生产链、`#156` 方法层、`#159` 类层）一次都没看过它们。落笔时现测 3 处零读者（01:08:24Z），
+    逐条处置见归档那一片。
+
+    名册规模先钉住：`consts` 是这一条唯一"扫到了东西"的证据，收集坏了它会空着，而空名册上的"零读者
+    名单为空"是真话——所以地板取 80（01:26:57Z 现测 94 个名字、96 条落点，含双下划线那一格；同一趟
+    另写了一份不共用这把尺的 ast 复算，两侧名字集相同）。
+
+    双下划线那一格豁免着**两具真零读者的名字**（01:33:36Z 摘掉豁免实测：`__all__`、`__version__`）。
+    前者是出口清单，`#155` 已经定过性——清单不是调用者。后者是本包 `__init__.py` 顶上的
+    `__version__ = "0.1.0"`，而 `pyproject.toml` 的 `version = "0.1.0"` 是同一件事的第二份抄本，两格
+    今天相等而没有任何东西在核对。接进包元数据或删掉都是处置变更，另开 `#161`，所以这里是**限界**
+    而不是"已查无缺陷"。
+    """
+    consts, unreached = _unreached_consts()
+    assert len(consts) >= 80, f"模块级常量只数到 {len(consts)} 个，多半是收集坏了"
+    extra = sorted(set(unreached) - set(CONST_EXITS))
+    stale = sorted(set(CONST_EXITS) - set(unreached))
+    assert not extra and not stale, (
+        f"这些模块级常量生产链里没人读：{extra}（落点见名册）；"
+        f"这些点名豁免已经不需要了：{stale}——接上了或删掉了就把它从 CONST_EXITS 摘掉。"
+        f"要么接上、要么删掉，别留着让它装作产品的一部分")
+
+
+def test_the_constant_probe_counts_a_definition_itself_as_no_reader(tmp_path):
+    """夹具：定义那一行自己不是读者，只有测试在养的名字也不算生产读者。
+
+    这一条钉的是判据里最容易坏的一格。`X = (...)` 的左端在 ast 里就是一个 `ast.Name`，跟真正的读取
+    同形，所以不扣定义的话每一具常量都自带一个读者：同一棵树、同一把尺，不扣报 0 处、扣了报 3 处
+    （01:08:24Z 在真语料上量的那一对）。把减法拆掉的那具刀要能红这一条，也要能红真语料那一条。
+
+    `ONLY_TEST` 的读者住在 `outside/`，而 `read_roots` 里没有它——这一格复现的是 `#155` 的决定：
+    "只有自己的用例在养它"不算产品读者。`orphan` 那一具函数同时被数，是拿来证明第三格没有改动
+    `#155` 那条判据读的那一张表（函数名不是 `ast.Name`，扣不到它）。
+    """
+    pkg = tmp_path / "pkg"
+    scripts = tmp_path / "script_side"
+    outside = tmp_path / "outside"
+    for d in (pkg, scripts, outside):
+        d.mkdir()
+    (pkg / "prod.py").write_text(
+        "USED = 1\nDEAD = 2\nONLY_TEST = 3\n\n\ndef show():\n    return USED\n\n\n"
+        "def orphan():\n    return 0\n", encoding="utf-8")
+    (pkg / "consumer.py").write_text(
+        "from prod import USED\nprint(USED)\n", encoding="utf-8")
+    (scripts / "run.py").write_text("import prod\nprint(prod.show())\n", encoding="utf-8")
+    (outside / "only_test_user.py").write_text("import prod\nassert prod.ONLY_TEST\n",
+                                               encoding="utf-8")
+
+    _, readers, _ = _module_defs_and_production_reads(
+        src_roots=(str(pkg),), read_roots=(str(pkg), str(scripts)))
+    roster, unreached = _unreached_consts((str(pkg),), (str(pkg), str(scripts)))
+
+    assert sorted(roster) == ["DEAD", "ONLY_TEST", "USED"], sorted(roster)
+    assert readers["USED"] >= 1 and readers["show"] >= 1
+    assert readers["DEAD"] == 0 and readers["ONLY_TEST"] == 0
+    assert readers.get("orphan", 0) == 0
+    assert unreached == ["DEAD", "ONLY_TEST"], unreached
 
 
 def _class_defs_and_reads():
@@ -865,7 +973,7 @@ def _class_constructions():
     时这一条继续向外层找，一直找不到就按模块体（import 期执行，算活）。
     """
     roster = _class_defs_and_reads()
-    mod_defs, mod_readers = _module_defs_and_production_reads()
+    mod_defs, mod_readers, _ = _module_defs_and_production_reads()
     entries = _entry_point_names()
     own = _own_module_names()
     site_trees = _parsed_trees(("src", "scripts"))

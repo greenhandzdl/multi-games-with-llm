@@ -24,17 +24,24 @@ from pathlib import Path
 import pytest
 
 from wolfengine import metrics
-from wolfengine.events import KINDS, EventLog, Kind
+from wolfengine.events import EventLog, Kind
 
 sys.path.insert(0, str(Path(__file__).parent))
 import test_golden_game as G  # noqa: E402  (the authored transcript, reused as the fixture)
+from declared_kinds import KINDS  # noqa: E402  (the roster, derived once, test-side since `#160`)
 
 TABLE = Path("src/wolfengine/events.py")
 
 
 def declared_shapes() -> dict[str, set[str]]:
-    """The `{"key": ...}` set attached to each `Kind` line, continuation comments included."""
-    block = TABLE.read_text(encoding="utf-8").split("class Kind:", 1)[1].split("\nKINDS", 1)[0]
+    """The `{"key": ...}` set attached to each `Kind` line, continuation comments included.
+
+    块尾的边界自 `#160` 起是下一具顶层 dataclass：这一格以前切在 `KINDS` 那一行上，而那一行搬走了。
+    切错了不会报错，只会把整份 `events.py` 当成形状表读，所以边界本身要钉一下。
+    """
+    text = TABLE.read_text(encoding="utf-8").split("class Kind:", 1)[1]
+    block = text.split("\n@dataclass", 1)[0]
+    assert "class Event" not in block, "块尾边界没切成，形状表读到了 Kind 之外的整份文件"
     out: dict[str, set[str]] = {}
     current = None
     for line in block.splitlines():

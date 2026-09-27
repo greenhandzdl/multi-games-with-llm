@@ -19,8 +19,6 @@ from .belief import BeliefState
 from .config import Config
 from .state import GameState, LegalSet
 
-SPEECH_ACTS = ("accuse", "defend", "align", "probe", "pivot", "listen")
-
 # Assignable acts that put nobody forward: an escalation out of 弃票 must not land here.
 NOMINATION_FREE_ACTS = ("listen", "align", "pass", "defend")
 

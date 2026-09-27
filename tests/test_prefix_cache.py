@@ -39,7 +39,7 @@ def _call(seq: int, phase: str = "day_speech", *, cached: object = _MISSING,
 def test_the_reuse_ratio_divides_cached_by_the_same_calls_prompt_tokens():
     """分子分母必须来自同一批调用：报了 cached 的那些才算分母，没报的一格都不许进。
 
-    和 `m7_cost_profile` 的 `asked`/`used` 是同一条纪律（`metrics.py:1331` 那一对 `append` 写进的是同
+    和 `m7_cost_profile` 的 `asked`/`used` 是同一条纪律（`metrics.py:1328` 那一对 `append` 写进的是同
     一件事）：把没量过的那 900 tok 塞进分母，命中率就凭空掉一截，而那一截会被读成"前缀没立住"。
     """
     ev = [_call(1, cached=1000, prompt=2000), _call(2, cached=500, prompt=1000),

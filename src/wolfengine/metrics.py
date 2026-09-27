@@ -199,9 +199,6 @@ def _at(t: str, g: str) -> list[int]:
     return [i for i in range(len(t) - len(g) + 1) if t.startswith(g, i)]
 
 
-SEAT_REF = "0123456789一二三四五六七八九两号位"
-
-
 def mentions_seat(text: str) -> bool:
     """Does the utterance point at a concrete player?
 
