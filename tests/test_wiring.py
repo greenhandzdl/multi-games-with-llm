@@ -732,6 +732,104 @@ def test_the_version_scanner_fires_on_a_second_copy_and_not_on_prose():
     assert hits == ["a/__init__.py", "b/m.py"], hits
 
 
+def test_no_module_level_test_helper_is_left_without_a_caller_or_an_injector():
+    """`#165`：引擎那一面被 `#81`/`#155`/`#156`/`#159`/`#160` 扫过，`tests/`+`scripts/` 自己这一面没有过。
+
+    03:28:01Z 现测：46 个文件、312 处模块级 helper 定义（`conftest.py` 算在内）里零读者 **0 处**，其中
+    17 具是 `@pytest.fixture`（名字去重后 14 个）——它们全靠"被某个函数按参数名注入"这一条口径活着，
+    而这一条正是这条尺比引擎那一面多出来的一维：pytest 注入不留任何 AST 上的点名。所以删掉一条用例、
+    把它独占的那个 fixture 变成孤悬（17 具里有 8 具只有这一个读者），pytest 一句警告都不给，只有这一格会红。
+
+    限界两条，与 `#155` 同族：它只数名字，所以**互相调用的一簇死代码**各自都有读者、它看不见；它也不问
+    "被调用的那一条用例还跑不跑"（`skip`/`xfail` 那一族是另一回事）。按名字数还会被重名蒙一次：一具 helper
+    与别处一个同名变量撞了，注入那一支会替它付账——这与 `#85` 在类层抓到过的那一形同族。现测有 4 处这样撞的
+    （`test_golden_game.py: b`、`test_legality.py: act`/`night`、`test_wiring.py: _prompt`），四具都另有
+    真读者，所以严格口径在这里零代价；判据把放行限定在 fixture 上，这一形就没法替一具死 helper 付账。
+    312 处定义里 18 个名字被抄了 44 处（多出来 26 处），名册按 `"文件: 名字"` 建键正是为了不让这 26 处互相顶替。
+
+    地板取 250（现测 312 处定义、46 个文件）：名册空掉的"零处零读者"是真话，所以扫面坏了必须先红。
+    """
+    trees = {str(f): ast.parse(f.read_text(encoding="utf-8"))
+             for root in ("tests", "scripts") for f in sorted(Path(root).rglob("*.py"))}
+    roster, dead = _unreached_test_helpers(trees)
+    assert len(roster) >= 250, f"名册只数到 {len(roster)} 具，多半是扫面坏了"
+    assert dead == [], f"这些测试侧/脚本侧的模块级 helper 没人调用、也没人按名字注入：{dead}"
+
+
+def _unreached_test_helpers(trees: dict[str, ast.Module]) -> tuple[list[str], list[str]]:
+    """(名册, 零读者名单)，两边都是 `"文件: 名字"` 的排序表。
+
+    读者四种，都从 AST 上导出来、没有一个名字是念出来的：被调用（`Name` 或 `Attribute` 位上的函数名）、
+    被当实参递出去、被当装饰器点名，以及 **fixture 被某个函数按参数名注入**。最后这一种只给
+    `@pytest.fixture` 装饰着的那些名字放行——别的名字撞上某个参数名只是重名，把它算成读者就是 `#132`
+    那个"按键名数读者"的老错（同名的局部变量会替一具死 helper 付账）。
+    """
+    helpers: dict[str, bool] = {}
+    for file, tree in trees.items():
+        for node in tree.body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("test_"):
+                dec = [ast.unparse(d) for d in node.decorator_list]
+                is_fixture = any(d == "fixture" or d.startswith("pytest.fixture") for d in dec)
+                helpers[f"{file}: {node.name}"] = is_fixture
+
+    called: set[str] = set()
+    injected: set[str] = set()
+    for tree in trees.values():
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                fn = node.func
+                name = fn.id if isinstance(fn, ast.Name) else (fn.attr if isinstance(fn, ast.Attribute) else None)
+                if name:
+                    called.add(name)
+                for arg in list(node.args) + [k.value for k in node.keywords]:
+                    if isinstance(arg, ast.Name):
+                        called.add(arg.id)
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                for d in node.decorator_list:
+                    if isinstance(d, ast.Name):
+                        called.add(d.id)
+                    elif isinstance(d, ast.Attribute):
+                        called.add(d.attr)
+                    elif isinstance(d, ast.Call) and isinstance(d.func, (ast.Name, ast.Attribute)):
+                        called.add(d.func.id if isinstance(d.func, ast.Name) else d.func.attr)
+                for a in list(node.args.args) + list(node.args.kwonlyargs):
+                    injected.add(a.arg)
+
+    dead = [key for key, is_fixture in helpers.items()
+            if key.rsplit(": ", 1)[1] not in called and not (is_fixture and key.rsplit(": ", 1)[1] in injected)]
+    return sorted(helpers), sorted(dead)
+
+
+def test_the_helper_probe_counts_injection_and_decoration_as_readers():
+    """`#165` 的夹具：零读者名单在喂假数据的七档上两侧都要对——尤其"没人注入的 fixture"必须报。
+
+    真语料上是零命中（03:28:01Z 现测：`tests/`+`scripts/` 里 312 处模块级、非 `test_` 的 helper 定义，
+    按"被调用 / 被当实参递出 / 被装饰器点名 / 被某个函数当参数名注入"四种读法全都有人读），所以这条
+    闸门有没有牙只能由这一格证。`airtight` 那一形在这里是 `alpha`：只被注入一处——把它那个用例删掉，
+    fixture 就成孤悬，而 pytest 对此一个字的警告都不会给。
+
+    七档是一档一维，各自都是真语料里**独占数最少或为零**的那一维：装饰器点名那一支在真语料上撑 0 具、
+    经属性调用那一支撑 12 具但独占 0 具——所以这两支有没有牙，除了这一格没有第二个证人。
+
+    `f/shadow.py` 问的是注入那一维**能走多远**：一具没被 `@pytest.fixture` 装饰的 helper，名字撞上某个
+    参数名，算不算被读了？这一格要求它算死。放行非 fixture 的注入，就是 `#132` 那个"按键名数读者"的老错
+    ——同名参数会替一具没人调的函数付账。
+    """
+    corpus = {
+        "f/injected.py": "@pytest.fixture\ndef alpha():\n    return 1\n\ndef test_uses(alpha):\n    assert alpha\n",
+        "f/orphan.py": "@pytest.fixture\ndef lonely():\n    return 1\n",
+        "f/helper.py": "def never():\n    return 1\n",
+        "f/decorated.py": "def deco(fn):\n    return fn\n\n@deco\ndef test_real():\n    pass\n",
+        "f/passed_as_arg.py": "def target():\n    return 1\n\ndef test_caller():\n    hand(target)\n",
+        "f/via_attr.py": "def got():\n    return 1\n\ndef test_attr():\n    holder().got()\n",
+        "f/shadow.py": "def alpha():\n    return 2\n",
+    }
+    trees = {name: ast.parse(src) for name, src in corpus.items()}
+    roster, dead = _unreached_test_helpers(trees)
+    assert dead == ["f/helper.py: never", "f/orphan.py: lonely", "f/shadow.py: alpha"], dead
+    assert len(roster) == 7, f"名册数到 {roster}，这一格的夹具面应该有七具非 test_ 定义"
+
+
 def test_the_constant_probe_counts_a_definition_itself_as_no_reader(tmp_path):
     """夹具：定义那一行自己不是读者，只有测试在养的名字也不算生产读者。
 
