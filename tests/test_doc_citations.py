@@ -1473,6 +1473,52 @@ def test_a_verdict_reading_split_by_one_hard_wrap_is_still_a_reading():
         "越过上限就当成两句不相干的话——这条用例钉的是『上限在起作用』，不是钉那个数（数从 `WRAP_GAP` 现取）"
 
 
+def _manual_verdict_lines() -> list[tuple[str, int, str]]:
+    """手册页里每一处出现判词字面量的行——不分形状、不要求邻居。
+
+    这一族前面的判据都要求邻居（具数、分数、表体里的竖线），所以"光杆判词"住在它们的缝里：
+    `docs/views.md` 里某一轮的两处读数就是这么活到今天的（`#170` 的票面）。这一条不是又一种
+    判据，是这一族的普查地板——管的是"手册里一共出现几处判词字面量、分别是哪一句"。
+    """
+    out: list[tuple[str, int, str]] = []
+    for f in _manual_pages():
+        for n, ln in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if ANY_VERDICT.search(ln):
+                out.append((f.name, n, ln.strip()[:60]))
+    return out
+
+
+def test_the_manuals_carry_one_bare_verdict_word_and_it_is_the_rule_sentence():
+    """手册里只许留一处判词字面量：README 那句在教判词怎么写，不是在报某一轮的判决。
+
+    地板取 1 而不是 0，是因为那句规矩（写超时也要记 hang、光杆的判词不算判决）对手册读者有用，
+    把它摘去归档就等于把手册少一条习惯。这一条的失效方向是**漏判**：有人把某一轮的读数写成
+    不带邻居、也不带那个教学习语的句式，它照样进名册、照样红；反过来若有人往规矩那句里塞读数，
+    同一行里的「判词写成」会替它背书——这是这条地板明说的例外，不是没看见。
+    """
+    sites = _manual_verdict_lines()
+    assert len(sites) == 1, \
+        f"手册页里的判词字面量只许那一句规矩，现测 {len(sites)} 处（文件, 行, 原文）：{sites}"
+    page, _, line = sites[0]
+    assert page == "README.md", f"教判词怎么写的那句在 README，不在 {page}：{line}"
+    assert "判词写成" in line, f"这一处不是那句规矩，是某一轮的读数：{line}"
+
+
+BARE_LANDING = "光杆判词的两处读数搬进这一份"
+
+
+def test_the_bare_verdict_readings_landed_verbatim_in_the_archive():
+    """摘走的那两行**整行**逐字在归档里找得到——普查地板的"摘"不是删。
+
+    整行而不是前缀，是 `#169` 那节 K6 第一跑 SURVIVED 换来的口径：那一轮按前缀断言，把登记行
+    中段换掉一个字，文档闸门全绿。
+    """
+    body = _archive_section(BARE_LANDING)
+    for span in ('**0 张弃票**，所以"把 `弃票` 列整个删掉"在整局用例上是等价变异（第一跑实测 `SURVIVED`）；而',
+                 '顺带修掉一种**误记**：`N7`（空格填占位符）在七连跑时报的是 `CAUGHT [hang after 60s]`，看着像'):
+        assert span in body, f"逐字登记缺这一整行：{span[:30]}…"
+
+
 def _archive_section(heading: str) -> str:
     """归档里标题以 `heading` 开头的那一节的正文。
 
