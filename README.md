@@ -284,7 +284,7 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 都在 `docs/iterations.md`〈手册里那段"哪一片补了哪条"的账搬进了这一份〉；指针形状那条规矩在
 〈这个仓库现在能做什么、不能做什么〉里已经写着，这里不再写第二遍。
 
-重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（58 条、跑起来 58 个用例，
+重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（60 条、跑起来 60 个用例，
 两秒内，不发请求）。D1 不是凭空设计的——第一次写这个闸门时确实只走了 `ast.FunctionDef`，于是把
 `test_a_marker_is_public_but_never_becomes_chronicle`（`test_live_path.py` 里的协程）误报成了
 文档过期。**误报也是这个闸门的输出**，所以它的红用例名要留在账上（那张表 D1 那一格记着它误报了谁）。
@@ -358,11 +358,11 @@ D36（只收 `ast.Name`、丢掉参数名）也活着，但活的原因不同：
 写错的后果是**一条通过的测试**。而 `Kind.COMPACTION` 的取值就是 `"compaction"`，所以改完行为不变、
 套件照绿——要钉住的正是这种"绿"，K1 就是把一处语料退回字面量。
 
-K1–K5 的具名账在同一份归档的那一节。
+K1–K5 的具名账（每格写着它红了哪条用例）在 `docs/iterations.md`〈手册里那四张具名变异账表搬进了这一份〉一节的 K 表。
 
 K4 第一版**活了下来**：判定写在守卫体内，对照用例于是自己复算了一遍 `[… for s in raw if s[2] not
 in KINDS]`，两遍实现里被改瞎的那遍恰好没人调用。把规则抽成 `_undeclared_kinds`、守卫和对照用例都
-调它之后 5/5 CAUGHT。**对照用例必须调用规则，不能复算规则**——这句现在写在 `_undeclared_kinds` 的
+调它之后才被抓住。**对照用例必须调用规则，不能复算规则**——这句现在写在 `_undeclared_kinds` 的
 docstring 里，因为它是这条规则的来路。
 
 重跑这一片（2 条，一秒内，不发请求）：
@@ -371,7 +371,6 @@ docstring 里，因为它是这条规则的来路。
 PYTHONPATH=src .venv/bin/pytest tests/test_wiring.py -k "kind_to_a_bare or kind_guard_sees_both"
 ```
 
-变异 5 具于 2026-09-21 对最终树跑过一轮，5/5 CAUGHT，两个被改文件按字节还原。
 
 同一轮里还补了一片**已实现但 0 覆盖**的东西：plan §15 要求上桌前必须从编排层清掉的三条隐含假设
 ——超时按 actor 取而不是按阶段、并发度表要能容忍"某座位阻塞"、墙钟不能杀含真人座位的局——代码里
@@ -379,9 +378,9 @@ PYTHONPATH=src .venv/bin/pytest tests/test_wiring.py -k "kind_to_a_bare or kind_
 `enforce_clock`），仓库里一条测试都没有。这个缺口比通常的缺测试更贵：`HumanActor.act()` 是一期
 刻意留的 `NotImplementedError`，所以真出事的时候没有替身能复现，只能等人坐进去。
 `tests/test_actor_contract.py` 用同一个 `_Seat` 把四个旋钮（`kind` / `blocking` / 截止时间 /
-答题耗时）各自独立地拧给三条规则看。8 具变异 2026-09-21 跑过一轮，8/8 CAUGHT，三个被改文件按字节还原：
+答题耗时）各自独立地拧给三条规则看。
 
-A1–C3 八具的具名账在同一份归档的那一节。
+A1–C3 八具的具名账在 `docs/iterations.md`〈手册里那四张具名变异账表搬进了这一份〉一节的 A·B·C 表。
 
 A 组有个**等价变异**要写清楚：删掉 `if limit is None` 那一支测不出来，因为
 `asyncio.wait_for(coro, None)` 本来就是无限等。这一条不为分支存在作证，只为"截止时间不从 `Config`
@@ -400,14 +399,14 @@ A 组有个**等价变异**要写清楚：删掉 `if limit is None` 那一支测
 整个清零，所以闭式解里一半的算术没被看过"——跑 W1–W5 时它们**全部**被旧锚点抓住了，因为
 `half = z·√(z²/4n²) = z²/2n` 并不是 0。真正测不出来的是只错在 `p(1-p)/n` 这一项的实现：角上该项
 本来就是 0，`wilson_ci(1,1)` 与错误实现在**六位小数上完全相同**（实测 `0.206549, 1.0`），只有内点
-分得开。W6 就是这么一具变异，跑出来 golden 那栏 `SURVIVED`、新用例那栏 `CAUGHT`，`_wilson_by_inversion`
+分得开。W6 就是这么一具变异——旧的锚点抓不住它、新用例抓得住，`_wilson_by_inversion`
 的 docstring 现在写的是这个版本。**跑变异不只是为了证明测试能红，也是为了给写在文档里的那句理由
 做证**——这轮如果
-只跑到 8/8 CAUGHT 就收工，README 里会留下一句错的论证。
+只跑到全部被抓那一格就收工，README 里会留下一句错的论证。
 
-W1–W9 九具的具名账在同一份归档的那一节，第三列记的是「旧的锚点抓不抓得住」。
+W1–W9 九具的具名账在 `docs/iterations.md`〈手册里那四张具名变异账表搬进了这一份〉一节的 W 表，第三栏记的是「旧的锚点抓不抓得住」。
 
-9 具变异 2026-09-21 跑过一轮，9/9 CAUGHT，`metrics.py` 按字节还原。已知等价变异：
+已知等价变异：
 把 `min(1.0, …)` 那个上界夹逼整个删掉——Wilson 区间按构造不超过 1，那条 clamp 在正确实现上是恒等
 的，测不出差别，所以不列入。重跑：`PYTHONPATH=src .venv/bin/pytest tests/test_report_stats.py`。
 

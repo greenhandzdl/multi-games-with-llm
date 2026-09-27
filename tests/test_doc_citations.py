@@ -1324,6 +1324,36 @@ def test_a_line_naming_mutations_without_a_separator_is_not_a_tally():
     assert _tally_tables("| 变异 | 说明 |\n这一族还没跑电池，先把要列的东西说一句") == []
 
 
+VERDICT_WORDS = "(?:CAUGHT|SURVIVED)"
+VERDICT_FRACTION = re.compile(rf"[0-9]{{1,3}}\s*/\s*[0-9]{{1,3}}\s*`?{VERDICT_WORDS}")
+VERDICT_COUNT = re.compile(rf"[0-9一二三四五六七八九十]{{1,3}}\s?具[^\n]*?`?{VERDICT_WORDS}")
+
+
+def _prose_verdicts(text: str) -> list[tuple[int, str]]:
+    """散文里"这一轮电池判成了什么"的读数：具数+判词、或 N/M+判词。整行范围内认。"""
+    out: list[tuple[int, str]] = []
+    for n, line in enumerate(text.splitlines(), 1):
+        hits = [m.group(0) for pat in (VERDICT_FRACTION, VERDICT_COUNT) for m in pat.finditer(line)]
+        if hits:
+            out.append((n, max(hits, key=len)))
+    return out
+
+
+def test_readme_carries_no_prose_battery_verdict():
+    bad = _prose_verdicts((ROOT / "README.md").read_text(encoding="utf-8"))
+    assert not bad, f"README 里还坐着逐片电池的判决读数（行号, 命中的那一句）：{bad}"
+
+
+def test_the_verdict_judge_reads_both_shapes_and_spares_the_rule_sentence():
+    """两形各钉一次，另一格钉"这句在教判决怎么写，不是在报某一轮的判决"。"""
+    assert _prose_verdicts("变异 5 具于 2026-09-21 跑过一轮，5/5 CAUGHT。") == [
+        (1, "5 具于 2026-09-21 跑过一轮，5/5 CAUGHT")]
+    assert _prose_verdicts("W6 就是这么一具变异，跑出来 golden 那栏 `SURVIVED`。") == [
+        (1, "一具变异，跑出来 golden 那栏 `SURVIVED")]
+    assert _prose_verdicts("判词写成 `CAUGHT [hang after Ns]` 并记下最后一行开始跑的测试文件名。") == [], \
+        "这句在教判决怎么写（没有具数、没有分数），删掉它手册就少一条习惯"
+
+
 # --------------------------------------------------------------- 「数到 N」的跑次账
 # `#135`/`#143` 立过规矩：逐片取证住归档，手册只留"怎么跑"和"该看到什么"。那两轮搬走了散文与变异
 # 账表，**跑次读数那一族一处没搬**——〈测试〉里 34 处「某时刻 数到 **N**」加 2 处「N passed」还坐着，
