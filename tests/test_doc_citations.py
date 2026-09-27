@@ -1324,6 +1324,77 @@ def test_a_line_naming_mutations_without_a_separator_is_not_a_tally():
     assert _tally_tables("| 变异 | 说明 |\n这一族还没跑电池，先把要列的东西说一句") == []
 
 
+# --------------------------------------------------------------- 「数到 N」的跑次账
+# `#135`/`#143` 立过规矩：逐片取证住归档，手册只留"怎么跑"和"该看到什么"。那两轮搬走了散文与变异
+# 账表，**跑次读数那一族一处没搬**——〈测试〉里 34 处「某时刻 数到 **N**」加 2 处「N passed」还坐着，
+# 而且已经烂了一处：手册第一行写的 `1015 passed`，与 `6141b18` 那一版实收集的 1023 条差 8。这一族的
+# 形状没有歧义，外面那两个形状也**没有读者**（链句里嵌的"某模块现 N 条"另算——那三处 `#44` 一直在
+# 核）：它报"这一刻套件多大"，而这个数每笔提交都变，写在手册里等于每笔提交制造一句假话——`#151` 那族
+# 管的是"锚在哪个 ref 上"，这一族管的是"这个数根本不该住在这儿"。秒数那一形（`N.NNs`）不进判据：
+# 延迟语料里它是产品常数，`6141b18` 的 README 里 43 处随这一族一起手搬，不设闸。
+# 两形各留一份，好让"搬来的东西在不在归档里"能按形点名。合并式**从这两个分支拼出来**，不是抄第三份：
+# `#153` 记过那一族双写的账，而这里连"两形与合并式一致"都不是一条可核对的主张——它是构造出来的。
+CHAIN_TALLY = re.compile(r"数到\s*\*\*[0-9]+\*\*")
+PASSED_TALLY = re.compile(r"[0-9]{3,6} passed")
+RUN_TALLY = re.compile(rf"(?:{CHAIN_TALLY.pattern})|(?:{PASSED_TALLY.pattern})")
+
+
+def _run_tally_lines(pages: dict[str, str]) -> list[tuple[str, int, str]]:
+    """The check itself: which manual lines hold a per-run suite-size reading."""
+    bad: list[tuple[str, int, str]] = []
+    for page, text in pages.items():
+        for no, line in enumerate(text.splitlines(), 1):
+            if RUN_TALLY.search(line):
+                bad.append((page, no, line.strip()))
+    return bad
+
+
+def test_a_run_tally_reading_is_told_from_a_live_count():
+    """夹具：两形都认，三形都放过——被顶掉的旧数、不绑数字的加粗、墙钟与"跑起来 N 个用例"。
+
+    第 4 行那格（`**709**` 光秃秃一个加粗数）放过是**故意的**：手册里"数到"才是跑次账的记号，
+    把判据放宽成"任何加粗整数"会连 `#131` 那张表里的形状一起报掉。这一格的账由电池里
+    "摘掉 `数到` 只留加粗"那一具还——摘掉之后第 4 行会一起红。
+    """
+    pages = {"a.md": "\n".join([
+        "08:06:23Z 数到 **704**、09:00:43Z 数到",
+        "现测 1015 passed，全程离线。",
+        "末行印的是 `N tests collected`，要重数。",
+        "**709**（中间那五格全是补的）",
+        "墙钟 71.52s 只用来判断跑完了没有。",
+        "`tests/test_cli.py` 现 63 条、跑起来 72 个用例。",
+    ])}
+    bad = _run_tally_lines(pages)
+    assert [b[1] for b in bad] == [1, 2], \
+        f"跑次账只认「数到 **N**」与「N passed」两形，别把加粗数字、墙钟与收集数一起报掉：{bad}"
+
+
+def test_the_manual_carries_no_per_run_suite_reading():
+    bad = _run_tally_lines({f.name: f.read_text(encoding="utf-8") for f in _manual_pages()})
+    assert not bad, (
+        "手册里还坐着逐片的套件规模读数（格式 文件:行 原文）："
+        f"{[(b[0], b[1], b[2][:50]) for b in bad]}——这些数每笔提交都会变，手册抄不动。"
+        "搬去 `docs/iterations.md`：那里的账按时刻记，本来就是给复数留的。手册只留"
+        "\"总数要重数：数 `--collect-only` 末行\"那句活规矩"
+    )
+
+
+def test_the_archive_is_where_a_moved_run_tally_lands():
+    """搬走的东西不许在移动里消失：归档里的跑次读数只多不少。
+
+    上一条断言"手册里没有"，把归档从语料里抹掉它一样绿，所以这一条钉"有"。两形各自的地板不是
+    同一种证人，账也分开记（02:12:48Z 现测归档：`数到 **N**` 3 处、`N passed` 152 处）：
+    链形地板取 30，**搬运完成之前这一条是红的**（3 < 30），它钉的正是"搬来的 34 处在归档里"；
+    `N passed` 那一形归档本来就有 152 处，150 的地板在移动前就满足，因此它不背书"这两处搬来了"，
+    只背书"这一族扫法没坏、归档没被顺手截断"——把两处搬来的读数点名的活是落盘脚本当场做的
+    （逐行按字节断言），不是一条每次都过的地板能代替的主张。
+    """
+    text = (ROOT / "docs" / ARCHIVE).read_text(encoding="utf-8")
+    chain, passed = len(CHAIN_TALLY.findall(text)), len(PASSED_TALLY.findall(text))
+    assert chain >= 30, f"归档里只剩 {chain} 处「数到 **N**」，多半是搬运丢了东西或扫法坏了"
+    assert passed >= 150, f"归档里只剩 {passed} 处「N passed」，语料或扫法出问题了"
+
+
 # --------------------------------------------------------------- 〈标题〉指针
 # `#135`/`#143` 把逐片取证搬去 `docs/iterations.md` 之后，手册里"细节在归档"的入口几乎全写成
 # 「见〈某节标题〉」：README 的能力清单压成指针形之后也只有这一个落点。读者照它搜索，标题被改过
