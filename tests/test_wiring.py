@@ -117,7 +117,7 @@ def test_every_declared_kind_has_an_emitter():
 
     `compaction` 就是漏网的那一个——`Kind` 里有、`render_line` 有分支、`audit` 有计数器，
     而 src/ 里没有任何一处写它，于是 `kinds["compaction"]` 永远读成 0，一份"这局从没折叠"的
-    假话。名字按发射点收集：`log.append(Kind.X)`、`t.say(Kind.X)`、`kind=Kind.X`。
+    假话。名字按发射点收集：`log.append(Kind.<名字>)`、`t.say(Kind.<名字>)`、`kind=Kind.<名字>`。
 
     用 `in EMIT_NAMES` 而不是"出现在任意调用的实参里"：`kinds.get(Kind.COMPACTION, 0)` 也是
     实参，读侧的引用会把自己伪装成写侧。

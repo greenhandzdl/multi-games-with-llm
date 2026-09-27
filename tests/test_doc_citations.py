@@ -1832,3 +1832,262 @@ def test_the_demonstrative_rule_bites_on_a_bare_pointer_and_grants_its_two_exemp
     assert [(d, n) for d, n, _t in bad] == [("a.md", 1)], (
         f"该报的只有第 1 行（邻句票号不给背书），实际报出：{bad}")
     assert [t for _d, _n, t in bad] == ["见下一节"]
+
+
+# ---------------------------------------------------------------- `类.成员` 点名的悬空一侧（`#158`）
+
+MEMBER_PAIR = re.compile(r"([A-Z][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)")
+QUALIFIER = re.compile(r"([a-z_][a-z0-9_]*)\.$")
+HISTORY_MARK = re.compile(r"曾|已随|删|移回|收回|写下当时")
+
+
+MEMBER_KINDS = ("def", "ann", "assign", "self")
+
+
+def _class_member_roster(roots: tuple[str, ...] = ("src", "scripts"),
+                         kinds: tuple[str, ...] = MEMBER_KINDS) -> dict[str, set[str]]:
+    """每一具类**今天**够得着的成员名，连同继承链。`#158` 的尺。
+
+    比 `#156` 那把宽，因为这里问的不是"有没有人读它"，而是"一句 `类.成员` 点下去落不落得空"。
+    四种形状都算落得到，`kinds` 就是这四格的名字（`def`／`ann`=dataclass 字段／`assign`=类级赋值，
+    枚举成员住在这一格里／`self`=在方法里现挂的属性），外加从**本包**父类继承来的名字。分成参数而不
+    是一把梭，是因为下面那条合成用例要**逐格**问"这个名字是不是只靠这一格活着的"——否则那一格删掉
+    也没人报，量不出它有没有读者（`#158` 的电池第一跑就有两格是这样的）。
+    少收一种就造出假缺陷：`#156` 那把把字段与 `self.x` 排除在外，于是 `Config` 的 `base_url` 在它眼里
+    是悬空的，而它每批都跟着落盘（`src/wolfengine/batch.py` 的 meta 里那一格）——同一批 177 处点名
+    在两把尺下"成员不在"的格数差出 80 处（00:39:33Z 现测：窄尺 97，宽尺 17）。
+    同趟按格数今天有多少处点名是靠这一格才落得到的：`def` 78、`ann` 42、`assign` 28、`self` 0。
+    末那一格今天没有真语料读者，它由合成用例里那条只靠 `self.x` 活着的名钉着，落点在
+    `test_the_dangling_member_rule_bites_on_a_never_existing_class_and_grants_history` 的前提那一组。
+
+    `scripts/` 也收，是因为散文会写 `calibrate.某具名` 那一形，只数 src 会让它落进噪声。
+    限界：跨包继承（第三方 base）看不见——文档点的是我们自己的成员，而第三方那一层的类名不在这份
+    名册里，整条会被跳过（见 `_dangling_member_cites` 的噪声两支）。
+    """
+    trees: dict[str, ast.Module] = {}
+    for root in roots:
+        for f in sorted((ROOT / root).rglob("*.py")):
+            if "__pycache__" in f.parts:
+                continue
+            trees[str(f)] = ast.parse(f.read_text(encoding="utf-8"))
+
+    members: dict[str, set[str]] = {}
+    parents: dict[str, list[str]] = {}
+    for tree in trees.values():
+        for cls in (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)):
+            own = members.setdefault(cls.name, set())
+            for node in cls.body:
+                if "def" in kinds and isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    own.add(node.name)
+                elif "ann" in kinds and isinstance(node, ast.AnnAssign):
+                    if isinstance(node.target, ast.Name):
+                        own.add(node.target.id)
+                elif "assign" in kinds and isinstance(node, ast.Assign):
+                    for t in node.targets:
+                        if isinstance(t, ast.Name):
+                            own.add(t.id)
+                        elif isinstance(t, ast.Tuple):
+                            own.update(e.id for e in t.elts if isinstance(e, ast.Name))
+            parents.setdefault(cls.name, []).extend(
+                b.id if isinstance(b, ast.Name) else
+                (b.attr if isinstance(b, ast.Attribute) else "") for b in cls.bases)
+
+    def own_write(tree) -> dict[str, set[str]]:
+        out: dict[str, set[str]] = {}
+        for cls in (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)):
+            for node in ast.walk(cls):
+                if isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Store) \
+                        and isinstance(node.value, ast.Name) and node.value.id == "self":
+                    out.setdefault(cls.name, set()).add(node.attr)
+        return out
+
+    if "self" in kinds:
+        for tree in trees.values():
+            for cls, names in own_write(tree).items():
+                members.setdefault(cls, set()).update(names)
+
+    def closed(cls: str, seen: frozenset[str]) -> set[str]:
+        out = set(members.get(cls, set()))
+        for p in parents.get(cls, []):
+            if p in members and p not in seen:
+                out |= closed(p, seen | {p})
+        return out
+
+    return {cls: closed(cls, frozenset({cls})) for cls in members}
+
+
+def _engine_module_classes(roots: tuple[str, ...] = ("src", "scripts"),
+                           imports: bool = True) -> dict[str, set[str]]:
+    """每个本包模块**够得着**的类名：模块体里定义的，加上从别处 import 进来的大写名字。
+
+    收 import 是因为散文写的是"从那个模块看到的名字"，只数定义会把真话判成假话——这一格今天真语料
+    里 0 处点名靠它（00:48:35Z 现测：带前缀的点名共 14 处，其中类住在别处的 0 处），所以它由合成用例
+    里那条前缀点名钉着，落点在
+    `test_the_dangling_member_rule_bites_on_a_never_existing_class_and_grants_history` 的前提那一组。
+    小写的绑定（`import cli`、`as np`）后面接不出类名，不收。
+    限界：两份 `__init__.py` 共用一个键（按模块名建键，而 Python 里模块名本来就该唯一），
+    本仓库那两具的类名册互不重叠，所以这一格今天不改变任何判定。
+    """
+    out: dict[str, set[str]] = {}
+    for root in roots:
+        for f in sorted((ROOT / root).rglob("*.py")):
+            if "__pycache__" in f.parts:
+                continue
+            names = out.setdefault(f.stem, set())
+            for node in ast.parse(f.read_text(encoding="utf-8")).body:
+                if isinstance(node, ast.ClassDef):
+                    names.add(node.name)
+                elif imports and isinstance(node, (ast.Import, ast.ImportFrom)):
+                    for a in node.names:
+                        bound = (a.asname or a.name).split(".")[-1]
+                        if bound[:1].isupper():
+                            names.add(bound)
+    return out
+
+
+# 树上已经没有、语料里还在**不带模块前缀**点名它的引擎类。带前缀的那一形（`state.PublicState`）由
+# `_engine_module_classes` 当场查得出那个模块里没有这具类，所以这份名单只管没前缀的这一支。
+# 每一格由下面那条守卫管着：不许又回到树上，也不许在语料里再没人点名。
+DEAD_ENGINE_CLASSES = {"PublicState"}
+
+
+def _dangling_member_cites(corpus: dict[str, str], roster: dict[str, set[str]],
+                           modules: dict[str, set[str]]) -> tuple[list, dict[str, int]]:
+    """语料里点空了的 `类.成员`，连同这一族五种落点的计数。
+
+    返回 `(悬空处, 分档读数)`。悬空的那一处只有在**它自己那句话**带着历史标记时才放过——判据不许
+    要求"零悬空"，归档的全部意义就是"我们删了 X"，它管的是"这句读起来像不像在说今天"。
+
+    分档读数放在返回值里而不是留给临时脚本，是因为这一族的总数会被文档复述：`#156` 那一节写过
+    "反引点到的成员名共 55 处"，而那一趟的脚本没留读者，这个数今天复现不出来。四个档各是一件事，
+    混成一个数就会像那次一样对不上账。
+
+    形状取"整条坐在反引号里"的那一形（`BACKTICK` 已经界定了跨度，跨度内部再找 `类.成员`），
+    于是 `rules.NightResolution.peace` 这种**带模块前缀**的点名也扫得到——这一支不是可有可无的加宽：
+    本片第一跑抓到的两处假话（README 的⛔清单与归档里那一处）点的是 `rules` 里一具从来没有存在过
+    的类，名字抄错了（真名是 `NightResolution`，`peace` 就住在它上），只看末两段那一档就会把它
+    当成噪声放过。三种落空分得开，是因为处置不一样：
+      * 类在、成员不在 → 这一条成员点名悬空；
+      * 前缀是我们的模块、那个模块里没有这具类，或类整个不在树上但在 `DEAD_ENGINE_CLASSES` 里 →
+        **整条都悬空**（不查成员名，因为这类点名无论点的是哪一个成员都同样是历史）；
+      * 前缀不是我们的模块（`httpx.Response`、测试里的局部变量 `cal.CONF`），或者没有前缀而类名
+        两边都不认识（`README.A`、只住在 tests 里的替身 `Chorus.Scripted`）→ 跳过，这两档的规模
+        由读数里的 `not_ours` 与 `noise` 两格说给读者看，不靠猜。
+    """
+    out = []
+    census = {"resolved": 0, "member_gone": 0, "class_gone": 0, "not_ours": 0, "noise": 0}
+    for path, text in sorted(corpus.items()):
+        lines = text.splitlines()
+        for no, line in enumerate(lines, 1):
+            for span in BACKTICK.finditer(line):
+                for pair in MEMBER_PAIR.finditer(span.group(1)):
+                    cls, member = pair.group(1), pair.group(2)
+                    q = QUALIFIER.search(span.group(1)[:pair.start()])
+                    if q:
+                        mod = q.group(1)
+                        if mod not in modules:
+                            verdict = "not_ours"
+                        elif cls not in modules[mod]:
+                            verdict = "class_gone"
+                        else:
+                            verdict = "resolved" if member in roster.get(cls, set()) \
+                                else "member_gone"
+                    elif cls in roster:
+                        verdict = "resolved" if member in roster[cls] else "member_gone"
+                    elif cls in DEAD_ENGINE_CLASSES:
+                        verdict = "class_gone"
+                    else:
+                        verdict = "noise"
+                    census[verdict] += 1
+                    if verdict in ("resolved", "not_ours", "noise"):
+                        continue
+                    block = lines[max(0, no - 3):no + 2]
+                    sentence = _cited_sentence(block, no - 1 - max(0, no - 3),
+                                               span.start() + pair.start())
+                    if not HISTORY_MARK.search(sentence):
+                        out.append((path, no, f"{cls}.{member}", sentence.strip()))
+    return out, census
+
+
+def test_a_dangling_class_member_mention_says_out_loud_that_it_is_history():
+    """`类.成员` 点空了可以，但同一句里得说清那是历史，不是今天。`#158`。
+
+    第一跑（00:32:28Z，判据已经是带模块前缀的这一版）报 8 处，其中两处是**假话**：README 的⛔清单
+    与归档里那一处都点 `rules` 里一具从来没有存在过的类，真名字是 `NightResolution`。
+    其余六处不是假话，是句子少了一个"这是历史"的记号，还有一处是把占位符写成了 ASCII 代码串
+    （一个大写字母挂在枚举类后面那一形，文件页眉本来就写着不许）。处置全在句子上，判据一行没动。
+
+    收口那一趟（00:39:33Z）的五档读数：160 处落在今树上、17 处成员没了但同句带了记号（按类分是
+    `GameState` 7、`Percept` 4、`GameResult` 2，其余四类各 1）、1 处整类没了（`#159` 那具投影类，
+    句子写着"已随"）、1 处前缀不是我们的模块、105 处噪声。这一格留在代码里而不是只进归档，是因为
+    上面那句"第一跑报 8 处"只有拿同趟读数才能核——`#156` 那句"共 55 处"就是没留读数才对不上账。
+    """
+    bad, census = _dangling_member_cites(_line_cite_corpus(), _class_member_roster(),
+                                         _engine_module_classes())
+    assert not bad, (
+        "这些 `类.成员` 点的东西树上已经没有，而同一句里没有历史标记，读起来像在说今天："
+        f"{bad}\n同趟分档读数：{census}")
+
+
+def test_the_dead_class_list_names_classes_that_are_gone_and_still_spoken_of():
+    """豁免名单两头都要钉住：不许已经回到树上，也不许没人再点名它。`#158`。
+
+    这条是 `#142` 那一族（"给豁免钉形状"）在这一片的样子：一格豁免一旦失去理由，它就从"放过历史"
+    变成"放过假话"，而没人会回来删它。两头各一次：回来了就摘掉，没人提了就删掉。
+    点名要求带成员的那一形（`PublicState.` 后面接东西），因为这条名单只管得了这个形状。
+    """
+    roster = _class_member_roster()
+    corpus = _line_cite_corpus()
+    back = sorted(c for c in DEAD_ENGINE_CLASSES if c in roster)
+    assert not back, f"这些类又回到树上了，把它们从名单里摘掉：{back}"
+    quiet = sorted(c for c in DEAD_ENGINE_CLASSES
+                   if not any(re.search(rf"`[^`]*\b{c}\.", t) for t in corpus.values()))
+    assert not quiet, f"这些类没人再按 `类.成员` 点名了，名单里的这一格是死豁免：{quiet}"
+
+
+def test_the_dangling_member_rule_bites_on_a_never_existing_class_and_grants_history():
+    """合成语料：该报的三形各报一次，该放过的五形各放过，且邻句的历史标记不给背书。
+
+    真语料那条只会红不会绿——把判据改瞎（永远返回 `[]`）它照样过，所以这一条不读语料，
+    钉的是检测能力在。形状一律运行时拼：本文件也在扫描面里，写死一个字面量就等于在本片
+    自己的语料里种一处悬空点名（`#140` 撞过一次）。
+
+    末尾那两行是**正控制**，钉的是名册里两格今天没有真语料读者的加宽（`self.x` 写入、模块名册收
+    import 进来的类名）：00:48:35Z 现测两格在真语料上都是 0 处依赖，电池第一跑对这两刀都是 0 红，
+    也就是"删了也没人报"。有了这两行，把 `MEMBER_KINDS` 去掉那一格、或把 `_engine_module_classes`
+    的 `imports` 改成默认关，这一条就会红——两格从此有名字可对。
+    """
+    roster, modules = _class_member_roster(), _engine_module_classes()
+    live_cls = "Config"
+    live_member = sorted(m for m in roster[live_cls] if not m.startswith("_"))[0]
+    ghost_cls, ghost_member = "NightResult", "peace"
+    gone_member = "public_state"
+    self_cls, self_member = "HumanActor", "console"
+    imp_mod, imp_cls = "cli", "EventLog"
+    imp_member = sorted(m for m in roster[imp_cls] if not m.startswith("_"))[0]
+    assert ghost_cls not in roster and ghost_cls not in modules["rules"]
+    assert live_member in roster[live_cls] and gone_member not in roster["GameState"]
+    assert self_member in roster[self_cls] and self_member not in _class_member_roster(
+        kinds=("def", "ann", "assign"))[self_cls]
+    assert imp_cls in modules[imp_mod] and imp_cls not in _engine_module_classes(
+        imports=False)[imp_mod]
+    dotted = lambda c, m: f"{c}.{m}"            # noqa: E731  拼形状，不留字面量
+    pages = {
+        "a.md": "".join([
+            f"`{dotted(live_cls, live_member)}` 天天落盘。\n",
+            f"`{dotted('GameState', gone_member)}` 渲染那一屏。\n",
+            f"`{dotted('rules', dotted(ghost_cls, ghost_member))}` 算出来之后没人读。\n",
+            f"`{dotted('httpx.Client', 'request')}` 那一层不归本仓库管。\n",
+            f"上面那句里 `{dotted('Chorus', 'Scripted')}` 是测试替身，不在这棵树里。\n",
+            f"已随 `#159` 删掉的是 `{dotted('PublicState', 'as_dict')}`。\n",
+            f"邻句写着删过别的。`{dotted('GameState', gone_member)}` 渲染那一屏。\n",
+            f"`{dotted(self_cls, self_member)}` 是真人那一屏的把手。\n",
+            f"`{dotted(imp_mod, dotted(imp_cls, imp_member))}` 记的是整局事件。\n"]),
+    }
+    bad, census = _dangling_member_cites(pages, roster, modules)
+    assert [(p, no, name) for p, no, name, _s in bad] == [
+        ("a.md", 2, dotted("GameState", gone_member)),
+        ("a.md", 3, dotted(ghost_cls, ghost_member)),
+        ("a.md", 7, dotted("GameState", gone_member))], f"实际报出：{bad}"
+    assert census == {"resolved": 3, "member_gone": 2, "class_gone": 2,
+                      "not_ours": 1, "noise": 1}, f"分档读数对不上：{census}；各处：{bad}"
