@@ -632,7 +632,7 @@ def _class_defs_and_reads():
     与 `_module_defs_and_production_reads` 的分别有两层。**什么算读者**沿用那一版：`ast.Attribute` 上的
     真名字，加 `getattr(obj, "名字")` 那一格字面量（`batch.py` 的 `axis_fields` 靠这一格活着，而那两处
     写的是三参数的 `getattr(obj, "名字", None)`——本尺的第一版只认两参数，就把这两个名字判成了零读者）。
-    **键的形状**换了：按 `文件::类.名字` 数，不按裸名字——`as_dict` 在
+    **键的形状**换了：按 `文件::类.名字` 数，不按裸名字——`as_dict` 曾在
     `GameResult` 与 `PublicState` 上各有一具，一个有测试读者、一个连读者都没有，按名字数会把这两件事
     混成一个数（`#85` 的"同名替付账"在类内那一侧的同一形）。
     """
@@ -691,15 +691,6 @@ def _cited_path_exists(text: str) -> bool:
 # 处置词只有五个：删 / 搬 / 接 / 留 / 待判。"留"是给真有产物理由的（`MANUAL_EXITS` 那一形），
 # 而连测试都不点它名的那一格不许写"留"。
 METHOD_TRIAGE: dict[str, str] = {
-    "state.py::PublicState.as_dict":
-        "搬：唯一读者是 tests/test_rules.py 里『公开投影不含 role 字段』那一格，与 `#155` 的 `frame_text`"
-        " 同形（读者只有测试的东西住测试侧），下一片动",
-    "state.py::GameState.public_state":
-        "待判：唯一读者与上面 `PublicState.as_dict` 那一格住在同一句里（tests/test_rules.py 的"
-        " `st.public_state().as_dict()`），而 src/wolfengine/state.py 的页眉把 PublicState 说成 prompt"
-        " Region B 的唯一来源——装配器 assemble.py 的 `_region_b` 收的是 Percept。构造点不是零：23:19:13Z"
-        " grep 现测 `src/`+`scripts/` 里 `PublicState` 唯一一处构造就在 `state.py` 的 `public_state()`"
-        " 体内，也就是这一格自己——所以除它以外没有第二条路能造出 PublicState。这句页眉的账另开 `#157`",
     "info.py::Percept.by_kind":
         "待判：七处读者全在 tests/test_info_isolation.py 与 tests/test_vote_wave.py；孪生 `tail` 是有生产"
         "读者的（人那一屏在 human.py 里就调它），`window` 那一格的名字被 plan.window 顶着——按名字数读数"
@@ -710,14 +701,20 @@ METHOD_TRIAGE: dict[str, str] = {
     "legality.py::Verdict.reason":
         "待判：src/ 里那几处只读 violations 那个列表，把它们拼成一句的只有这个 property，而它唯一的"
         "读者是 tests/test_legality.py 的断言——拼句要不要成为产物的一部分是决定，不是清理",
+    "rules.py::NightResolution.dead_seats":
+        "待判：产物链读的是 `deaths` 那张表本身（`src/wolfengine/phases.py` 夜里结算那一支就是逐条 "
+        "`for d in res.deaths`），把表压成座位号只有测试在用——23:42:16Z 现测 src+scripts 零处、"
+        "tests/test_rules.py 十处，其中一处专门断言这两者一致。这一格是 `#159` 删掉 `PublicState` "
+        "时**级联**长出来的：同名的 `GameState.dead_seats` 原本唯一的生产读者就坐在被删的 `public_state()`"
+        " 体内，那一具删了它便彻底没人读，同一趟删净（名册里不留它，因为树上已经没有这个 def）",
     "state.py::GameState.teammates_of":
         "待判：docs/iterations.md 里 `#133` 那一节写明它与 `Percept.teammates()` 不是同一个判据（按"
         "『存活过滤 vs 念发牌那一刻的名册』），卡片印的是后者；两具哪一具该活下来要先定，不是删得掉的",
 }
 # 限界：测试侧的读数按**名字**数，不按 def 数。同名两具（`as_dict` 曾住在 `GameResult` 与 `PublicState`
 # 各一具）里究竟哪一具有读者这条判不出来——所以『零读者』那一格只敢在**连名字都没人点**时强制『删/搬』，
-# 名字被点过但可能不是点它这一具时，只能由处置那一格自己写清落点。这一具的读者是零（22:39Z 现测：
-# `GameResult.as_dict` 的 `vars(self)` 那行没有任何调用者），已随 `#156` 删掉。
+# 名字被点过但可能不是点它这一具时，只能由处置那一格自己写清落点。两具都没有读者（22:39Z 现测：
+# `GameResult.as_dict` 的 `vars(self)` 那行没有任何调用者），已分别随 `#156` 与 `#159` 删掉。
 
 
 def test_the_method_layer_names_every_zero_production_reader_and_each_carries_a_disposition():
@@ -835,6 +832,155 @@ def test_no_class_in_the_engine_is_kept_alive_by_a_namesake():
     assert dead == [], (
         "这些引擎类没有任何读者够得着（第三方同名属性不算读者），要么接上要么删："
         f"{dead}")
+
+
+DECLARATION_ONLY_BASES = ("Enum", "IntEnum", "StrEnum", "ReprEnum", "Flag", "IntFlag",
+                          "Protocol", "ABC", "Generic", "Exception", "BaseException")
+
+
+def _class_constructions():
+    """每个 src 模块级类的构造证据，连同"这一格归因到哪一形"。`#159` 的尺。
+
+    与 `#85` 的分别是这条存在的全部理由，两条都要留着：那条问**有没有人点这个名**（`tests/` 里的
+    点名也算，一根裸 `Name` 就活），这一条问**产物链走不走得到那一次构造**。`PublicState` 正是穿过
+    那条却卡在构造这一环的——23:32Z 现测：全树 62 具模块级类里只有它一具，全部构造点都坐在
+    `#156` 名册里零生产读者的成员体内。
+
+    构造口径四种，少认一种就造出假缺陷（00:00:43Z 用本函数自己的归因现测：把"①构造点在生产链上"以外
+    全算成缺陷是 6 格，6 格全是形状；`PublicState` 还在的时候是 7 格里 1 格真、6 格形状）：
+      ① 显式 `Cls(...)`——callee 是 `Name`，或 `Attribute` 且根名是本包模块（`#85` 的同名替付账
+        在这一层同样成立，所以 `Attribute` callee 必须过 `_own_module_names()`，第三方同名不算）
+      ② dunder 隐式——构造点坐在 `__init__` / `__post_init__` 这类双下划线成员体内，Python 自己会走到
+      ③ `field(default_factory=Cls)`——父 dataclass 构造时隐式实例化，那一格根本不长成 Call
+      ④ 按设计不实例化——base 里有 Enum / Protocol / ABC / Generic / Exception，或整具类体一个函数都没有
+        （`events.py::Kind` 是常量名册，走成员访问）
+
+    形状有两份来源的那一格要认下来：`config.py::RegionBudget` 既没有 Call 也没有方法，③与④的"无方法"
+    那一支同时解释着它——拆掉③那把刀只报出 `WitchState` 一具（00:12Z 现测），对 `RegionBudget` 它是等价
+    变异。③仍然要留：`WitchState` 有 property，只有③解释得了它。
+
+    限界，两条，都写在这里而不是藏在代码里：**只往外找一层**——构造点的宿主有没有生产读者用的是
+    `#156`/`#155` 那两份名册，不是调用图闭包，所以"死函数里套死函数"这条看不见（套在更外面那层的
+    宿主只要被人点过名就放行）；**嵌套闭包不是宿主**——`_functions_of` 会给出内层函数，它不在名册里
+    时这一条继续向外层找，一直找不到就按模块体（import 期执行，算活）。
+    """
+    roster = _class_defs_and_reads()
+    mod_defs, mod_readers = _module_defs_and_production_reads()
+    entries = _entry_point_names()
+    own = _own_module_names()
+    site_trees = _parsed_trees(("src", "scripts"))
+    src_trees = _parsed_trees(("src",))
+
+    def callee(node):
+        """这次 Call 在被构造的是哪一具类；第三方同名（根名不在本包里）不算。"""
+        func = node.func
+        if isinstance(func, ast.Name):
+            return func.id
+        if isinstance(func, ast.Attribute):
+            head = func.value
+            while isinstance(head, ast.Attribute):
+                head = head.value
+            if isinstance(head, ast.Name) and head.id in own:
+                return func.attr
+        return None
+
+    def host(path, defs, lineno):
+        """ lineno 所在的最内层函数（按 AST 跨度认，不认"行号上最近的前一个 def"），一路向外直到模块体。
+
+        按行号就近取宿主是这一具的第一版，K3 那具负控制把它抓出来了：模块体里、写在最后一个 `def`
+        **之后**的一次构造，被算给了那个 `def` 的体内——于是"import 期执行＝算活"那一支根本没机会开口。
+        """
+        inside = [d for d in defs if d[0].lineno <= lineno <= d[0].end_lineno]
+        for fn, cls, _ in sorted(inside, key=lambda t: (t[0].end_lineno - t[0].lineno, -t[0].lineno)):
+            if fn.name.startswith("__"):
+                return ("dunder", fn.name)
+            if cls is not None:
+                key = f"{Path(path).name}::{cls}.{fn.name}"
+                if key in roster:
+                    return ("method", key)
+            elif fn.name in mod_defs:
+                return ("module-fn", fn.name)
+        return ("import", None)
+
+    calls: dict[str, list[tuple]] = {}
+    factory: dict[str, list[tuple]] = {}
+    for path, tree in site_trees.items():
+        defs = _functions_of(tree)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                name = callee(node)
+                if name:
+                    kind, key = host(path, defs, node.lineno)
+                    calls.setdefault(name, []).append((f"{path}:{node.lineno}", kind, key))
+            elif isinstance(node, ast.keyword) and node.arg == "default_factory":
+                ref = node.value
+                ref = ref.id if isinstance(ref, ast.Name) else None
+                if ref:
+                    factory.setdefault(ref, []).append(f"{path}:{node.lineno}")
+
+    out: dict[str, dict] = {}
+    for path, tree in src_trees.items():
+        for node in tree.body:
+            if not isinstance(node, ast.ClassDef):
+                continue
+            if node.name.startswith("__"):
+                continue
+            bases = []
+            for b in node.bases:
+                while isinstance(b, ast.Subscript):
+                    b = b.value
+                bases.append(b.id if isinstance(b, ast.Name) else
+                             (b.attr if isinstance(b, ast.Attribute) else ""))
+            methods = [s for s in node.body
+                       if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef))]
+            where = f"{path}:{node.lineno}"
+            shape, live, dead_sites = "", [], []
+            for site, kind, key in calls.get(node.name, []):
+                if kind in ("import", "dunder"):
+                    live.append(f"{site}（{kind}）")
+                elif kind == "module-fn":
+                    (live if (key in entries or mod_readers.get(key, 0)) else dead_sites).append(
+                        f"{site} 坐在 {key}()")
+                else:
+                    (live if roster[key][0] else dead_sites).append(f"{site} 坐在 {key}")
+            if live:
+                shape = "①构造点在生产链上"
+            elif dead_sites:
+                shape = "①有构造点但产物链走不到"
+            elif factory.get(node.name):
+                shape = f"③field(default_factory)：{factory[node.name]}"
+            elif any(b in DECLARATION_ONLY_BASES for b in bases):
+                shape = f"④按设计不实例化（base {bases}）"
+            elif not methods:
+                shape = "④常量名册，无一具方法（走成员访问）"
+            out[f"{Path(path).name}::{node.name}"] = {
+                "where": where, "shape": shape, "live": live, "dead": dead_sites,
+                "has_method": bool(methods), "bases": bases,
+            }
+    return out
+
+
+def test_no_engine_class_lives_only_on_a_construction_the_product_never_reaches():
+    """`#159`：类层此前只有 `#85` 那一把尺，而它问的是"点名"不是"构造"——`PublicState` 从它眼底过去了。
+
+    第一跑（23:36Z，删之前）是红的，名单恰好一具：`state.py::PublicState` 唯一一处
+    `PublicState(...)` 坐在 `GameState.public_state()` 体内，而那一具在 `#156` 名册里是零生产读者
+    ——也就是整具类在产物链上不可达。同趟另六具"一处 Call 构造都没有"的类全部由形状解释（`Actor`
+    与 `LLMTransport` 是 Protocol、`Phase` 是 Enum、`Kind` 是无方法的常量名册、`RegionBudget` 与
+    `WitchState` 走 `field(default_factory=...)`），一条手工豁免都没开。
+
+    这一条不许"登记个处置就放过"：解释必须机械可查（四种口径都是从 AST 上取的），所以唯一的出路是
+    `#85` 那两选一——接进产物链，或者删掉。`PublicState` 走的是后者，理由与代价记在 `docs/iterations.md`
+    对应那一节（`#157` 的页眉假话是同一次删的）。
+    """
+    cells = _class_constructions()
+    unexplained = {k: v for k, v in cells.items()
+                   if v["shape"] == "①有构造点但产物链走不到" or v["shape"] == ""}
+    shaped = {k: v["shape"] for k, v in sorted(cells.items()) if k not in unexplained}
+    report = [f"{k}（{v['where']}；{v['dead']}）" for k, v in sorted(unexplained.items())]
+    assert not unexplained, (
+        f"这些引擎类的构造点产物链走不到，或根本没有构造点又没有形状解释：{report}\n"
+        f"同趟有解释的 {len(shaped)} 格，各自归因：{shaped}")
 
 
 def _is_a_declaration_only(fn) -> bool:

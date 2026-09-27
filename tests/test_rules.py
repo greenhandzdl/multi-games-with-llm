@@ -459,25 +459,6 @@ def test_last_words_table(death, expected):
 # ----------------------------------------------------------------- public projection
 
 
-def test_public_state_has_no_seat_to_role_binding():
-    """The dangerous leak is a *binding* (seat 3 is the witch), not a vocabulary.
-
-    Phase names contain role words on purpose — a real moderator also says 狼人请睁眼, so
-    "night_wolf" reveals the rules of the game rather than anyone's identity. Scanning for
-    the bare word would fail on correct code and, worse, teach the next reader that this
-    projection is unsafe when it is actually safe. The seat→role map simply has no field
-    here, which is the property worth pinning.
-    """
-    st = mk_state(BASE)
-    pub = st.public_state().as_dict()
-    assert "role" not in pub and "roles" not in pub and "seats" not in pub
-    for field_name, value in pub.items():
-        if field_name == "phase":
-            continue
-        assert "role" not in str(value).lower()
-    assert st.role_of(3) == "witch"
-
-
 def test_teammates_view_is_wolves_only():
     st = mk_state(BASE)
     assert st.teammates_of(1) == frozenset({7, 9})

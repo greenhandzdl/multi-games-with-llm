@@ -91,8 +91,8 @@ def percept_for(
 
     Filters *before* constructing, so nothing downstream has to remember to filter. Note
     this takes events, not a GameState: the prompt path never touches the seat→role table,
-    which is why `test_public_state_has_no_seat_to_role_binding` and the canary test are
-    two independent lines of defence rather than one.
+    so there is no separate "public projection" to keep role-free — the canary tests in
+    tests/test_info_isolation.py are what pin that claim down.
     """
     src = list(events)
     # A transcript with no events has no last seq to cut at, and an IndexError on the read

@@ -1,16 +1,17 @@
-"""In-memory game state, and the one projection that is allowed to reach a prompt.
+"""In-memory game state — the one place the seat→role table lives.
 
-`GameState` knows roles. `PublicState` does not. Region B of the prompt is rendered only
-from `PublicState`; anything carrying a role must go through `info.percept_for()`, which
-is where seat-authorized private data gets appended. Keeping the two types separate is
-what makes "the renderer cannot leak" a structural fact rather than a review checklist.
+`GameState` knows roles, and nothing in this module renders a prompt: Region B is assembled
+by `assemble._region_b()` from a `Percept`, and a `Percept` is built by `info.percept_for()`,
+which is where seat-authorized private data gets appended. Keeping `GameState` and `Percept`
+separate is what makes "the renderer cannot leak" a structural fact rather than a review
+checklist.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Literal
+from typing import Literal
 
 from .roles import Board, HouseRules
 
@@ -111,10 +112,6 @@ class GameState:
     def alive_seats(self) -> list[int]:
         return [s.seat for s in self.seats.values() if s.alive]
 
-    @property
-    def dead_seats(self) -> list[int]:
-        return [s.seat for s in self.seats.values() if not s.alive]
-
     def role_of(self, seat: int) -> str:
         """Private. Only game.py/phases.py/belief.py (for its own seat) may call this
         with a seat other than the caller's — enforced by test_info_isolation.py, which
@@ -134,46 +131,3 @@ class GameState:
         return frozenset(
             s for s in self.alive_seats if s != seat and self.team_of(s) == "wolf"
         )
-
-    # --- projection ------------------------------------------------------------
-    def public_state(self) -> PublicState:
-        return PublicState(
-            day=self.day,
-            phase=self.phase,
-            alive=tuple(self.alive_seats),
-            dead=tuple(self.dead_seats),
-            deaths=tuple(self.deaths),
-            winner=self.winner,
-            terminal=self.terminal,
-            speech_order=self.speech_order,
-            pk_seats=self.pk_seats,
-            seat_count=self.board.seat_count,
-        )
-
-
-@dataclass(frozen=True)
-class PublicState:
-    """Everything every seat is allowed to know by definition. Contains no role."""
-
-    day: int
-    phase: Phase
-    alive: tuple[int, ...]
-    dead: tuple[int, ...]
-    deaths: tuple[Death, ...]
-    winner: Winner | None
-    terminal: str
-    speech_order: tuple[int, ...]
-    pk_seats: tuple[int, ...]
-    seat_count: int
-
-    def as_dict(self) -> dict[str, Any]:
-        return {
-            "day": self.day,
-            "phase": self.phase.value,
-            "alive": list(self.alive),
-            "dead": list(self.dead),
-            "deaths": [[d.seat, d.night, d.cause] for d in self.deaths],
-            "winner": self.winner,
-            "speech_order": list(self.speech_order),
-            "pk_seats": list(self.pk_seats),
-        }
