@@ -23,7 +23,7 @@ import pytest
 
 from wolfengine import (assemble, belief, compress, events, info, legality, persona,
                         render_html, render_live, roles, rules, schema, state)
-from wolfengine.config import Config, RegionBudget
+from wolfengine.config import INERT_FIELDS, INERT_LEAVES, Config, RegionBudget
 from wolfengine.events import Event, EventLog, Kind, seats
 from declared_kinds import KINDS
 
@@ -1097,6 +1097,185 @@ def test_the_method_layer_names_every_zero_production_reader_and_each_carries_a_
             sloppy.append(f"{name}：{verdict}")
     assert not nowhere, f"这些方法生产链和测试都不读它，不能登记成『留』：{nowhere}"
     assert not sloppy, f"这些格的处置没写出落点（或落点那个文件不存在）：{sloppy}"
+
+
+def _field_defs_and_reads(
+    src_roots: tuple[str, ...] = ("src",),
+    read_roots: tuple[str, ...] = ("src", "scripts"),
+    test_roots: tuple[str, ...] = ("tests",),
+) -> tuple[dict[str, tuple[int, int, list[int]]], list[str]]:
+    """字段层的探测本体：(名册 `文件::类.字段` -> (生产读数, 测试读数, 落点行), 零读者字段)。
+    名册与夹具两条判据共用这一具，夹具不许另写一份尺（`#153`）。
+
+    与 `#156` 那把方法层的尺差三格，每一格都是这一层特有的：
+
+    * **落盘回读算读者**：`row["名字"]` 与 `meta.get("名字")`。dataclass 整份 `asdict()` 出去、
+      读侧再按键取回，是字段最常见的活法，方法层没有这一形。
+    * **写盘不算读者**：dict 字面量里的键、构造时的 `名字=v` 关键字、类体里那行注解的左端——
+      同 `#160` 那条"定义自己不是读者"，字段这一层还要多扣两种写。
+    * **src 自己点名惰性的那两张表算读者**：`config.INERT_FIELDS` 与 `INERT_LEAVES`（嵌套那半边
+      写成 `tokens.warn`，取末段）。从源码 import 而不是在这里抄第二份名单。
+    """
+    inert = {*(INERT_FIELDS), *(leaf.rsplit(".", 1)[-1] for leaf in INERT_LEAVES)}
+    readers: dict[str, int] = {}
+    test_readers: dict[str, int] = {}
+    defs: dict[str, list[int]] = {}
+
+    def bump(bucket: dict[str, int], key: str) -> None:
+        bucket[key] = bucket.get(key, 0) + 1
+
+    def count_reads(tree: ast.AST, bucket: dict[str, int]) -> None:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute):
+                if isinstance(node.ctx, ast.Load):
+                    bump(bucket, node.attr)
+            elif isinstance(node, ast.Call):
+                fn = node.func
+                if (isinstance(fn, ast.Name) and fn.id in DISPATCH and len(node.args) > 1
+                        and isinstance(node.args[1], ast.Constant)
+                        and isinstance(node.args[1].value, str)):
+                    bump(bucket, node.args[1].value)
+                elif (isinstance(fn, ast.Attribute) and fn.attr == "get" and node.args
+                      and isinstance(node.args[0], ast.Constant)
+                      and isinstance(node.args[0].value, str)):
+                    bump(bucket, node.args[0].value)
+            elif (isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant)
+                  and isinstance(node.slice.value, str)):
+                bump(bucket, node.slice.value)
+
+    def py_files(root: str):
+        for f in sorted(Path(root).rglob("*.py")):
+            if "__pycache__" not in f.parts:
+                yield f, ast.parse(f.read_text(encoding="utf-8"))
+
+    for root in read_roots:
+        for f, tree in py_files(root):
+            count_reads(tree, readers)
+    for root in test_roots:
+        for f, tree in py_files(root):
+            if root not in read_roots:
+                count_reads(tree, test_readers)
+    for root in src_roots:
+        for f, tree in py_files(root):
+            for cls in (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)):
+                for node in cls.body:
+                    if (isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+                            and not node.target.id.startswith("__")):
+                        defs.setdefault(f"{f.name}::{cls.name}.{node.target.id}", []).append(
+                            node.lineno)
+
+    roster = {k: (readers.get(k.rsplit(".", 1)[1], 0) + (1 if k.rsplit(".", 1)[1] in inert else 0),
+                  test_readers.get(k.rsplit(".", 1)[1], 0), v) for k, v in defs.items()}
+    return roster, sorted(k for k, v in roster.items() if v[0] == 0)
+
+
+# 字段层的零读者名册：每一格都要写处置和落点（`#172`）。处置词沿用 `#156` 那五个：
+# 删 / 搬 / 接 / 留 / 待判。
+FIELD_TRIAGE: dict[str, str] = {
+    "config.py::RegionBudget.a_hard":
+        "留：这六格由 src/wolfengine/metrics.py 的 `REGION_CAP_KEYS` 按**算出来的键**回读（那张表把 "
+        "'A' 映到 'a_hard'，`src/wolfengine/game.py` 里 `asdict(regions)` 整份落进 meta）——本尺只认"
+        "字面量下标，看不见这一形，所以它是**登记**下来的留，不是证出来的，见限界第二条",
+    "config.py::RegionBudget.b0": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'B0' 那一格，见 src/wolfengine/metrics.py",
+    "config.py::RegionBudget.b1": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'B1' 那一格，见 src/wolfengine/metrics.py",
+    "config.py::RegionBudget.c_persona":
+        "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C1' 那一格；`src/wolfengine/config.py` 的注释另写明它"
+        "改的是 audit 的超额判定、不动发出去的字节",
+    "config.py::RegionBudget.c_private": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C3' 那一格，见 src/wolfengine/metrics.py",
+    "config.py::RegionBudget.c_task": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C4' 那一格，见 src/wolfengine/metrics.py",
+    "roles.py::Board.night_order":
+        "待判：`src/wolfengine/phases.py` 里那一夜是**硬写的三次调用**（狼→女巫→预言家），没有一处读这格；"
+        "而同一文件开头的 docstring 说 'the night follows Board.night_order'——那是一句认领了不存在读者的"
+        "话，`#81` 那一形搬到字段层。要么把这格接成真的循环，要么连 docstring 那句话一起删",
+    "roles.py::RoleSpec.night_slot":
+        "待判：`src/wolfengine/roles.py` 给三个角色各写了一个序号，零读者——**同一个事实的第三份声明**"
+        "（前两份是上面那格与 phases 里硬写的那三次调用），见 src/wolfengine/phases.py",
+    "rules.py::VoteResult.top_seats":
+        "待判：`src/wolfengine/rules.py` 里由 `tied_seats` 写入，全仓库零读者，而并列这件事已经由 "
+        "`tied_seats` 那张表本身落盘——先确认这格不是第二份抄本，见 src/wolfengine/rules.py",
+    "rules.py::NightResolution.peace":
+        "待判：这一格已经有票了——#88 问的是『平安夜要不要在公开产物里留痕』，那是处置变更不是清理，"
+        "见 src/wolfengine/rules.py 与 docs/iterations.md 里 `#88` 那一节",
+    "state.py::GameState.hunter_seat":
+        "待判：`src/wolfengine/game.py` 发牌时算出并写进状态，之后没人读（猎人那一枪走的是别的路径，"
+        "见 src/wolfengine/phases.py）——接进产物还是删掉是决定，见 src/wolfengine/state.py",
+    "state.py::LegalSet.assigned_target":
+        "待判：`src/wolfengine/phases.py` 里 `replace(..., assigned_act=act, assigned_target=target)` "
+        "成对写，`#68` 只给 `assigned_act` 补了读者（服从率），target 那一半零读者，见 src/wolfengine/state.py",
+    "assemble.py::Prompt.legal_acts":
+        "待判：`src/wolfengine/assemble.py` 里 `Prompt` 构造时写入，而落盘那格走的是同文件 "
+        "`payload_for_log` 的白名单、不含它；`src/wolfengine/schema.py` 里同名的那一格是**函数参数**"
+        "不是这一具（`#156` 记过的同名替付账搬到字段层），见 src/wolfengine/assemble.py",
+    "assemble.py::Prompt.legal_targets":
+        "待判：同 `legal_acts`，成对写入、零读者、不在落盘白名单里，见 src/wolfengine/assemble.py",
+    "batch.py::BatchResult.rows":
+        "待判：落盘那一格 `\"rows\"` 写的是同函数里的**局部变量**（`src/wolfengine/batch.py` 里 "
+        "`\"n_logs\": len(rows), \"rows\": rows`），字段这一份是它的第二份抄本且没人回读，见 src/wolfengine/batch.py",
+    "info.py::Percept.at_seq":
+        "待判：`src/wolfengine/metrics.py` 与 `src/wolfengine/agent.py` 里那两处 `at_seq=` 都是 "
+        "`percept_for` 的**入参**（定义在 `src/wolfengine/info.py`），不是这格的读者——同名替付账，见 info.py",
+    "schema.py::ParseOutcome.raw_used":
+        "待判：`src/wolfengine/schema.py` 里两处写入（`raw_used=cand`）、零读者——它是『最后发出去的是"
+        "哪一个候选』的出处格，要不要进产物链由 `#114` 那张载荷普查说了算，见 src/wolfengine/schema.py",
+}
+FIELD_VERDICTS = ("删", "搬", "接", "留", "待判")
+
+
+def test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_disposition():
+    """`#172`：`#81`→`#166` 那一族数过函数、方法、类、导入、模块级常量，唯独没数过**类体里
+    带注解的字段**。本条自己数：298 格字段、17 格零生产读者（其中 6 格连测试都不点它名）——
+    落笔前那份不共用这把尺的复算报的是 24 格（08:14:58Z），差的 7 格就是这具尺多认的那两形：
+    `row["名字"]` 式的落盘回读与 src 自己那两张 INERT 表。
+
+    本条不要它们都"有读者"，只要**每一格都有一条登记过的处置**：名册与本条数的零读者两侧相等
+    （多一格＝新长出来没登记，少一格＝登记的那格已不在树上）、处置词必须是那五个之一、落点路径
+    必须存在。词表这一格是必要的：`#156` 的规矩里"生产链和测试都不读的不许标留"在那一层能立，
+    是因为方法层没有"按算出来的键回读"这一形；这一层有（见上面那六格 `RegionBudget`），所以
+    先把"必须表态"钉住，哪一格表态错了由下面那条夹具与限界第二条管。
+    """
+    roster, dead = _field_defs_and_reads()
+    assert len(roster) >= 250, f"字段只数到 {len(roster)} 格，多半是收集坏了"
+    assert sorted(dead) == sorted(FIELD_TRIAGE), (
+        f"零读者的字段与登记的名册不是一份：只在树上 {sorted(set(dead) - set(FIELD_TRIAGE))}，"
+        f"只在名册里 {sorted(set(FIELD_TRIAGE) - set(dead))}")
+    vague = [f"{k}：{FIELD_TRIAGE[k][:24]}" for k in dead
+             if not FIELD_TRIAGE[k].startswith(FIELD_VERDICTS)]
+    assert not vague, f"这些格的处置没以『删/搬/接/留/待判』开头：{vague}"
+    sloppy = [f"{k}：{FIELD_TRIAGE[k]}" for k in dead if not _cited_path_exists(FIELD_TRIAGE[k])]
+    assert not sloppy, f"这些格的处置没写出落点（或落点那个文件不存在）：{sloppy}"
+
+
+def test_the_field_probe_reads_a_disk_key_readback_but_not_a_dict_literal(tmp_path):
+    """夹具：回读那一格算读者，写盘那一格不算，src 点名惰性的那一格豁免——三向都要红得起来。
+
+    `via_attr` 被 `b.via_attr` 读、`via_key` 被 `row["via_key"]` 读、`via_get` 被
+    `b.__dict__.get("via_get")` 读、`never` 被**三参数** `getattr(b, "never", None)` 读（`#156`
+    那一课：只认两参数的 getattr 会把这格判成零读者），四格都不许进名册；`dict_key_only`
+    只作为 dict 字面量的键出现过（那是写盘不是回读），必须进来。`enable_sheriff` 谁都不读，
+    但它坐在 `config.INERT_FIELDS` 里、由 src 自己背书，不许被本尺判成缺陷——这一格是
+    "豁免不是漏判"的正控制。
+    """
+    pkg = tmp_path / "pkg"
+    scripts = tmp_path / "script_side"
+    for d in (pkg, scripts):
+        d.mkdir()
+    (pkg / "board.py").write_text(
+        "from dataclasses import dataclass\n\n\n@dataclass\nclass Board:\n"
+        "    via_attr: int\n    via_key: int\n    via_get: int\n"
+        "    dict_key_only: int\n    never: int\n    enable_sheriff: int\n\n\n"
+        "def show(b: Board) -> int:\n    return b.via_attr\n", encoding="utf-8")
+    (scripts / "run.py").write_text(
+        "from pkg import board\n\nb = board.Board(1, 2, 3, 4, 5, 6)\n"
+        'row = {"via_key": 0, "dict_key_only": 7}\n'
+        'print(board.show(b), row["via_key"], b.__dict__.get("via_get"), '
+        'getattr(b, "never", None))\n', encoding="utf-8")
+
+    roster, dead = _field_defs_and_reads((str(pkg),), (str(pkg), str(scripts)), ())
+    assert sorted(roster) == [
+        "board.py::Board.dict_key_only", "board.py::Board.enable_sheriff",
+        "board.py::Board.never", "board.py::Board.via_attr", "board.py::Board.via_get",
+        "board.py::Board.via_key"], sorted(roster)
+    assert dead == ["board.py::Board.dict_key_only"], dead
 
 
 def _own_module_names() -> set[str]:
