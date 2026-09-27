@@ -222,13 +222,8 @@ wolf compare data/temp09-vs-06 --axis temperature                   # → compar
   > （最狠的一条少发 14 条指控）`——`B.regions.c_total=250` 那一臂压在那一桌 335 的地板以下，所以"最狠的一条"就是
   > 砍到只剩查验记录的那一条。整批没有这一格时（`#67` 之前的日志）改说"主张卡被动过没有 = 没有读数，
   > 不是 0"，一臂有一臂没有时 `—` 只盖在缺的那一臂上（`test_only_one_arm_having_the_knife_count_is_named_rather_than_summed`）。
-  > 本切片 14 具变异体**全部 CAUGHT**（2026-09-21 串行跑，具名红用例逐具记在
-  > 跑批输出里）：5 具改减法语（两份上限照样减、缺尺子的局数写成 0、臂内取 `min`、越界局数数的
-  > 是"有读数"、没证人等于零分歧），4 具改渲染与接线（缺尺子被说成两份上限、少印 C 那一列、
-  > `None` 格直接 `str()`、两臂都拿 A 臂的日志减），5 具改那句跨臂汇总的范围（两臂都没证人时说成
-  > 一致、`silent` 恒空、分歧总数写死 0、只有一局对不上时不报、把"零分歧"当成"没读数"）。
-  > 加上搬家后原地重跑的 `metrics.region_budget_check` 那 9 具（全部照旧
-  > CAUGHT），本切片一次 23 具。
+  > 这一片的逐具账——减法语五处、渲染与接线四处、跨臂汇总那五处，加上搬家后原地重跑的
+  > `metrics.region_budget_check` 那一族——在 `docs/iterations.md`〈另外三本手册页里的逐片电池账搬进这一份〉一节。
   > **三条用例是补在分支之后的**（`no_witness_at_all`、`one_disagreement_prints`、以及
   > `nobody_cross_checked` 的 null 那一半）：写它们的时候分支已经在树上了，没有 RED 可看。
   > 强度由 A10/A12/A13/A14/A5 五具顶回来——各自点名的红用例就是上面那行输出，不是"跑过了"。

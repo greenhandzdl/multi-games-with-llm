@@ -284,7 +284,7 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 都在 `docs/iterations.md`〈手册里那段"哪一片补了哪条"的账搬进了这一份〉；指针形状那条规矩在
 〈这个仓库现在能做什么、不能做什么〉里已经写着，这里不再写第二遍。
 
-重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（60 条、跑起来 60 个用例，
+重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（64 条、跑起来 64 个用例，
 两秒内，不发请求）。D1 不是凭空设计的——第一次写这个闸门时确实只走了 `ast.FunctionDef`，于是把
 `test_a_marker_is_public_but_never_becomes_chronicle`（`test_live_path.py` 里的协程）误报成了
 文档过期。**误报也是这个闸门的输出**，所以它的红用例名要留在账上（那张表 D1 那一格记着它误报了谁）。

@@ -1344,6 +1344,20 @@ def test_readme_carries_no_prose_battery_verdict():
     assert not bad, f"README 里还坐着逐片电池的判决读数（行号, 命中的那一句）：{bad}"
 
 
+def test_the_other_manual_pages_carry_no_prose_battery_verdict():
+    """同一族判据扫其余手册页：`#143` 搬走的是 README，那三本页里的逐片电池账一处没动过。
+
+    `#167` 那一条只管 README，是因为 `docs/metrics.md`、`docs/views.md`、
+    `docs/comparison.md` 里这批句子的唯一出处（当年那份跑批输出）已经不在仓库里——先逐字登记进
+    归档（`#168` 第一步那张 13 行的表）才有资格摘，否则"精简"就是销毁记录。
+    """
+    pages = [f for f in _manual_pages() if f.name != "README.md"]
+    assert [f.name for f in pages] == ["calibration.md", "comparison.md", "metrics.md", "views.md"], \
+        "语料面不叫这四本就不是「手册为零」：扫空了这条闸门照样绿"
+    sites = [(f.name, n, s) for f in pages for n, s in _prose_verdicts(f.read_text(encoding="utf-8"))]
+    assert not sites, f"这些手册页里还坐着逐片电池的判决读数（带时间戳的历史值）：{sites}"
+
+
 def test_the_verdict_judge_reads_both_shapes_and_spares_the_rule_sentence():
     """两形各钉一次，另一格钉"这句在教判决怎么写，不是在报某一轮的判决"。"""
     assert _prose_verdicts("变异 5 具于 2026-09-21 跑过一轮，5/5 CAUGHT。") == [
@@ -1352,6 +1366,79 @@ def test_the_verdict_judge_reads_both_shapes_and_spares_the_rule_sentence():
         (1, "一具变异，跑出来 golden 那栏 `SURVIVED")]
     assert _prose_verdicts("判词写成 `CAUGHT [hang after Ns]` 并记下最后一行开始跑的测试文件名。") == [], \
         "这句在教判决怎么写（没有具数、没有分数），删掉它手册就少一条习惯"
+
+
+VERDICT_ROSTER = "另外三本手册页里的散文判决"
+VERDICT_LANDING = "另外三本手册页里的逐片电池账搬进这一份"
+
+
+def _archive_section(heading: str) -> str:
+    """归档里标题以 `heading` 开头的那一节的正文。
+
+    只认标题不认正文，是为了让"落点没有读者"这一形直接抛错而不是静默扫空——
+    `#143` 那条"手册里不许坐着账表"曾经因为扫法错了而绿了一整片。
+    """
+    for _, title, _, body in _ledger_sections():
+        if title.startswith(heading) or heading in title:
+            return body
+    raise AssertionError(f"归档里没有〈{heading}〉这一节，落点核验直接空了")
+
+
+def _roster_sentences(body: str) -> list[str]:
+    """登记表「摘出来的句子」那一列——每格是手册页某一行逐字抄下来的前缀（登记时截到 150 字）。"""
+    lines = body.splitlines()
+    out: list[str] = []
+    for i, ln in enumerate(lines):
+        if not ln.startswith("| 编号 |"):
+            continue
+        if not (i + 1 < len(lines) and lines[i + 1].lstrip().startswith("| ---")):
+            continue
+        for row in lines[i + 2:]:
+            if not row.startswith("| "):
+                break
+            out.append(row.split("|")[3].strip())
+    return out
+
+
+def test_every_registered_verdict_sentence_lands_verbatim_in_the_archive():
+    """登记表里逐字摘下的每一句，都必须原样住在落点那一节里——搬走不等于改写。
+
+    为什么拿登记表查而不是拿手册页查：手册页这一族已经被钉成零，从手册页里再也取不到这些句子；
+    而登记表本身就坐在归档里，拿整篇归档自查等于自己背书（`#153` 那条规矩），所以两侧都按标题
+    取了各自的正文。
+    """
+    cells = _roster_sentences(_archive_section(VERDICT_ROSTER))
+    assert cells, "登记表那一列扫出来是空的，扫法坏了"
+    landed = _archive_section(VERDICT_LANDING)
+    missing = [c[:40] for c in cells if c not in landed]
+    assert not missing, f"这些登记过的句子在落点那一节里找不到（被改写或被搬丢了）：{missing}"
+
+
+def test_the_landing_reader_takes_each_side_by_heading():
+    """两条核验各自的"扫法"都得有读者，否则它们会在扫空时绿着。
+
+    登记表那一列只认"表头 + 分隔行"这个形状（同 `#143` 给账表立的那条件）；落点那一节里不许
+    坐着登记表——落点核验要是退化成"在整篇归档里找"，登记表就会自己给自己背书。
+    """
+    assert _roster_sentences(
+        "| 编号 | 行 | 摘出来的句子 | 节 |\n| --- | --- | --- | --- |\n| A | x | 甲 | 丙 |\n"
+        "| B | y | 乙 | 丙 |\n") == ["甲", "乙"]
+    assert _roster_sentences("| 编号 | 行 | 摘出来的句子 | 节 |\n散文一行\n| A | x | 甲 | 丙 |") == [], \
+        "没有分隔行的那张表不算登记表"
+    assert _roster_sentences(_archive_section(VERDICT_LANDING)) == [], \
+        "落点那一节里出现了具名表：核验变成自己查自己"
+
+
+def test_the_landed_verdict_blocks_keep_their_readings():
+    """落点那一节自己得是一条有读数的账：块还在但判词被改写成散文、尾段被剪掉，都要在这里红。
+
+    上面那条按"逐字前缀"核，剪掉某一具块的后半段它看不见——那半段里另有读数。地板取 13，
+    不是量的数而是**登记表的行数**：第一步每处登记一行、本节每行留一条读数，现测两侧都是 13
+    （06:30:31Z 量），少一条就是有一处判决在这一步里变了形。代价写在这里：判据按行计数，
+    把相邻两行并成一行会误报，那时要改的是计数口径，不是把地板往下挪。
+    """
+    landed = _prose_verdicts(_archive_section(VERDICT_LANDING))
+    assert len(landed) >= 13, f"落点那一节只剩 {len(landed)} 条判决读数，登记表却有 13 处"
 
 
 # --------------------------------------------------------------- 「数到 N」的跑次账

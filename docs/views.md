@@ -283,16 +283,17 @@ rich 有两条坑，都各有一条测试钉着：
 
 W 那三行是 2026-09-21 把守卫从 4 个名字扩到 8 个、并把"确实在用那一份"从子串改成 AST 导入名
 之后跑的（电池脚本一次性、不入库；只跑 `tests/test_wiring.py -k share_one_definition` 这一条参数化
-用例，三具全部 CAUGHT 且具名如上；跑完按 `cmp` 校验 `render_live.py` 与 `metrics.py` 字节还原）。
+用例；跑完按 `cmp` 校验 `render_live.py` 与 `metrics.py` 字节还原，那一轮的具名账在
+`docs/iterations.md`〈另外三本手册页里的逐片电池账搬进这一份〉一节）。
 
-T 那四行是同一轮给 `〔发言超长〕` 补断言时跑的（8 具全部 CAUGHT，具名如上；
-跑完 `cmp` 校验 `legality.py` 与 `render_html.py` 字节还原）。
+T 那四行是同一轮给 `〔发言超长〕` 补断言时跑的（跑完 `cmp` 校验 `legality.py` 与 `render_html.py`
+字节还原；那一轮八具的具名账在 `docs/iterations.md`〈另外三本手册页里的逐片电池账搬进这一份〉一节）。
 
-harness 自己也有一条**必须算红**的教训：那一轮的电池第一跑报了 5 具 `SURVIVED`，看着像
-断言没牙，实际是我把单条测试集写成了平铺的 list（`["tests/x.py", "-k", "…"]` 被当成三个测试集逐个
-跑），pytest 每次都在 `pytest -k` 这种残缺命令上退出码 4、一行用例都没跑。**退出码非零被当成了红、
-没跑起来被当成了绿**，两个方向都错。现在 harness 先识别 `no tests ran` / 缺文件这类输出并判
-`INVALID-RUN — 不采信`，改完重跑才是上面那 8/8。
+harness 自己也有一条**必须算红**的教训：电池第一跑看着像断言没牙，实际是把单条测试集写成了平铺的
+list（`["tests/x.py", "-k", "…"]` 被当成三个测试集逐个跑），pytest 每次都在 `pytest -k` 这种残缺
+命令上退出码 4、一行用例都没跑。**退出码非零被当成了红、没跑起来被当成了绿**，两个方向都错。
+现在 harness 先识别 `no tests ran` / 缺文件这类输出并判 `INVALID-RUN — 不采信`，改完重跑才算数；
+那一轮五具的账在 `docs/iterations.md`〈另外三本手册页里的逐片电池账搬进这一份〉一节。
 
 只报"绿"不算证明。
 

@@ -54,10 +54,8 @@
 与**另一条独立路径**（对 score 统计量做二分反解）比到 1e-9；
 `test_the_interval_stays_inside_the_unit_interval_where_the_normal_approximation_leaves` 同时钉住
 "正态近似确实越界"这个前提，前提不成立时这条自己会红；
-`test_an_empty_denominator_is_the_whole_interval_rather_than_a_division_error` 钉 `n=0`。9 具变异
-`test_an_empty_denominator_is_the_whole_interval_rather_than_a_division_error` 钉 `n=0`。9 具变异
-2026-09-21 跑过一轮，9/9 CAUGHT；W6 与 W8 只有新用例抓得到、旧锚点那栏 SURVIVED，
-`src/wolfengine/metrics.py` 按字节还原。
+`test_an_empty_denominator_is_the_whole_interval_rather_than_a_division_error` 钉 `n=0`。
+这一片九具变异的账在 `docs/iterations.md`〈手册里那四张具名变异账表搬进了这一份〉一节的 W 表，第三栏记的是「旧的锚点抓不抓得住」。
 
 `descriptive` 这个旗子读的就是这条区间的半宽：`wilson_ci(20, 40)` 实测 ±14.8pp，48 局时 ±13.6pp。
 
@@ -179,16 +177,8 @@ append，冲洗只随"又多折了一天"发生，上界就是 `max_days`（plan
 > `2 / 37 / 2 / 41 / 336`：折过 2 次之后仍然有 41 个 prompt 坐在地板上，"折了几次"和"够不够放"果然
 > 不是同一个数。
 > 逐回合的改写次数要读 prompt 字节，跑 `pytest tests/test_prefix_stability.py -k slide`。
-> 本切片 11 具变异体全部被抓回：8 具改 `compress.plan_fold`（四个出口各删一次、天边界判定反了、
-> `shrink` 空转、回到固定条数窗口、摘要不随 shrink 更新），3 具改 `agent._mark_fold` 的键与指纹
-> （幂等键加回 window、指纹算上条数、状态没变也写标记）。
->
-> B2 分量的落盘与上面那两格另算 8 具（2026-09-21 重跑：**8 具全部 CAUGHT**，具名红用例逐具记在
-> `tests/test_prefix_stability.py::test_the_day_floor_breach_is_written_into_every_request` 和
-> `tests/test_cli.py::test_audit_reads_the_fold_rounds_out_of_the_requests_it_writes_them_into`
-> 这两个名字下面）：5 具改 `assemble`（分量算了不落盘、超额的尺子拿成 `rb.b1`、不 clip 把负差额印成
-> 超额、`B1` 那格算成整个 B 正文、`B2` 那格算成整个 B），3 具改 `cli.cmd_audit`（字段缺失读成 0、
-> 数成 prompt 总数而不是踩地板的条数、最坏超额印成恒定 0）。
+> 上面那些命令的电池账——`compress.plan_fold` 的四个出口与天边界、`agent._mark_fold` 的键与指纹、`assemble` 的分量与尺子、`cli.cmd_audit` 的三格——
+> 逐具在 `docs/iterations.md`〈另外三本手册页里的逐片电池账搬进这一份〉一节。
 
 **预算的尺子也落盘（`meta.regions` → `audit.region_budget_check`）**：`region_tokens` 是九段没有尺子的
 长度，光有长度就只能问"多大"，问不了"超没超"。`game.open_log` 把这一臂自己的 `RegionBudget`（11 个数）
@@ -228,16 +218,8 @@ append，冲洗只随"又多折了一天"发生，上界就是 `max_days`（plan
 > `card_prompts_thinned` 和 `compactions.b2_worst_over_tokens` 照常是数字——那两格读的
 > 是每 prompt 的字段，用不着尺子。`card_*` 是 `#67` 新加的，落进来时就带着这条反向断言（缺尺子的臂必须
 > 照旧给出削卡条数，见 `test_a_log_without_the_caps_in_meta_prints_null_not_zero`）。
-> 本切片 9 具变异体**全部 CAUGHT**（2026-09-21 串行重跑，具名红用例逐具记在跑批输出里）：8 具改
-> `metrics.region_budget_check`（这一格最初写在 `cli.py` 里，同日搬进 `metrics.py` 让两个读取点共用，
-> 搬家后 9 具原地重跑一次照旧全 CAUGHT：老日志读出 0 而不是 `null`、`all` 换成 `any`、比较写成单向的
-> `>=`、B2 的账拿
-> C 的尺去核、超额不夹地板、`caps` 把整份 `RegionBudget` 都印出来、区域到上限的映射错一格、峰值取 `min`），
-> 1 具改 `game.open_log`（`regions` 落成空字典）。
-> **`all`→`any` 那一具第一版是 SURVIVED 的**：伪造用例把**每一条** prompt 的 `b2_over_cap` 都改成 9001，
-> 于是"全都对得上才算一致"和"有一条对得上就算一致"打印出同一个 `false`，两句完全不同的话分辨不出来；
-> 改成只伪造第一条（坏一条、其余都好）才抓回。上一节 A7 那个教训的另一种形状：交叉校验的价值全在
-> "多数好、少数坏"这一档，只测"全都坏"等于把它降级成一条布尔或。
+> 交叉校验值钱的地方全在"多数有、少数没有"那一档，只测两端等于把它降级成一条布尔或；
+> 这一格第一次没被抓的来路、以及 `metrics.region_budget_check` 那八具与 `game.open_log` 那一具的账，记在 `docs/iterations.md`〈另外三本手册页里的逐片电池账搬进这一份〉一节。
 
 **C 区超预算时砍哪一半（`assemble._region_c`）**：C 里唯一可砍的是 belief 卡的逐条主张；座位行、
 人格卡、本轮任务都砍不得（人格卡塌掉就是 §7 的 P1/P3 防线失效，任务块砍掉就是 act 闸门失效），
@@ -269,40 +251,17 @@ append，冲洗只随"又多折了一天"发生，上界就是 `max_days`（plan
 > 459 tok，每砍一条省 29，keep=13/12/11 分别是 430/402/373（11:22:16Z、11:22:57Z），所以最少的一刀
 > 恰好落在 11 条。把 `c_belief` 放宽到 9999、其余不动，则 14 条主张一条不少：两侧都有用例，才分得开
 > "读了这把尺"和"任何让 C2 变小的改动都算通过"。
-> 本切片 11 具变异体**全部 CAUGHT**（7 具改 `assemble._region_c`：闸门永不合、搜索方向反了、候选正文
-> 从没换过、装没装下判反、地板那一轮什么都不砍、地板定在 1 条、上限拿错字段；4 具改
-> `belief.render_card`：杠杆不认、切片方向反、砍空还留表头、瘦身时连查验记录一起交出去），具名红用例
-> 逐具记在跑批输出里。**其中"上限拿错字段"第一版是 SURVIVED 的**：两条超预算的用例只要求"砍到装得下"，
-> 把尺子换成 `c_persona`（250）恰好也砍得动，分辨不出来；补了反方向的
-> `test_c_under_cap_hands_over_the_whole_card`（没超预算就不许动刀）才被抓回。一条守卫要两侧都有用例，
-> 只测它触发的那一侧等于没测。
->
-> `#63`/`#67` 两片另算 11 具（`Z1`–`Z11`，一轮电池 12:01:58Z→12:04:24Z 串行跑完；
-> 每具跑完 `cmp` 逐字节还原，11/11 CAUGHT，且 11/11 先过 `import` 一关——没有一具是靠语法错误"被抓"的）。
-> 分散在装配器 / 度量 /
-> 批次三台机器上：`_region_c` 的触发条件不看 `c_belief`、缩卡循环把尺子拿成 `c_total`（最少那一刀的
-> 算术失去读者）、`_accusation_lines` 恒 0、地板那一支不记刀数、`payload_for_log` 少写一行、
-> `region_budget_check` 的无 caps 早退不带 `card_*`、削卡条数把写 0 的 prompt 也算成削过、
-> `_region_md` 的 `all`→`any`。另三具是臂级聚合里同一句"这个臂没有一局量过才算没量过"的
-> `all`→`any`（`witness_disagreements` / `card_prompts_thinned` / `card_worst_claims_dropped` 各一具）。
-> `Z4`（白名单少写一行）一次红 8 条：装配器之外每一个读这一格的出口——audit 的 `compactions`、臂级表
-> 那两格、三处"没有读数 vs 0"的形状——各自发现它没了，而不是只有白名单那条用例红。一格多个读者，
-> 这一具的红集就是那张读者名单。
-> **这后三具第一版是 SURVIVED 的**：`tests/test_batch_paired.py` + `tests/test_cli.py` 122 条全绿，
-> 因为已有的臂级用例只有"全有"和"全无"两档，半缺（一臂里一局丢了证人、另一局还在）那一档没有读者——
-> 补了 `test_half_an_arm_without_the_witness_keeps_the_reading_that_survived` 之后三具各自红在那一条上。
-> 是这一族教训的第三个形状：`all`→`any` 上一节（逐 prompt 的证人）和本节（臂级聚合）第一次都 SURVIVED，
+> 一条守卫要两侧都有用例，只测它触发的那一侧等于没测；一格有多个读者时，那一具的红集就是那张读者名单。
+> 上面那两批的逐具账（`assemble._region_c` 与 `belief.render_card`、`Z1`–`Z11`，连同"后三具第一版没被抓"那一段）在 `docs/iterations.md`〈另外三本手册页里的逐片电池账搬进这一份〉一节；
+> 那一段的判据同一句是：
 > 成因不同、判据同一句——交叉校验值钱的地方全在"多数有、少数没有"那一档，只测两端等于把它降级成布尔或。
 
 标记是 `visibility="all"` 却**不是编年史**，`compress.chronicle()` 把它挡在 B 之外——一段摘要不能去
 摘要自己，而且它带的新 seq 会插在逐条那段前面，把已缓存的前缀改写掉。两侧各有一条用例钉着：整局侧
 `test_a_marker_is_public_but_never_becomes_chronicle`，纯函数门口侧
 `test_a_marker_is_not_chronicle_material_even_handed_to_the_primitives`。标记发射与编年史门口守卫
-那一片另算 12 具（和上面那 11 具不重叠：上面改 `plan_fold`，下面改 `_mark_fold`/`chronicle` 以及
-三个纯函数的门口）：发射点不调用、摘要改成转述、`window` 写死 0、键去掉、`folded_days` 不落 payload、
-标记写成私有、`chronicle` 两道过滤各删一次、`chrono_bytes`/`plan_fold`/`fold_body` 门口不归一化
-（各 1–3 具）。2026-09-21 重跑：**11 具 CAUGHT（具名红用例逐具记在跑批输出里），1 具按预期 SURVIVED**
-——就是上面那句"键放松成只认 `folded_days`"，它今天测不出差别，因为两者一一对应。
+那一片的具名账在 `docs/iterations.md`〈另外三本手册页里的逐片电池账搬进这一份〉一节；已知等价变异：把键放松成只认
+`folded_days` 今天测不出差别，因为两者一一对应，所以不列入。
 `fold_body` 那道门口也是这一轮才补上的：先前没有断言守着它，而它的 COMPACTION 半边是等价变异
 （`day_fold_lines` 本来就只数 SPEECH/VOTE/DEATH），所以那条断言打在建了功的可见性半边——一句夜里
 私聊混进第 1 天，摘要就从"发言3人"变成"发言4人"。
