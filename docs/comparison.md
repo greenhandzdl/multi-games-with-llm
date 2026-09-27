@@ -68,13 +68,10 @@ wolf compare data/temp09-vs-06 --axis temperature                   # → compar
 `test_the_refusal_for_an_empty_cell_names_the_empty_cell_not_the_paired_assumption` 双向钉着（记账那句
 里不许出现"配对前提"，身份那句里不许出现"没有代码"）。嵌套名单的"读"还多认一种形状：`a_hard` 在
 `src/` 里唯一的读者是
-`REGION_CAP_KEYS = {"A": "a_hard", ...}` 这个字符串键，只按属性访问找就会把有人读的格子判成记账格
-（Q3 实测红在双向对账那条上，报的是 `regions.a_hard`、`regions.b1` 一起被拖进零读取名单）。5 具变异
-（09:29:15Z→09:29:55Z，set0 `tests/test_batch_paired.py`、set1 `tests/test_cli.py` +
-`tests/test_report_stats.py`）9/10 合预期。合的那四具各指到一条具名红用例上；不合的是 Q2（把顶层名单
-并进嵌套名单），两套都 SURVIVED，而我按 CAUGHT 预期它——因为 `inert_fields` 里的名字永远不是点号
-路径，双向对账那条又只读 `inert_leaves`，这个并集在这份语料里没有读者。等价不是性质，是"此刻有没有
-断言在读"的读数；预期指不到具体某条 assert 上，就先量。
+`REGION_CAP_KEYS = {"A": "a_hard", ...}` 这个字符串键，只按属性访问找就会把有人读的格子判成记账格。
+这一轮的具名账、以及那具不合预期的为什么在这份语料里没有读者，记在归档
+〈跨硬换行的判决读数搬进这一份〉一节。等价不是性质，是"此刻有没有断言在读"的读数；预期指不到具体
+某条 assert 上，就先量。
 
 退出码是给脚本看的：`0` 出结论、`1` 拒绝出结论（或探针跑不动导致整批中止）、`2` 命令本身写错了。
 
@@ -243,10 +240,8 @@ wolf compare data/temp09-vs-06 --axis temperature                   # → compar
   根本没有差；两种都写成 `—`，但都不能写成 `×0`——`×0` 读起来是"配对一点没换来东西"，那是结论。
   一局也要能出报告：端点半夜挂掉时，一份写着"不足"的报告比一份 KeyError 有用。
   复现：`PYTHONPATH=src .venv/bin/pytest tests/test_batch_paired.py -k "pairing_gain or identical_arms"`
-  ——比值身份、小于 1 时那句解释、以及 `—` 不含数字，三个方向各一条。这切片 5 具变异体
-  （全部 CAUGHT，具名红用例逐具记在跑批输出里）：拿 naive 宽度冒充非配对
-  宽度、比值写反、缺读数写成 `0.0`、表里那格印成 `deff`、报告里那句解释被删回"就是配对设计
-  换来的东西"。
+  ——比值身份、小于 1 时那句解释、以及 `—` 不含数字，三个方向各一条。这一片摘走的变异账连同它
+  逐具的红用例，记在归档〈跨硬换行的判决读数搬进这一份〉一节。
 
 ## 现在还缺什么（要端点）
 

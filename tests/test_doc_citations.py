@@ -1325,8 +1325,10 @@ def test_a_line_naming_mutations_without_a_separator_is_not_a_tally():
 
 
 VERDICT_WORDS = "(?:CAUGHT|SURVIVED)"
+# 分数那一形后面只许跟空白，所以反引号必须由这一格自己认下来；具数那两形的间隙是自由字符类，
+# 反引号本来就在类里，再挂一个可选 `` `? `` 是永远走不到的分支（07:04:44Z 四种写法各测一遍）。
 VERDICT_FRACTION = re.compile(rf"[0-9]{{1,3}}\s*/\s*[0-9]{{1,3}}\s*`?{VERDICT_WORDS}")
-VERDICT_COUNT = re.compile(rf"[0-9一二三四五六七八九十]{{1,3}}\s?具[^\n]*?`?{VERDICT_WORDS}")
+VERDICT_COUNT = re.compile(rf"[0-9一二三四五六七八九十]{{1,3}}\s?具[^\n]*?{VERDICT_WORDS}")
 
 
 def _prose_verdicts(text: str) -> list[tuple[int, str]]:
@@ -1340,7 +1342,7 @@ def _prose_verdicts(text: str) -> list[tuple[int, str]]:
 
 
 def test_readme_carries_no_prose_battery_verdict():
-    bad = _prose_verdicts((ROOT / "README.md").read_text(encoding="utf-8"))
+    bad = _verdict_readings((ROOT / "README.md").read_text(encoding="utf-8"))
     assert not bad, f"README 里还坐着逐片电池的判决读数（行号, 命中的那一句）：{bad}"
 
 
@@ -1354,22 +1356,56 @@ def test_the_other_manual_pages_carry_no_prose_battery_verdict():
     pages = [f for f in _manual_pages() if f.name != "README.md"]
     assert [f.name for f in pages] == ["calibration.md", "comparison.md", "metrics.md", "views.md"], \
         "语料面不叫这四本就不是「手册为零」：扫空了这条闸门照样绿"
-    sites = [(f.name, n, s) for f in pages for n, s in _prose_verdicts(f.read_text(encoding="utf-8"))]
+    sites = [(f.name, n, s) for f in pages for n, s in _verdict_readings(f.read_text(encoding="utf-8"))]
     assert not sites, f"这些手册页里还坐着逐片电池的判决读数（带时间戳的历史值）：{sites}"
 
 
 def test_the_verdict_judge_reads_both_shapes_and_spares_the_rule_sentence():
-    """两形各钉一次，另一格钉"这句在教判决怎么写，不是在报某一轮的判决"。"""
+    """两形各钉一次，另两格钉"这句在教判决怎么写，不是在报某一轮的判决"和那格反引号归谁认。"""
     assert _prose_verdicts("变异 5 具于 2026-09-21 跑过一轮，5/5 CAUGHT。") == [
         (1, "5 具于 2026-09-21 跑过一轮，5/5 CAUGHT")]
     assert _prose_verdicts("W6 就是这么一具变异，跑出来 golden 那栏 `SURVIVED`。") == [
         (1, "一具变异，跑出来 golden 那栏 `SURVIVED")]
+    assert _prose_verdicts("9/10 `CAUGHT` 是本切片的成绩。") == [(1, "9/10 `CAUGHT")], \
+        "分数后面带反引号这一格只有 `VERDICT_FRACTION` 认得：它前面是空白类，反引号得由它自己吃下"
     assert _prose_verdicts("判词写成 `CAUGHT [hang after Ns]` 并记下最后一行开始跑的测试文件名。") == [], \
         "这句在教判决怎么写（没有具数、没有分数），删掉它手册就少一条习惯"
 
 
 VERDICT_ROSTER = "另外三本手册页里的散文判决"
 VERDICT_LANDING = "另外三本手册页里的逐片电池账搬进这一份"
+WRAP_LANDING = "跨硬换行的判决读数搬进这一份"
+WRAP_GAP = r"[^。\n|]{0,40}"
+# 「具数」与判词被一次硬换行劈开：`#167` 把这条不对称记在限界里，`#169` 来收。空行、句号、
+# 表格竖线都不许跨——跨过它们的两截不是同一句主张（同 `#150` 给落点账定的界）。
+VERDICT_WRAPPED = re.compile(rf"[0-9一二三四五六七八九十]{{1,3}}\s?具{WRAP_GAP}\n{WRAP_GAP}{VERDICT_WORDS}")
+
+
+def _wrapped_verdicts(text: str) -> list[tuple[int, str]]:
+    """整行判据读不到的那一形：具数在上一行、判词在下一行。与 `_prose_verdicts` 两形不相交。"""
+    return [(text[:m.start()].count("\n") + 1, m.group(0).replace("\n", "⏎"))
+            for m in VERDICT_WRAPPED.finditer(text)]
+
+
+def _verdict_readings(text: str) -> list[tuple[int, str]]:
+    """语料面读的并集：同句内的读数与跨一次硬换行的读数。两形各自判，合并只在这一个地方。"""
+    return sorted(_prose_verdicts(text) + _wrapped_verdicts(text))
+
+
+def test_a_verdict_reading_split_by_one_hard_wrap_is_still_a_reading():
+    """`#167` 的限界那一格在这里合上：手册页里现就有两处这种形状，整行判据一处都读不到。"""
+    assert _wrapped_verdicts("这切片 5 具变异体\n  （全部 CAUGHT，具名账在下面）") == [
+        (1, "5 具变异体⏎  （全部 CAUGHT")]
+    assert _wrapped_verdicts("这切片 5 具变异体。\n全部 CAUGHT") == [], "跨过句号就是两句主张"
+    assert _wrapped_verdicts("这切片 5 具变异体\n\n全部 CAUGHT") == [], "隔着空行的两截不是同一句"
+    assert _verdict_readings("9 具变异体全部 CAUGHT") == _prose_verdicts("9 具变异体全部 CAUGHT"), \
+        "同句内的读数只能被整行那一形认一次"
+    assert _wrapped_verdicts("| 5 具变异 | 说明 |\n| W1 | 刀 | CAUGHT |") == [], \
+        "表格两行之间不算一句主张：竖线把上下两格隔成两条记录"
+    cap = int(re.search(r"\{0,(\d+)\}", WRAP_GAP).group(1))
+    assert _wrapped_verdicts(f"5 具变异{'填' * (cap - 4)}\n全部 CAUGHT") != [], "上限之内要认"
+    assert _wrapped_verdicts(f"5 具变异{'填' * cap}\n全部 CAUGHT") == [], \
+        "越过上限就当成两句不相干的话——这条用例钉的是『上限在起作用』，不是钉那个数（数从 `WRAP_GAP` 现取）"
 
 
 def _archive_section(heading: str) -> str:
@@ -1439,6 +1475,21 @@ def test_the_landed_verdict_blocks_keep_their_readings():
     """
     landed = _prose_verdicts(_archive_section(VERDICT_LANDING))
     assert len(landed) >= 13, f"落点那一节只剩 {len(landed)} 条判决读数，登记表却有 13 处"
+
+
+WRAP_SPANS = ("（Q3 实测红在双向对账那条上", "这切片 5 具变异体")
+
+
+def test_the_two_wrapped_readings_landed_with_their_verdicts():
+    """`#169` 搬的两处都是跨行形状：整行那一形在归档里也读不到它们，所以按并集量。
+
+    两条腿各管一件事：句子本身在不在（前缀逐字找）与判决读数还在不在（并集计数）。地板取 2，
+    就是这一节搬来的处数。
+    """
+    body = _archive_section(WRAP_LANDING)
+    assert [s for s in WRAP_SPANS if s not in body] == [], "搬来的句子不在了"
+    readings = _verdict_readings(body)
+    assert len(readings) >= 2, f"这一节里只剩 {len(readings)} 条判决读数：{readings}"
 
 
 # --------------------------------------------------------------- 「数到 N」的跑次账
