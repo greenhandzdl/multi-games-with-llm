@@ -1275,18 +1275,42 @@ def test_the_artifact_scanner_scans_every_manual_page():
 
 # --------------------------------------------------- 逐片变异账表不许留在手册里
 
+def _table_body(lines: list[str], header_idx: int) -> str:
+    """一张表的表体：分隔行之后、第一行不以竖线开头之前的那些行。"""
+    body = []
+    for row in lines[header_idx + 2:]:
+        if not row.startswith("|"):
+            break
+        body.append(row)
+    return "\n".join(body)
+
+
+TABLE_SEP = re.compile(r"^\|?\s*:?-{3,}")
+# 分隔行有两种写法要认：`| --- | --- |` 与 `|---|---|`。前者是 `#143` 立判据时唯一见过的形状，
+# 后者在 `docs/views.md` 里——竖线后面那个空格不是形状的一部分。
+VERDICT_WORDS = "(?:CAUGHT|SURVIVED)"
+# 判词这两个字面量只住这一处：下面的表体判据与散文判据（`_prose_verdicts` 一族）共用它。
+ANY_VERDICT = re.compile(VERDICT_WORDS)
+# 表体里只要出现判词就是这一轮的读数，不带具数也算：`| 退出删掉 | harness 判 `CAUGHT` |`
+# 那一格既没有「5 具」也没有「5/5」，`_verdict_readings` 两个形状都读不到它。
+
+
 def _tally_tables(text: str) -> list[int]:
-    """具名变异账表的表头行号：以 `| 变异` 开头、下一行是分隔行的那张表。
+    """具名变异账表的表头行号：表头写着「变异」，或者表体里报着判词的那张表。
 
     认表头而不是认整张表，因为这一族的正文里也会提到"某一具"——只有表格才是逐片取证的那份
     清单，而 `#135` 立的规矩管的正是清单：手册只回答"怎么跑、跑出来该看到什么、哪些事还答不了"。
+    表头那两个字只是它的**一种**写法（`#169` 第二步）：一张"哪一具刀 → 哪条用例红了"的表把
+    表头改叫「坏改动 / 谁变红了」就绕过旧判据，所以判据改成看表体报不报判决。
     """
     lines = text.splitlines()
     out: list[int] = []
     for i, ln in enumerate(lines):
-        if not ln.startswith("| 变异"):
+        if not ln.startswith("| ") or i + 1 >= len(lines):
             continue
-        if i + 1 < len(lines) and lines[i + 1].lstrip().startswith("| ---"):
+        if not TABLE_SEP.match(lines[i + 1].lstrip()):
+            continue
+        if ln.startswith("| 变异") or ANY_VERDICT.search(_table_body(lines, i)):
             out.append(i + 1)
     return out
 
@@ -1322,9 +1346,50 @@ def test_a_line_naming_mutations_without_a_separator_is_not_a_tally():
     """
     assert _tally_tables("| 变异 | 红用例 |\n| --- | --- |\n| D1 … | … |") == [1]
     assert _tally_tables("| 变异 | 说明 |\n这一族还没跑电池，先把要列的东西说一句") == []
+    assert _tally_tables("| 变异 | 红用例 |") == [], "表头后面什么都没有：不越界，也不算账表"
 
 
-VERDICT_WORDS = "(?:CAUGHT|SURVIVED)"
+def test_a_tally_table_that_renamed_its_header_is_still_a_tally():
+    """表头不写「变异」、分隔行写成 `|---|` 的账表，也得被认成账表。
+
+    `#143` 立这条判据时认的是表头那两个字，于是它有两个盲区，而真实语料一次踩中两个：
+    `docs/views.md` 那张 26 行的表表头叫「坏改动 / 谁变红了」、分隔行竖线后面没有空格，
+    可它每一行都是"哪一具刀、哪条用例红了"——正是 `#135` 那条规矩要搬去归档的东西。
+    """
+    assert _tally_tables("| 变异 | 红用例 |\n|---|---|\n| D1 … | … |") == [1], \
+        "分隔行写成 `|---|`（竖线后没有空格）也是分隔行"
+    assert _tally_tables("| 坏改动 | 谁变红了 |\n|---|---|\n| 退出删掉 | harness 判 `CAUGHT` |") == [1]
+    assert _tally_tables("| 能力 | 状态 |\n|---|---|\n| 观众模式 | 已可用 |") == [], \
+        "没有判词的能力表不是账表：把手册里正常的表都扫成账，这条判据就废了"
+    assert _tally_tables("| 能力 | 状态 |\n|---|---|\n| 观众模式 | 已可用 |\n\n"
+                         "判词写成 `CAUGHT [hang after Ns]`。") == [], \
+        "判词得在表体那一截里；读整页会因一段教判词怎么写的散文把每张表都判成账表"
+
+
+TALLY_LANDING = "表头没写「变异」的那张账表搬进这一份"
+VIEWS_HAZARD_HEADER = "| 坏改动 | 谁变红了 |"
+
+
+def test_the_views_table_residue_landed_verbatim_in_the_archive():
+    """摘走的两截逐字在归档那一节里找得到，且这张表自己不再报某一轮的判决。
+
+    后半句不是 `test_the_manual_carries_no_per_slice_mutation_tally` 的复读：那条只说"扫不到账表"，
+    把表头改名或把分隔行删掉也能让它绿。这一条钉的是**摘的正是判词那一格**——躲判据不算搬完。
+
+    登记表那一截按**整行**断言而不是按前缀：电池第一跑的 K6 把登记行中段一个字换掉（去掉→摘掉），
+    文档闸门 68 条全绿——前缀只保证开头那一段在，中段被改了也不是"不逐字"。K6 重跑才红在这条上。
+    """
+    body = _archive_section(TALLY_LANDING)
+    for span in ('分支改坏"验过一次它会真的红，改完再按 sha256 校验还原成字节相同的文件。本轮重跑并确认被抓住的：',
+                 '| "没有键盘且日志已终局"这条退出删掉 | 同一条**挂起**，harness 判 `CAUGHT [hang after 25s]`'
+                 '（去掉退出后循环不再回到 `_read_key`，fake 的 50 次保险也触发不了） |'):
+        assert span in body, f"逐字登记缺这一截：{span[:24]}…"
+    lines = (ROOT / "docs" / "views.md").read_text(encoding="utf-8").splitlines()
+    assert not ANY_VERDICT.search(_table_body(lines, lines.index(VIEWS_HAZARD_HEADER))), \
+        "这张表还在报判决：加宽后的判据会一直红着，说明该摘的没摘干净"
+
+
+# `VERDICT_WORDS` 的单一定义在上面「逐片变异账表」那一节：表体判据与散文判据共用同一对字面量。
 # 分数那一形后面只许跟空白，所以反引号必须由这一格自己认下来；具数那两形的间隙是自由字符类，
 # 反引号本来就在类里，再挂一个可选 `` `? `` 是永远走不到的分支（07:04:44Z 四种写法各测一遍）。
 VERDICT_FRACTION = re.compile(rf"[0-9]{{1,3}}\s*/\s*[0-9]{{1,3}}\s*`?{VERDICT_WORDS}")

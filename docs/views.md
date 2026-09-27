@@ -250,7 +250,9 @@ rich 有两条坑，都各有一条测试钉着：
 ## 这些守卫是怎么验的
 
 渲染层 56 条用例（`test_render_html.py` 27 + `test_render_live.py` 29）里，每条都被"把被保护的
-分支改坏"验过一次它会真的红，改完再按 sha256 校验还原成字节相同的文件。本轮重跑并确认被抓住的：
+分支改坏"验过一次它会真的红，改完再按 sha256 校验还原成字节相同的文件。这张表记的是**哪一具刀归
+哪条用例盯**；某一轮跑出来的判决读数（具名红用例、判词、超时秒数）逐轮记在 `docs/iterations.md`
+〈表头没写「变异」的那张账表搬进这一份〉与〈另外三本手册页里的逐片电池账搬进这一份〉两节。
 
 | 坏改动 | 谁变红了 |
 |---|---|
@@ -266,7 +268,7 @@ rich 有两条坑，都各有一条测试钉着：
 | Enter 不再走席 / 改成收回面板 / 到 9 之后不回绕 | 三条各被 `test_enter_steps_through_the_seats_one_at_a_time` 与 `test_a_poll_that_returned_no_key_is_not_a_key_press` 抓住 |
 | `""` 又被当成 esc | 2 条（单位 + 整局面板，后者看的是帧数） |
 | 闭着的 stdin 继续被读成按键 | `test_a_closed_keyboard_stops_polling_and_leaves_when_the_log_is_done` |
-| "没有键盘且日志已终局"这条退出删掉 | 同一条**挂起**，harness 判 `CAUGHT [hang after 25s]`（去掉退出后循环不再回到 `_read_key`，fake 的 50 次保险也触发不了） |
+| "没有键盘且日志已终局"这条退出删掉 | 同一条**挂起**（去掉退出后循环不再回到 `_read_key`，fake 的 50 次保险也触发不了），所以这一具只能被超时抓住、不被任何一条用例抓住；那一轮的判词与秒数在归档〈表头没写「变异」的那张账表搬进这一份〉 |
 | `_read_key` 里 `""`→EOF、`\x1b`→escape 两条映射各删一次 | `test_the_reader_reports_a_closed_stdin_as_itself`（两个半边） |
 | 票型矩阵的 `弃票` 列常驻 / 永不出现 | 整局的行列那条 + `test_the_abstain_column_appears_exactly_when_somebody_abstained`（常驻那侧两条都红） |
 | 矩阵行按座位号重排（不是落票序） | `test_the_rows_are_in_the_order_the_ballots_were_written` |
