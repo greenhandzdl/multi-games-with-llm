@@ -14,7 +14,9 @@
    README 那条安装命令在新机器上直接报错，而本机什么都绿。
 
 判定住在 `_undeclared_imports()` / `_unread_dependencies()` / `_missing_from_lock()` 三个纯函数里，
-真仓库和夹具共用同一份（`#153` 那条规矩：判据不许在守卫和夹具里各抄一遍）。
+真仓库和夹具共用同一份（`#153` 那条规矩：判据不许在守卫和夹具里各抄一遍）。名字比对一律先过
+`_canonical()` 走 PEP 503 口径——`pydantic-core` 和 `import pydantic_core` 是同一只包，换个分隔符
+或大小写不算缺陷，`uv` 自己也不这么认；报出来的仍是文件里写着的原样。
 
 限界三条，写的都是这一本明知会放过什么：只看顶层名，所以 `import a.b.c` 里住着的三方子模块
 不会被拆开对账；`optional-dependencies` 的每一组都算进"在册"，所以一个只有文档里提到、
@@ -39,6 +41,17 @@ PYTEST_PLUGIN_READERS = {
 }
 
 SPEC_CUT = re.compile(r"[<>=!~;\[\s]")
+NAME_VARIANT = re.compile(r"[-_.]+")
+
+
+def _canonical(name: str) -> str:
+    """包名的 PEP 503 口径：小写，`-`、`_`、`.` 的连续段都算同一个分隔符。
+
+    `uv` 和 PyPI 自己就是这么认名字的，所以三种拼法在锁里、在 pyproject 里、在 import 语句里
+    指的是同一只包。这一本只在**比对**时归一，报出来的还是写在那份文件里的原样——人被点名时
+    要能对回自己写的那一行。
+    """
+    return NAME_VARIANT.sub("-", name).lower()
 
 
 def _dep_name(spec: str) -> str:
@@ -80,17 +93,19 @@ def _imported_tops(bodies: dict[str, str]) -> set[str]:
 
 def _undeclared_imports(deps: set[str], tops: set[str], own: set[str]) -> list[str]:
     """第一条判据：三方顶层名（不是标准库、不是本仓库自己的模块）必须在册。"""
-    return sorted(t for t in tops if t not in deps | own | set(sys.stdlib_module_names))
+    allowed = {_canonical(x) for x in deps | own | set(sys.stdlib_module_names)}
+    return sorted(t for t in tops if _canonical(t) not in allowed)
 
 
 def _unread_dependencies(deps: set[str], tops: set[str], cfg_keys: set[str],
                          test_texts: list[str]) -> list[str]:
     """第二条判据：在册的每一条都要有读者，读者有两种形。"""
     unread: list[str] = []
+    imported = {_canonical(t) for t in tops}
     for dep in sorted(deps):
-        if dep.replace("-", "_") in tops:
+        if _canonical(dep) in imported:
             continue
-        evidence = PYTEST_PLUGIN_READERS.get(dep)
+        evidence = PYTEST_PLUGIN_READERS.get(_canonical(dep))
         if evidence and evidence[0] in cfg_keys and any(evidence[1] in t for t in test_texts):
             continue
         unread.append(dep)
@@ -99,7 +114,8 @@ def _unread_dependencies(deps: set[str], tops: set[str], cfg_keys: set[str],
 
 def _missing_from_lock(deps: set[str], lock_names: set[str]) -> list[str]:
     """第三条判据：pyproject 点名的每一条要在锁里有同名包。"""
-    return sorted(d for d in deps if d not in lock_names)
+    locked = {_canonical(n) for n in lock_names}
+    return sorted(d for d in deps if _canonical(d) not in locked)
 
 
 def _real_inputs() -> tuple[set[str], set[str], set[str], set[str], list[str], set[str]]:
@@ -159,6 +175,18 @@ def test_every_declared_dependency_is_in_the_lock():
     deps, _tops, _own, _cfg, _tests, lock_names = _real_inputs()
     stale = _missing_from_lock(deps, lock_names)
     assert not stale, f"这些在册依赖不在 uv.lock 里，锁落后于 pyproject：{stale}"
+
+
+def test_declared_names_match_regardless_of_spelling_variants():
+    """包名按 PEP 503 的口径比，不比字面：`-`、`_`、`.` 和大小写都不是缺陷的证据。
+
+    三条判据第一版都拿字符串直接比，于是同一只包换个拼法就同时是"没点名""没人读""锁落后"——
+    而 `uv` 自己认为这两个名字是同一个包。这一族的报错方向是多事，多事的闸门会让人学着忽略它，
+    所以先把三形各钉一格。
+    """
+    assert _undeclared_imports({"pydantic-core"}, {"pydantic_core"}, set()) == []
+    assert _unread_dependencies({"HTTPX"}, {"httpx"}, set(), []) == []
+    assert _missing_from_lock({"pytest_asyncio"}, {"pytest-asyncio"}) == []
 
 
 def test_the_three_predicates_each_need_their_own_shape():
