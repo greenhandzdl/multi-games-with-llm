@@ -2733,3 +2733,113 @@ def test_the_shared_face_admits_a_low_read_twin_and_refuses_the_other_two(tmp_pa
     assert n == SHARED_READ_LIMIT, n
     assert sorted(Path(f).name for f in files) == ["run.py"], files
     assert shared["dark"] == (("t.py::A", "t.py::B"), 0, ()), shared["dark"]
+
+
+ABILITY_ALIAS = "Ability"
+ABILITY_FIELD = "abilities"
+
+
+def _ability_values_and_consultations(
+        corpus: dict[str, str]) -> tuple[list[str], dict[str, list[tuple[str, int]]], list[str]]:
+    """`Ability` 的取值、每个取值被 `…abilities` 成员测试点名的落点，以及没被点名的那些。
+
+    读侧只认一种形状：与名为 `abilities` 的属性做**单目**成员测试（`in` 与 `not in` 两形都算）。
+    声明本身不算读者——别名那一行和 RoleSpec 那几格 tuple 是在**写**这份词汇表，把"列在能力表里"
+    当成"有人按能力表问过"，就是 `#205` 那笔替付账在取值层重演。整份 tuple 的遍历、别的属性名上的
+    成员测试、字符串只出现在注释或 docstring 里，都不算；失效方向是误判而不是漏判——将来有人改成
+    遍历 `spec.abilities` 来执行能力表，这把尺会把那几枚报成"没按名字问过"，要人处置而不是默默放绿。
+    """
+    values: list[str] = []
+    for text in corpus.values():
+        for node in ast.parse(text).body:
+            if isinstance(node, ast.Assign):
+                if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+                    continue
+                name = node.targets[0].id
+            elif isinstance(node, ast.AnnAssign):
+                if not isinstance(node.target, ast.Name) or node.value is None:
+                    continue
+                name = node.target.id
+            else:
+                continue
+            if name == ABILITY_ALIAS and _is_literal_subscript(node.value):
+                sl = node.value.slice
+                elts = sl.elts if isinstance(sl, ast.Tuple) else [sl]
+                values.extend(e.value for e in elts
+                              if isinstance(e, ast.Constant) and isinstance(e.value, str))
+    assert values, f"语料里没有模块级的 {ABILITY_ALIAS} = Literal[...]"
+    assert len(values) == len(set(values)), f"{ABILITY_ALIAS} 的取值里有重名：{values}"
+
+    consulted: dict[str, list[tuple[str, int]]] = {}
+    for path, text in sorted(corpus.items()):
+        for node in ast.walk(ast.parse(text)):
+            if not isinstance(node, ast.Compare) or len(node.ops) != 1:
+                continue
+            if not isinstance(node.ops[0], (ast.In, ast.NotIn)):
+                continue
+            for lit, container in ((node.left, node.comparators[0]),
+                                   (node.comparators[0], node.left)):
+                if (isinstance(lit, ast.Constant) and isinstance(lit.value, str)
+                        and isinstance(container, ast.Attribute)
+                        and container.attr == ABILITY_FIELD):
+                    consulted.setdefault(lit.value, []).append((path, node.lineno))
+    return sorted(set(values)), consulted, [v for v in sorted(set(values)) if v not in consulted]
+
+
+def test_the_ability_scanner_counts_only_membership_tests_on_the_abilities_field():
+    """夹具：四格各管一种错法，让"谁问过这份能力表"这一问有牙。
+
+    `asked` 与 `negated` 各踩一种极性（`in` / `not in`），两格都必须算被问过；`elsewhere` 的成员
+    测试挂在别的属性上，`never` 只坐在别名和 RoleSpec 那两格里——两格都不许算读者，否则本尺会把
+    "写了一次词汇表"读成"有人按名字问过"，正是要抓的那种假绿。遍历整份 tuple 与注释里的那一句
+    同样不许算。
+    """
+    corpus = {
+        "pkg/r.py": 'from typing import Literal\n\n'
+                    'Ability = Literal["asked", "never", "negated", "elsewhere"]\n'
+                    'SPECS = (("asked", "never", "negated", "elsewhere"),)\n',
+        "pkg/g.py": 'def gate(spec):\n'
+                    '    if "asked" in spec.abilities:\n        return 1\n'
+                    '    if "negated" not in spec.abilities:\n        return 2\n'
+                    '    if "elsewhere" in spec.powers:\n        return 3\n'
+                    '    for a in spec.abilities:\n        print(a)\n'
+                    '    # 注释里写着 "never" in spec.abilities 也不算\n'
+                    '    return 0\n',
+    }
+    values, consulted, unenforced = _ability_values_and_consultations(corpus)
+    assert values == ["asked", "elsewhere", "negated", "never"], values
+    assert sorted(consulted) == ["asked", "negated"], sorted(consulted)
+    assert [Path(p).name for p, _ in consulted["asked"]] == ["g.py"], consulted
+    assert unenforced == ["elsewhere", "never"], unenforced
+
+
+# 没被任何一处成员测试问过的能力取值：每一条都要点名"那件事由哪本文件的哪一路执行"（`#206`）。
+ABILITY_TRIAGE: dict[str, str] = {
+    'wolf_chat': '删：那件事的原本坐在同一格里——`RoleSpec.knows_teammates` 才是被读的那一枚（state.py 问"这一席看不看得见队友"），'
+                 '而狼队夜谈那份名单由 phases.py 按阵营取，从不问能力表；本片的下一步把这枚从别名和 WOLF 那一格一起收掉',
+    'poison': '留：女巫能不能下毒走的是另一路，state.py 的 `poison_left` 由 rules.py 折进 consumables、actors.py 只在 '
+              'legal.acts 里看见它才发这一手，额度用尽即出局——能力表那一格是给读 roles.py 的人看的角色说明，不是闸门输入',
+}
+
+
+def test_every_declared_ability_is_asked_about_by_name_or_named_in_the_register():
+    """`#206`：能力表上列了两枚从来没有被"这个职业有没有这项能力"问过的取值。
+
+    `#172`/`#205` 把字段层的替付账收掉之后，同一趟普查剩下的就是取值层。取值层按裸名数读者会
+    立刻重演那一笔：`kill`/`save`/`poison`/`check` 同时是 `ActName` 与 `DeathCause` 的取值，
+    `wolf` 同时是 `Team` 与 `Winner` 的取值——按字符串数一遍，每一枚都很忙。这一具之所以可判，
+    是因为它的读侧统一到一个表达式形状上（与名为 `abilities` 的属性做成员测试），容器名就写在
+    同一格里，归属不需要反推类型。
+    """
+    corpus = {str(p): p.read_text(encoding="utf-8")
+              for p in sorted(Path("src/wolfengine").rglob("*.py"))}
+    assert len(corpus) >= 10, f"src 只数到 {len(corpus)} 个模块，多半是扫面坏了"
+    values, consulted, unenforced = _ability_values_and_consultations(corpus)
+    assert len(values) >= 6, f"{ABILITY_ALIAS} 只数到 {len(values)} 枚取值，多半是收集坏了"
+    sites = sum(len(spots) for spots in consulted.values())
+    assert sites >= 4, f"整份 src 只数到 {sites} 处按名字问能力表的地方，多半是谓词坏了"
+    assert set(unenforced) == set(ABILITY_TRIAGE), (
+        f"列在能力表里却没人按名字问过：{unenforced}——名册 keys={sorted(ABILITY_TRIAGE)}；"
+        f"要么接一个真正的执行处，要么在册里点名它由哪一路执行，两者都不是就把这条删掉")
+    for value, why in ABILITY_TRIAGE.items():
+        assert re.search(r"\w+\.py", why), f"{value} 的处置没点到那本文件：{why}"
