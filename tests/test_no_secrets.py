@@ -9,7 +9,9 @@
 
 范围在这里钉死（`src/` + `tests/fixtures/` + `docs/` + `README.md` + 一份新生成的日志），因为一条"扫全仓
 库"的命令在没 `git init` 的目录上会返回 0 且不报错——那是典型的假绿。历史那一侧同一件事由
-`_committed_history_patch()` 管：git 不答话、或答出来是空的，都直接报错，而不是让"零命中"冒充干净。
+`_committed_history_patch()` 管：git 不答话、或答出来是空的，都直接报错，而不是让"零命中"冒充干净；
+历史被截断（`git clone --depth`、CI 的默认深度）时它跳过并点名自己答不出——那一版上"从没加过"和
+"看不见加过"是同一句话（`#190`）。
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from pathlib import Path
 
 import pytest
 
+from conftest import git_history_is_shallow
 from wolfengine.config import Config
 from wolfengine.events import EventLog, Kind
 
@@ -232,7 +235,17 @@ def _history_offenders(patch: str, *, exempt: tuple[str, ...] = (SENTINEL,)) -> 
     return hits
 
 
+def _require_full_history(repo: Path) -> None:
+    """历史被截断时停笔：这一格查的是"哪一次提交加过、后来又删掉"，一棵树的快照答不出这句话。"""
+    if git_history_is_shallow(repo):
+        pytest.skip("这份克隆的 git 历史被截断了：`git log -p --all` 只看得见留下的那几条提交，"
+                    "被删掉的那一行不在里面（depth-1 时它只剩一条，把整棵当前树当成「全部是新加的」）。"
+                    "「提交历史里从没加入过 key 值」这句在这一版上没有对象可查，它今天没有读数："
+                    "`git fetch --unshallow` 之后重跑才有。")
+
+
 def _committed_history_patch() -> str:
+    _require_full_history(ROOT)
     r = subprocess.run(["git", "log", "-p", "--all"], cwd=ROOT, capture_output=True, text=True)
     assert r.returncode == 0, f"扫不了提交历史，这条判据就成了假绿：{r.stderr.strip()[:200]}"
     assert r.stdout.strip(), "历史是空的——「没有任何值」这句话就没有对象可查"
@@ -293,6 +306,50 @@ def test_the_history_scanner_names_a_planted_leak():
         f"-泄漏过又被删掉的那一行：WOLF_LLM_API_KEY={SENTINEL}",
         "+还是占位符：WOLF_LLM_API_KEY=<REPLACE_WITH_YOUR_KEY>",
     ]))
+
+
+def test_the_truncation_probe_reads_both_shapes(full_and_shallow_clone):
+    """探针两向都判得出来，而"截断"的症状是删除行为 0——行数的地板看不见它。
+
+    动因是 `#189` 之后在公开克隆上重跑：在 `e04ea3d` 上拿 `git clone --depth 1` 出来的仓库里
+    `git log -p --all` 有 44103 行新增、**0 行删除**（同一版本的完整历史是 50970 行新增、6865 行
+    删除、82 个提交）。那一个提交把整棵当前树当成"全部是新加的"报出来，于是三条历史判据全绿，
+    而它们查的命题——"有没有哪次提交加过 key 值、后来又删掉"——在这个克隆里根本没有对象。
+    旁边那条 20 000 行的地板拦不住：快照比 82 个提交加起来的新增行只少一点点。
+    所以这里钉的是形状而不是数量：新增行多不等于读到了历史。
+    """
+    full, shallow = full_and_shallow_clone
+    assert not git_history_is_shallow(full), "两串提交的仓库被判成了浅克隆——它会去跳开一条本该开火的判据"
+    assert git_history_is_shallow(shallow), "depth-1 克隆没被判成浅克隆，下面那条跳过永远不会开火"
+
+    def corpus(repo):
+        out = subprocess.run(["git", "log", "-p", "--all"], cwd=repo, capture_output=True, text=True)
+        lines = out.stdout.splitlines()
+        return (len(_added_lines(out.stdout)),
+                sum(1 for ln in lines if ln.startswith("-") and not ln.startswith("---")))
+
+    added_full, removed_full = corpus(full)
+    added_shallow, removed_shallow = corpus(shallow)
+    assert removed_full > 0, f"连现造的两次提交都读不出删除行，`git log -p` 这一形已经坏了：{corpus(full)}"
+    assert removed_shallow == 0, "浅克隆里读到了删除行——下面那格断言的'症状'就不再成立"
+    assert added_shallow >= 3, f"浅克隆的新增行太少，撑不起「行数地板拦不住它」这句：{added_shallow}"
+
+
+def test_the_history_gate_refuses_to_sign_a_truncated_corpus(full_and_shallow_clone, monkeypatch):
+    """历史判据在环境答不出时要停笔：跳过真的发生，且只在截断时发生。
+
+    为什么拿 monkeypatch 而不是本仓库——本机有 82 个提交的完整历史，这一支在这里永远走不到，
+    而"一支没有读者的跳过"正是 `#153` 那一课（一具永远跳过的刀能无声杀掉一整格）。所以两向都在
+    现造的仓库上各测一次，真实克隆里的那一次读数另外记进归档（`#189` 的做法：`git clone --depth 1`
+    重跑，看这两条报的是 skipped 而不是 passed）。
+    """
+    full, shallow = full_and_shallow_clone
+    _require_full_history(full)                         # 不跳：完整历史在这里答得出
+    with pytest.raises(pytest.skip.Exception):
+        _require_full_history(shallow)                  # 截断 → 停笔
+    monkeypatch.setattr("test_no_secrets.git_history_is_shallow", lambda repo: True)
+    with pytest.raises(pytest.skip.Exception):
+        _committed_history_patch()                      # 判据确实接在探针上，不只是探针自己会判
 
 
 def test_the_env_reader_corpus_actually_finds_the_key_name():

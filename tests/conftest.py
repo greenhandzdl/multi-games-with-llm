@@ -10,9 +10,17 @@ blunt: no `# noqa`, no allowlist, every imported name on the test side has a rea
 to be unable to send. `run --human` is refused before a transport exists (`#123`), and a fixture
 that only one file can reach would have to be copied there — two copies of "零请求" is the shape
 this repo calls a defect.
+
+`git_history_is_shallow` moved here from `tests/test_doc_citations.py` for the same reason twice
+over (`#153`): that file asks it before reading a README from history, and `tests/test_no_secrets.py`
+asks it before certifying that no commit ever added a key value (`#190`). A predicate that decides
+whether a gate answers at all is not something to keep two copies of.
 """
 
 from __future__ import annotations
+
+import subprocess
+from pathlib import Path
 
 import httpx
 import pytest
@@ -21,6 +29,42 @@ from wolfengine.config import Config
 from wolfengine.transport import HttpTransport
 
 PLACEHOLDER = "PLACEHOLDER-NOT-A-KEY"
+
+
+def git_history_is_shallow(repo: Path | str) -> bool:
+    """这份克隆的 git 历史是被截断的吗（`git clone --depth 1`、CI 的默认深度）。"""
+    r = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=repo,
+                       capture_output=True, text=True)
+    return r.stdout.strip() == "true"
+
+
+@pytest.fixture
+def full_and_shallow_clone(tmp_path):
+    """两个现造的小仓库：两次提交的，和它的 `--depth 1` 克隆——探针要两向都判过才算有读者。
+
+    第二次提交同时改第一份文件（不只是加一份新的）：完整历史里那一次留下一行删除，浅克隆把
+    当前树整个当成"新加的"、一行删除都没有。截断的症状就是这一格，而按行数设的地板看不见它。
+    """
+    full = tmp_path / "full"
+    full.mkdir()
+
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", *args], cwd=full, capture_output=True, text=True)
+
+    git("init", "-q")
+    git("config", "user.email", "probe@example.invalid")
+    git("config", "user.name", "probe")
+    (full / "f1.txt").write_text("aaa\nbbb\n", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-qm", "c1")
+    (full / "f1.txt").write_text("aaa\nCCC\n", encoding="utf-8")
+    (full / "f2.txt").write_text("ddd\n", encoding="utf-8")
+    git("add", ".")
+    git("commit", "-qm", "c2")
+    shallow = tmp_path / "shallow"
+    subprocess.run(["git", "clone", "-q", "--depth", "1", "--no-hardlinks",
+                    f"file://{full}", str(shallow)], capture_output=True, text=True)
+    return full, shallow
 
 
 @pytest.fixture

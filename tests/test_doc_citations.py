@@ -63,6 +63,7 @@ import sys
 import pytest
 from pathlib import Path
 
+from conftest import git_history_is_shallow
 from wolfengine import cli
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -2612,14 +2613,7 @@ def _departures(old_text: str, now_lines: list[str], archive_lines: list[str],
     return [ln for ln in gone if not _registered(ln, archive_lines, by_mask, anchor)], gone
 
 
-def _is_shallow(repo: Path) -> bool:
-    """这份克隆的 git 历史是被截断的吗（`git clone --depth 1`、CI 的默认深度）。"""
-    r = subprocess.run(["git", "rev-parse", "--is-shallow-repository"], cwd=repo,
-                       capture_output=True, text=True)
-    return r.stdout.strip() == "true"
-
-
-def test_a_line_that_left_the_manual_is_registered_verbatim_in_the_archive(tmp_path):
+def test_a_line_that_left_the_manual_is_registered_verbatim_in_the_archive(full_and_shallow_clone):
     """`#135` 那条"先逐字登记才有资格摘"从此有断言读它：摘走而没登记的每一行都会报出来。
 
     动因是本轮数 README〈测试〉一节时现出来的形状：那一节 228 行（去掉空行 188 行）里坐着 D/K/A
@@ -2631,30 +2625,16 @@ def test_a_line_that_left_the_manual_is_registered_verbatim_in_the_archive(tmp_p
 
     开头那一段是这条判据自己的正控制：它读的是**历史里那一版**，所以在 `--depth 1`
     的克隆里读不到锚点，只能跳过（下面那个 `pytest.skip`）。跳过没有读者＝一具"永远跳过"
-    的刀就能无声杀掉这一格（`#153` 那一课），于是这一条先拿两个现造的小仓库证明
-    `_is_shallow` 两向都判得出来，再决定要不要跳。
+    的刀就能无声杀掉这一格（`#153` 那一课），于是这一条先拿两个现造的小仓库证明探针两向都
+    判得出来，再决定要不要跳。那两个仓库出自 `tests/conftest.py` 的夹具：`#190` 里
+    `tests/test_no_secrets.py` 也要问同一件事，一份判据不抄两遍。
     """
+    full, shallow = full_and_shallow_clone
+    assert not git_history_is_shallow(full), "两串提交的仓库被判成了浅克隆——它会去跳开一条本该开火的判据"
+    assert git_history_is_shallow(shallow), "depth-1 克隆没被判成浅克隆，下面那条跳过永远不会开火"
+    assert (full / "f1.txt").read_text(encoding="utf-8") == "aaa\nCCC\n"
 
-    full = tmp_path / "full"
-    full.mkdir()
-
-    def git(*args: str) -> subprocess.CompletedProcess:
-        return subprocess.run(["git", *args], cwd=full, capture_output=True, text=True)
-
-    git("init", "-q")
-    git("config", "user.email", "probe@example.invalid")
-    git("config", "user.name", "probe")
-    for i in (1, 2):
-        (full / f"f{i}.txt").write_text(str(i), encoding="utf-8")
-        git("add", ".")
-        git("commit", "-qm", f"c{i}")
-    shallow = tmp_path / "shallow"
-    subprocess.run(["git", "clone", "-q", "--depth", "1", "--no-hardlinks",
-                    f"file://{full}", str(shallow)], capture_output=True, text=True)
-    assert not _is_shallow(full), "两串提交的仓库被判成了浅克隆——它会去跳开一条本该开火的判据"
-    assert _is_shallow(shallow), "depth-1 克隆没被判成浅克隆，下面那条跳过永远不会开火"
-
-    if _is_shallow(ROOT):
+    if git_history_is_shallow(ROOT):
         pytest.skip(f"这份克隆的 git 历史被截断了，锚点 {MANUAL_CUT_ANCHOR} 不在里面——这一条要读那一版的"
                     "README 才答得出「摘走而没登记」。它今天没有读数：`git fetch --unshallow` 之后重跑才有。")
     shown = subprocess.run(["git", "show", f"{MANUAL_CUT_ANCHOR}:README.md"], cwd=ROOT,

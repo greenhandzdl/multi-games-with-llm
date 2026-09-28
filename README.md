@@ -31,7 +31,8 @@ export WOLF_LLM_API_KEY=<key>      # 只在 shell 里
 就以"已经脱敏过"的样子进了日志（`#147`）。写盘的 `request` / `response` 字段走白名单，`headers`
 连键名都不落盘——这条主张由 `tests/test_no_secrets.py` 扫 `src/`、`tests/fixtures/`、`docs/`、本页（`README.md`）和一份新生成的日志来兜底。
 查提交历史里有没有混进过 key——这件事现在**每次跑测试都会做**：`tests/test_no_secrets.py` 把
-`git log -p --all` 的新增行扫一遍，只豁免脱敏用例自己埋的那枚哨兵，扫不到历史时它报错而不是沉默。
+`git log -p --all` 的新增行扫一遍，只豁免脱敏用例自己埋的那枚哨兵：git 不答话时报错，历史被截断时
+跳过并点名自己答不出（`#190`）——两种都不是沉默，也不是签字。
 手动查还是这两条：
 
 ```bash
