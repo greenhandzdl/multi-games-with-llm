@@ -9129,3 +9129,37 @@ calibration/comparison/metrics/views），不是上面几节说的"手册四页"
   `docs/iterations.md` 只增不减（上一节收尾时 9100 行，本节之后交给这一格之外的 `wc -l` 量，不写进正文，
   免得自己追自己）；四本手册文件行数一字未变
   （591 / 331 / 512 / 277），手册侧整族时刻读数仍是 0。
+
+### #187 文件层的孤儿判据立起来了：四条谓词、两回形状 bug、一格量过就收回的豁免
+
+`#186` 只把这一维**量**了一遍就收工，理由是"被点到"在文件层不是一条谓词而是四条，最弱那条（markdown
+点名）会把新加的测试报成缺陷。这一片把那条反驳解决了：`tests/test_file_layer.py`（两条用例）里四条
+谓词各管一层，谁都不靠文档点名——src 与 tests 的辅助层认 **import 语句里的名字**（AST 取，函数体里
+缩进的延迟 import 也算），`tests/test_*.py` 与 `conftest.py` 认**自己声明了可被收集的东西**（现测 42 本
+测试文件每一本的 basename 其实都在别处被拼出来过，所以"被文档提过"根本不是它们活着的原因，这一形正是
+`#186` 那 7 本假孤儿里剩下的几本），其余（`__init__.py`、fixtures、根级、`scripts/`、docs）认 basename
+被另一本拼出来。守卫与夹具共用同一个 `_dead_files`（`#153` 那条规矩：判定不许抄两遍）。
+
+* 出生红不是设计出来的，是量出来的，而且**两回都是扫描器的形状假设**：第一版把 import 语句锚在行首，
+  09:04:16Z 那一趟报 5 本（`batch`、`human`、`phases`、`report` 四本 src 加 `tests/conftest.py`），
+  前四本的读者是一句缩进在函数体里的延迟 import，`conftest.py` 则根本没有 importer——它是被 pytest 的
+  收集机制执行的。换成 AST 取名字、给 conftest 单开一条"声明 hook 或 fixture"之后，同一棵树归零。
+  这是 `#186` 那笔账（"0 命中先怀疑扫描器"）在同一棵树上的第二次和第三次现形。
+* 量过又收回的那一格豁免：入口那本 `cli` 本来另走 `pyproject.toml` 的 `[project.scripts]`。两形对比
+  （09:06:56Z）是名册整条摘掉之后孤儿名单一字不变——tests 里有一句 `from wolfengine.cli import main`
+  先把它认领了，所以这条豁免零读者，按"新限定条件零读者就删分支而不是留断言"删了。代价写清楚：哪一天
+  那句 import 没了（比如入口改成只由安装出来的命令走），这一条会先把 `cli.py` 报成孤儿，那时再决定
+  是补名册还是把入口那本交出去。
+* 三具刀各自红在哪：`tests/test_belief.py` 里 `def test_` 全改名（09:06:59Z）→ 红，且报的正是被刀那本，
+  基线是绿的所以归因干净；把 `tests/test_wiring.py` 与 `tests/test_payload_shape.py` 那两句
+  `from declared_kinds import KINDS` 各摘一次（09:08:00Z，只在内存里摘、不写盘）→ 红，名单只剩
+  `tests/declared_kinds.py` 一本，同一层的另一位读者 `live_frame` 没被牵连；夹具那一条本身就是第三具刀
+  的反向（该报的三本各钉一层：src 的反向、conftest 那一支、被收集却什么都不声明的那本）。
+
+#### 跑次
+
+* 现测：`git ls-files` 85 本，基线孤儿 **0**；`tests/test_file_layer.py` 09:08:00Z **2 passed in 0.26s**；
+  全量 09:08:02Z 起 **1071 passed in 74.36s**（`rc` 0、`grep -c "^FAILED"` 0，比 `#186` 那一趟多的 2 道
+  就是这一族）。被刀过的那本测试文件跑完按 sha256 核过还原。
+* 这一片动的文件只有两本：新增 `tests/test_file_layer.py`，加 `docs/iterations.md` 本节。四本手册一行未
+  动（还是 591 / 331 / 512 / 277 那一把尺子），文档闸门的读数与提交说明同一趟，那一趟对着的树含本节全部。
