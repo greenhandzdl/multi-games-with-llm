@@ -110,9 +110,9 @@ def open_log(cfg: Config, state: GameState, path: Path, actor_kinds: tuple[str, 
         # denominator argument.
         "regions": asdict(cfg.regions),
         # The roles are in this file, but only as private `deal` events — which is the point:
-        # there is no field a renderer can read to leak them.
+        # there is no field a renderer can read to leak them. Reproducibility is the flag, not a
+        # sentence: a sentence in the file had no reader, and the two view footers are its authors.
         "reproducible": False,
-        "reproducibility_note": "端点无确定性：seed 只决定发牌与座位序，重跑不是复现。",
     })
     log.write_meta()
     log.append(Kind.GAME_START, day=1, phase=Phase.NIGHT_WOLF.value,

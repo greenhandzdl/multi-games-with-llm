@@ -442,10 +442,10 @@ def test_audit_carries_the_version_stamps_the_log_was_written_with(played, capsy
 
     `open_log` 把 `contract_version` / `rules_version` / `compress_version` 写进 meta，
     `prompts/templates.py` 顶上那句"改这里就是新的 `rules_version`/`contract_version`"讲的就是
-    它们——可今天没有任何一条读侧的路问得出"这份日志是哪一版规则写的"：`audit` 的 meta 那一格是
-    一串**拼出来的**键名，里面只有 game_id / deal_seed / config_hash / actor_kinds / model /
-    reproducible 六个。同一趟普查把这一串里的 `reproducible` 也报成了零读者，那一格是假缺陷——
-    它有人读，就在这同一串键名里，所以这把尺换成闸门之前得先补这一层。
+    它们——可那一片当时没有任何一条读侧的路问得出"这份日志是哪一版规则写的"：`audit` 的 meta 那一格是
+    一串**拼出来的**键名，当时里面只有 game_id / deal_seed / config_hash / actor_kinds / model /
+    reproducible 六格，今天那串是十格。同一趟普查把这一串里的 `reproducible` 也报成了零读者，那一格是假缺陷——
+    它有人读，就在这同一串键名里，所以这把尺换成闸门之前得先补这一层——而那一个读者自己到 `#181` 才有用例钉。
     """
     _, path = played
     assert cli.main(["audit", str(path)]) == 0
@@ -460,7 +460,7 @@ def test_audit_carries_which_board_the_log_was_dealt_on(played, capsys):
     """同一把尺（`#177` 的零读者普查）量出来的六格之一：`board` 落了盘、没有人读。
 
     这一格和三份版本戳不是同一种缺陷——版本戳是"问得出但没接线"，`board` 是"机器出口分不出
-    这两份日志坐在哪张桌上"：座位数不同的两块板，接线之前 `audit` 出的六个键里只有
+    这两份日志坐在哪张桌上"：座位数不同的两块板，接线之前那串键名里只有
     `config_hash` 那串 12 位十六进制会不同，而那串是**整体配置**的指纹，说不了"是板子不同"。
     """
     _, path = played
@@ -469,6 +469,21 @@ def test_audit_carries_which_board_the_log_was_dealt_on(played, capsys):
     raw = json.loads(path.read_text(encoding="utf-8").splitlines()[0])["meta"]
     assert stats["meta"]["board"] == raw["board"]
     assert stats["meta"]["board"], "board 印了个空的"
+
+
+def test_the_reproducibility_flag_reaches_the_machine_exit(played, capsys):
+    """`audit` 那串拼出来的键名里，`reproducible` 那一格今天有了第二个读者，也才有了证人。
+
+    `#178`/`#179` 数读者的那把尺说这一格有人读，读它的就是那串键名；可**那一串里每一格都没有证人**。
+    `#181` 的电池现形过一次：05:38:37Z 把 `game.py` 里这一格整行摘掉，红的只有读文件的那两条用例，
+    这一本（`test_cli.py`）一条没红——也就是说把键名从 `audit` 的出口里删掉，当时没有任何东西会响。
+    这条钉的是"落盘的声明到得了机器出口"这一格，其余九格按同一形状逐格补。
+    """
+    _, path = played
+    assert cli.main(["audit", str(path)]) == 0
+    stats = _last_json_block(capsys.readouterr().out)
+    raw = json.loads(path.read_text(encoding="utf-8").splitlines()[0])["meta"]
+    assert stats["meta"]["reproducible"] is raw["reproducible"] is False
 
 
 def test_audit_prints_metrics_and_nothing_else(played, capsys):

@@ -584,6 +584,22 @@ def test_the_manifest_declares_this_a_synthetic_table(golden):
     assert meta["contract_version"] and meta["rules_version"] and meta["compress_version"]
 
 
+def test_the_manifest_declares_reproducibility_as_a_flag_not_a_sentence(golden):
+    """The file's whole say-so on "does a rerun reproduce this" is the boolean `reproducible`.
+
+    `#177` 的普查量出 meta 里还躺着一句人话，读者零个；`#179` 把它挂成一张票——要么给它找一个机器
+    读者，要么删掉、承认那句话只活在渲染器里。这一片走后半张：那句话的两个作者都在**给人看**的出口
+    上（`render_html.py` 的页脚和 `render_live.py` 的页脚，各有断言钉着），而机器出口 `audit` 念的
+    是那个布尔。所以文件里再抄一句人话，多的不是信息是第二个作者。
+
+    这条钉的是形状而不是某个键名：它防的是以后有人把渲染器里的句子抄回落盘那一方。
+    """
+    _, _, _, meta = golden
+    assert meta["reproducible"] is False
+    offenders = [k for k, v in meta.items() if isinstance(v, str) and "复现" in v]
+    assert offenders == [], f"复现性那句话不该住在文件里：{offenders}"
+
+
 # ------------------------------------------------------- M1–M8 as functions of a loaded log
 #
 # Everything below takes the *file*, not the running game: a metric that needs the engine
