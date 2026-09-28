@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-Ability = Literal["kill", "wolf_chat", "check", "save", "poison", "shoot_on_death"]
+Ability = Literal["kill", "check", "save", "poison", "shoot_on_death"]
 # The three keys the win condition counts by. `rules.winner_for` is annotated with this, and
 # `tests/test_wiring.py` reads it back out of here rather than keeping its own copy.
 Team = Literal["wolf", "villager", "god"]
@@ -26,7 +26,7 @@ class RoleSpec:
     knows_teammates: bool = False
 
 
-WOLF = RoleSpec("wolf", "狼人", "wolf", ("kill", "wolf_chat"), knows_teammates=True)
+WOLF = RoleSpec("wolf", "狼人", "wolf", ("kill",), knows_teammates=True)
 VILLAGER = RoleSpec("villager", "平民", "villager", ())
 SEER = RoleSpec("seer", "预言家", "god", ("check",))
 WITCH = RoleSpec("witch", "女巫", "god", ("save", "poison"))

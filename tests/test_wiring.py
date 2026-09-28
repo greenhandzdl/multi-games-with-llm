@@ -2815,8 +2815,6 @@ def test_the_ability_scanner_counts_only_membership_tests_on_the_abilities_field
 
 # 没被任何一处成员测试问过的能力取值：每一条都要点名"那件事由哪本文件的哪一路执行"（`#206`）。
 ABILITY_TRIAGE: dict[str, str] = {
-    'wolf_chat': '删：那件事的原本坐在同一格里——`RoleSpec.knows_teammates` 才是被读的那一枚（state.py 问"这一席看不看得见队友"），'
-                 '而狼队夜谈那份名单由 phases.py 按阵营取，从不问能力表；本片的下一步把这枚从别名和 WOLF 那一格一起收掉',
     'poison': '留：女巫能不能下毒走的是另一路，state.py 的 `poison_left` 由 rules.py 折进 consumables、actors.py 只在 '
               'legal.acts 里看见它才发这一手，额度用尽即出局——能力表那一格是给读 roles.py 的人看的角色说明，不是闸门输入',
 }
@@ -2835,9 +2833,14 @@ def test_every_declared_ability_is_asked_about_by_name_or_named_in_the_register(
               for p in sorted(Path("src/wolfengine").rglob("*.py"))}
     assert len(corpus) >= 10, f"src 只数到 {len(corpus)} 个模块，多半是扫面坏了"
     values, consulted, unenforced = _ability_values_and_consultations(corpus)
-    assert len(values) >= 6, f"{ABILITY_ALIAS} 只数到 {len(values)} 枚取值，多半是收集坏了"
+    # 地板两格都钉在"今天以下"：5 枚 = 4 枚真被闸门问过的 + 1 枚在册说明的，4 处 = 五处少一处。
+    # 再删一枚取值或再改一处成员测试，红的就是这一格，要人看一眼是不是真把闸门拆了。
+    assert len(values) >= 5, f"{ABILITY_ALIAS} 只数到 {len(values)} 枚取值，多半是收集坏了"
     sites = sum(len(spots) for spots in consulted.values())
     assert sites >= 4, f"整份 src 只数到 {sites} 处按名字问能力表的地方，多半是谓词坏了"
+    undeclared = sorted(set(consulted) - set(values))
+    assert not undeclared, (f"能力表上没有这几枚，却有人在按名字问：{undeclared}——"
+                            f"要么把别名补上，要么那一处问的本来就不是能力")
     assert set(unenforced) == set(ABILITY_TRIAGE), (
         f"列在能力表里却没人按名字问过：{unenforced}——名册 keys={sorted(ABILITY_TRIAGE)}；"
         f"要么接一个真正的执行处，要么在册里点名它由哪一路执行，两者都不是就把这条删掉")
