@@ -243,7 +243,7 @@ def _drift_md(man: dict[str, Any], d: Path) -> str:
          f"- 判定：`{v['terminal']}`，异常探针：{'、'.join(v['drifted']) or '（无）'}",
          f"- 说明：{v.get('note') or '批首与批尾探针不一致'}"]
     if v.get("latency_ratio") is not None:
-        L.append(f"- 中位延迟比（尾/首）：{v['latency_ratio']}，阈值 {v.get('threshold')}")
+        L.append(f"- 中位延迟比（尾/首）：{v['latency_ratio']}，阈值 {v.get('threshold')}，{v.get('n_probes')} 条探针")
     L += [f"- 本批目录：`{d}`",
           f"- 重新出报告：`wolf compare {d} --axis ...`\n",
           "| 探针 | 批首答案 | 批尾答案 | 批首 s | 批尾 s |", "|---|---|---|---|---|"]

@@ -335,6 +335,11 @@ def test_a_drifted_tail_canary_marks_the_whole_batch(tmp_path):
     man = json.loads((tmp_path / "run_manifest.json").read_text(encoding="utf-8"))
     assert man["canary"]["terminal"] == "INVALID_DRIFT"
     assert (tmp_path / "drift.md").exists(), "plan §8 第 5 条：漂移要落一份能读的东西"
+    drift_txt = (tmp_path / "drift.md").read_text(encoding="utf-8")
+    ratio_line = next(ln for ln in drift_txt.splitlines() if "中位延迟比" in ln)
+    assert f"{len(batch.CANARY_PROMPTS)} 条探针" in ratio_line, (
+        "延迟比没印分母：一个 3 条探针的比和一个 30 条的比印成同一句话，"
+        "#107/#109 那一族在 canary 这一格还欠着")
     out = batch.compare(tmp_path, axis=("temperature",))
     assert out["verdict"] == "INVALID_DRIFT" and "不可比" in out["markdown"]
 
