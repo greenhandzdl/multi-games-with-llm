@@ -252,7 +252,6 @@ def apply_night(state: GameState, res: NightResolution) -> None:
 class VoteResult:
     tally: dict[int, int]
     abstainers: list[int]
-    top_seats: list[int]
     out: int | None
     tied: bool
     # seats that must give a second-round speech before a revote
@@ -275,15 +274,14 @@ def tally_votes(votes: dict[int, int | None], eligible: list[int]) -> VoteResult
             continue
         tally[target] += 1
     if not tally:
-        return VoteResult({}, sorted(abstainers), [], None, False, ())
+        return VoteResult({}, sorted(abstainers), None, False, ())
     top = max(tally.values())
     tied_seats = sorted(s for s, n in tally.items() if n == top)
     if len(tied_seats) == 1:
-        return VoteResult(dict(tally), sorted(abstainers), tied_seats, tied_seats[0], False, ())
+        return VoteResult(dict(tally), sorted(abstainers), tied_seats[0], False, ())
     return VoteResult(
         tally=dict(tally),
         abstainers=sorted(abstainers),
-        top_seats=tied_seats,
         out=None,
         tied=True,
         pk_seats=tuple(tied_seats),

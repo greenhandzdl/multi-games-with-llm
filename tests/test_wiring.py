@@ -1183,9 +1183,6 @@ FIELD_TRIAGE: dict[str, str] = {
         "改的是 audit 的超额判定、不动发出去的字节",
     "config.py::RegionBudget.c_private": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C3' 那一格，见 src/wolfengine/metrics.py",
     "config.py::RegionBudget.c_task": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C4' 那一格，见 src/wolfengine/metrics.py",
-    "rules.py::VoteResult.top_seats":
-        "待判：`src/wolfengine/rules.py` 里由 `tied_seats` 写入，全仓库零读者，而并列这件事已经由 "
-        "`tied_seats` 那张表本身落盘——先确认这格不是第二份抄本，见 src/wolfengine/rules.py",
     "rules.py::NightResolution.peace":
         "待判：这一格已经有票了——#88 问的是『平安夜要不要在公开产物里留痕』，那是处置变更不是清理，"
         "见 src/wolfengine/rules.py 与 docs/iterations.md 里 `#88` 那一节",
@@ -1198,9 +1195,12 @@ FIELD_TRIAGE: dict[str, str] = {
     "assemble.py::Prompt.legal_acts":
         "待判：`src/wolfengine/assemble.py` 里 `Prompt` 构造时写入，而落盘那格走的是同文件 "
         "`payload_for_log` 的白名单、不含它；`src/wolfengine/schema.py` 里同名的那一格是**函数参数**"
-        "不是这一具（`#156` 记过的同名替付账搬到字段层），见 src/wolfengine/assemble.py",
+        "不是这一具（`#156` 记过的同名替付账搬到字段层），见 src/wolfengine/assemble.py。"
+        "`#175` 量过删它的代价：注解占第 63、64 行、写入占第 300、301 行，手册里 11 处点这个文件行号"
+        "的引用有 10 处落在下游要一起顶号（只有第 57 行那一处在前头，不动），所以这一格留在待判不是"
+        "因为没查，是因为顶号比留它贵，见 src/wolfengine/assemble.py",
     "assemble.py::Prompt.legal_targets":
-        "待判：同 `legal_acts`，成对写入、零读者、不在落盘白名单里，见 src/wolfengine/assemble.py",
+        "待判：同 `legal_acts`，成对写入、零读者、不在落盘白名单里，代价也与它同一笔（同一份顶号账），见 src/wolfengine/assemble.py",
     "batch.py::BatchResult.rows":
         "待判：落盘那一格 `\"rows\"` 写的是同函数里的**局部变量**（`src/wolfengine/batch.py` 里 "
         "`\"n_logs\": len(rows), \"rows\": rows`），字段这一份是它的第二份抄本且没人回读，见 src/wolfengine/batch.py",
@@ -1216,10 +1216,10 @@ FIELD_VERDICTS = ("删", "搬", "接", "留", "待判")
 
 def test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_disposition():
     """`#172`：`#81`→`#166` 那一族数过函数、方法、类、导入、模块级常量，唯独没数过**类体里
-    带注解的字段**。本条自己数：296 格字段、15 格零生产读者（其中 5 格连测试也不点它名，那是
-    下面九格"待判"里的五格）。`#172` 那份不共用这把尺的复算当时报 24 格（08:14:58Z 那棵树比
+    带注解的字段**。本条自己数：295 格字段、14 格零生产读者（其中 4 格连测试也不点它名，那是
+    下面八格"待判"里的四格）。`#172` 那份不共用这把尺的复算当时报 24 格（08:14:58Z 那棵树比
     现在多两格），多的 7 格正是这具尺多认的那两形：`row["名字"]` 式的落盘回读与 src 自己那两张
-    INERT 表。
+    INERT 表；`#174` 与 `#175` 各删掉一格，把当时的 298/17 变成了现在这一份，见 docs/iterations.md。
 
     本条不要它们都"有读者"，只要**每一格都有一条登记过的处置**：名册与本条数的零读者两侧相等
     （多一格＝新长出来没登记，少一格＝登记的那格已不在树上）、处置词必须是那五个之一、落点路径
