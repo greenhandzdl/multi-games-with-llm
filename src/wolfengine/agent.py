@@ -64,7 +64,6 @@ class TurnOutcome:
     fell_back: bool = False
     timed_out: bool = False
     context_overflow: bool = False
-    failure: str = ""
 
 
 @dataclass(frozen=True)
@@ -257,7 +256,6 @@ class Agent:
             fell_back=accepted is None,
             timed_out=timed_out,
             context_overflow=overflow,
-            failure="" if accepted is not None else (last.failure or "no_legal_action"),
         )
         outcome.seq = self._write(kind=kind, seat=seat, phase=phase, visibility=visibility,
                                   action=action, outcome=outcome, as_of=as_of,

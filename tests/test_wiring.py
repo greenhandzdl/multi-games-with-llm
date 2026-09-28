@@ -1103,12 +1103,16 @@ def test_the_method_layer_names_every_zero_production_reader_and_each_carries_a_
     assert not sloppy, f"这些格的处置没写出落点（或落点那个文件不存在）：{sloppy}"
 
 
+SHARED_READ_LIMIT = 8
+
+
 def _field_defs_and_reads(
     src_roots: tuple[str, ...] = ("src",),
     read_roots: tuple[str, ...] = ("src", "scripts"),
     test_roots: tuple[str, ...] = ("tests",),
-) -> tuple[dict[str, tuple[int, int, list[int]]], list[str]]:
-    """字段层的探测本体：(名册 `文件::类.字段` -> (生产读数, 测试读数, 落点行), 零读者字段)。
+) -> tuple[dict[str, tuple[int, int, list[int]]], list[str], dict[str, tuple[tuple[str, ...], int, tuple[str, ...]]]]:
+    """字段层的探测本体：(名册 `文件::类.字段` -> (生产读数, 测试读数, 落点行), 零读者字段,
+    同名多类的低读数面 `裸名` -> (声明它的类, 读数, 读者所在文件))。
     名册与夹具两条判据共用这一具，夹具不许另写一份尺（`#153`）。
 
     与 `#156` 那把方法层的尺差三格，每一格都是这一层特有的：
@@ -1119,33 +1123,40 @@ def _field_defs_and_reads(
       同 `#160` 那条"定义自己不是读者"，字段这一层还要多扣两种写。
     * **src 自己点名惰性的那两张表算读者**：`config.INERT_FIELDS` 与 `INERT_LEAVES`（嵌套那半边
       写成 `tokens.warn`，取末段）。从源码 import 而不是在这里抄第二份名单。
+
+    第三格是 `#205` 加的那一面：读数只按**裸名**归属，所以一具类里的字段会把读者借给另一具
+    同名字段——名册那一格判不出这种替付账，它只会问"有没有读者"。这一面把"两具以上类共用一个
+    裸名、且裸名读数不超过 `SHARED_READ_LIMIT`"的名字交给人点名，见 `SHARED_NAME_TRIAGE`。
     """
     inert = {*(INERT_FIELDS), *(leaf.rsplit(".", 1)[-1] for leaf in INERT_LEAVES)}
     readers: dict[str, int] = {}
+    read_files: dict[str, set[str]] = {}
     test_readers: dict[str, int] = {}
     defs: dict[str, list[int]] = {}
 
-    def bump(bucket: dict[str, int], key: str) -> None:
+    def bump(bucket: dict[str, int], key: str, origin: str = "") -> None:
         bucket[key] = bucket.get(key, 0) + 1
+        if origin:
+            read_files.setdefault(key, set()).add(origin)
 
-    def count_reads(tree: ast.AST, bucket: dict[str, int]) -> None:
+    def count_reads(tree: ast.AST, bucket: dict[str, int], origin: str = "") -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute):
                 if isinstance(node.ctx, ast.Load):
-                    bump(bucket, node.attr)
+                    bump(bucket, node.attr, origin)
             elif isinstance(node, ast.Call):
                 fn = node.func
                 if (isinstance(fn, ast.Name) and fn.id in DISPATCH and len(node.args) > 1
                         and isinstance(node.args[1], ast.Constant)
                         and isinstance(node.args[1].value, str)):
-                    bump(bucket, node.args[1].value)
+                    bump(bucket, node.args[1].value, origin)
                 elif (isinstance(fn, ast.Attribute) and fn.attr == "get" and node.args
                       and isinstance(node.args[0], ast.Constant)
                       and isinstance(node.args[0].value, str)):
-                    bump(bucket, node.args[0].value)
+                    bump(bucket, node.args[0].value, origin)
             elif (isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant)
                   and isinstance(node.slice.value, str)):
-                bump(bucket, node.slice.value)
+                bump(bucket, node.slice.value, origin)
 
     def py_files(root: str):
         for f in sorted(Path(root).rglob("*.py")):
@@ -1154,7 +1165,7 @@ def _field_defs_and_reads(
 
     for root in read_roots:
         for f, tree in py_files(root):
-            count_reads(tree, readers)
+            count_reads(tree, readers, str(f))
     for root in test_roots:
         for f, tree in py_files(root):
             if root not in read_roots:
@@ -1170,7 +1181,13 @@ def _field_defs_and_reads(
 
     roster = {k: (readers.get(k.rsplit(".", 1)[1], 0) + (1 if k.rsplit(".", 1)[1] in inert else 0),
                   test_readers.get(k.rsplit(".", 1)[1], 0), v) for k, v in defs.items()}
-    return roster, sorted(k for k, v in roster.items() if v[0] == 0)
+    by_name: dict[str, set[str]] = {}
+    for key in defs:
+        by_name.setdefault(key.rsplit(".", 1)[1], set()).add(key.rsplit(".", 1)[0])
+    shared = {n: (tuple(sorted(c)), readers.get(n, 0), tuple(sorted(read_files.get(n, ()))))
+              for n, c in sorted(by_name.items())
+              if len(c) >= 2 and readers.get(n, 0) <= SHARED_READ_LIMIT}
+    return roster, sorted(k for k, v in roster.items() if v[0] == 0), shared
 
 
 # 字段层的零读者名册：每一格都要写处置和落点（`#172`）。处置词沿用 `#156` 那五个：
@@ -1242,7 +1259,7 @@ def test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_dispos
     是因为方法层没有"按算出来的键回读"这一形；这一层有（见上面那六格 `RegionBudget`），所以
     先把"必须表态"钉住，哪一格表态错了由下面那条夹具与限界第二条管。
     """
-    roster, dead = _field_defs_and_reads()
+    roster, dead, _ = _field_defs_and_reads()
     assert len(roster) >= 250, f"字段只数到 {len(roster)} 格，多半是收集坏了"
     assert sorted(dead) == sorted(FIELD_TRIAGE), (
         f"零读者的字段与登记的名册不是一份：只在树上 {sorted(set(dead) - set(FIELD_TRIAGE))}，"
@@ -1279,7 +1296,7 @@ def test_the_field_probe_reads_a_disk_key_readback_but_not_a_dict_literal(tmp_pa
         'print(board.show(b), row["via_key"], b.__dict__.get("via_get"), '
         'getattr(b, "never", None))\n', encoding="utf-8")
 
-    roster, dead = _field_defs_and_reads((str(pkg),), (str(pkg), str(scripts)), ())
+    roster, dead, _ = _field_defs_and_reads((str(pkg),), (str(pkg), str(scripts)), ())
     assert sorted(roster) == [
         "board.py::Board.dict_key_only", "board.py::Board.enable_sheriff",
         "board.py::Board.never", "board.py::Board.via_attr", "board.py::Board.via_get",
@@ -2641,3 +2658,78 @@ def test_the_literal_alias_scanner_fires_on_a_second_copy_in_either_spelling():
     })
     assert homes == {"ActorKind": [("pkg/a.py", 3), ("pkg/c.py", 2)],
                      "Winner": [("pkg/f.py", 3)]}, homes
+
+
+# 同名多类的低读数面：每一格都要点名「读者属于哪一具类」（`#205`）。
+SHARED_NAME_TRIAGE: dict[str, str] = {
+    'alive': '留：`SeatState.alive` 由 state.py 回读、`BeliefState.alive` 由 belief.py 回读；phases.py 那三处是 `Table.alive()` 这个**方法**，裸名尺把它当字段读者算了进来（限界）',
+    'deviations': '留：`ParseOutcome.deviations` 由 actors.py 读、`Proposal.deviations` 由 agent.py 读',
+    'error': '留：llm.py 里 `res.error` 读的是 `TransportResult` 那一具（`res` 来自 transport.chat），`CallResult.error` 由 actors.py 与 cli.py 读、同文件 `self.error` 也是它；calibrate.py 那两处是落盘键回读',
+    'finish_reason': '留：`TransportResult.finish_reason` 由 llm.py 读、`CallResult.finish_reason` 由同文件的 `self.finish_reason` 读；metrics.py 与 calibrate.py 那两处是落盘键回读',
+    'folded_days': '留：`FoldPlan.folded_days` 由 assemble.py 读、`Prompt.folded_days` 由 agent.py 读，metrics.py 那一处是落盘键回读；`#115` 给的就是后者',
+    'legal': '留：`TurnContext.legal` 由 actors.py 与 human.py 读、`_View.legal` 由 agent.py 读',
+    'percept': '留：三具各有读者——`TurnContext.percept`（actors.py、human.py）、`_View.percept` 与 `TurnOutcome.percept`（都在 agent.py）',
+    'persona': '留：`TurnContext.persona` 由 actors.py 读、`_View.persona` 由 agent.py 读、`RngStreams.persona` 由 game.py 读',
+    'pk_seats': '留：`GameState.pk_seats` 由 rules.py 读（`state.pk_seats`）、`VoteResult.pk_seats` 由 rules.py 与 phases.py 读（`res.pk_seats`）',
+    'prompt': '留：`TurnContext.prompt` 由 actors.py 与 cli.py 读、`TurnOutcome.prompt` 由 agent.py 读',
+    'prompt_tokens': '留：`TransportResult.prompt_tokens` 与 `CallResult.prompt_tokens` 的读者都在 llm.py（一处 `res.`、一处 `self.`）；metrics.py、batch.py、calibrate.py 那几处是落盘键回读',
+    'raw_usage': '留：`CallResult.raw_usage` 由 llm.py 的 `self.raw_usage` 读、`TransportResult.raw_usage` 由同文件 `res.raw_usage` 读，两处不是同一具',
+    'rung': '留：`ParseOutcome.rung` 由 actors.py 与 agent.py 读、`Proposal.rung` 由 agent.py 读，metrics.py 那几处是落盘键回读',
+    'timed_out': '留：`Proposal.timed_out` 由 agent.py 读（`proposal.timed_out`）、`TurnOutcome.timed_out` 由同文件 `outcome.timed_out` 读；metrics.py 那一处是落盘键回读',
+    'window': '留：`FoldPlan.window` 由 assemble.py 读、`Prompt.window` 由 agent.py 读；metrics.py 那一处是落盘键回读，接读者接的就是它（`#115`）',
+}
+
+
+def test_a_field_name_two_classes_share_names_which_one_the_readers_belong_to():
+    """`#205`：字段尺按**裸名**归属读者，所以一具类的读者能把另一具类的同名死字段顶绿。
+
+    名册那一条只问「有没有读者」，答不出「是谁的读者」——本条把两具以上类共用一个裸名、
+    且裸名读数不超过 `SHARED_READ_LIMIT` 的名字交给人点名：处置要点名每一具声明它的类，
+    并点到读者真正所在的那本文件。归属由人写、机器只查「点没点名」，因为按接收者反推类型
+    试过一回，八个名字一个类都归不到，那把尺比它要抓的 bug 更不可信。
+    """
+    _, _, shared = _field_defs_and_reads()
+    assert len(shared) >= 10, f"同名面只数到 {len(shared)} 个名字，多半是收集坏了"
+    assert sorted(shared) == sorted(SHARED_NAME_TRIAGE), (
+        f"同名面与登记的名册不是一份：只在树上 {sorted(set(shared) - set(SHARED_NAME_TRIAGE))}，"
+        f"只在名册里 {sorted(set(SHARED_NAME_TRIAGE) - set(shared))}")
+    for name, (slots, n, files) in sorted(shared.items()):
+        claim = SHARED_NAME_TRIAGE[name]
+        assert claim.startswith(FIELD_VERDICTS), f"{name}：处置没以『删/搬/接/留/待判』开头：{claim[:24]}"
+        silent = [c.split("::")[1] for c in slots if c.split("::")[1] not in claim]
+        assert not silent, f"{name}：这些类声明了它却没人被点名，读者到底算谁的？{silent}"
+        if n:
+            cited = [f for f in files if Path(f).name in claim]
+            assert cited, f"{name}：有 {n} 处读数，处置却没点到读者那本文件（候选 {list(files)}）"
+
+
+def test_the_shared_face_admits_a_low_read_twin_and_refuses_the_other_two(tmp_path):
+    """夹具：同名面那三道门槛各配一格——两具类且读数不超上限的进来，单类的不进、超上限的不进。
+
+    读数现场按 `SHARED_READ_LIMIT` 算，改上限不需要改这一格。`twin` 坐在两具类里、被读的次数
+    **正好等于上限**（这一形含在面里，仓库里的 `alive` 就踩在这一格上）；`crowded` 同样两具类，
+    多读一次就得出局；`solo` 只有一具类声明，读了也不算同名；`dark` 两具类零读者，必须带着读数
+    `0` 和一份空的读者名单进来——名册那一条把它判成零读者，本面却看得见它有两具类，这正是
+    `#205` 要人点名的那一形：`twin` 的读者全在 run.py 里点 `b.`，尺却把两具类记成共用同一份读数。
+    """
+    pkg = tmp_path / "pkg"
+    scripts = tmp_path / "script_side"
+    for d in (pkg, scripts):
+        d.mkdir()
+    (pkg / "t.py").write_text(
+        "from dataclasses import dataclass\n\n\n@dataclass\nclass A:\n"
+        "    twin: int\n    crowded: int\n    dark: int\n    solo: int\n\n\n"
+        "@dataclass\nclass B:\n    twin: int\n    crowded: int\n    dark: int\n", encoding="utf-8")
+    (scripts / "run.py").write_text(
+        "from pkg import t\n\na = t.A(1, 2, 3, 4)\nb = t.B(5, 6, 7)\n"
+        + "print(a.twin, b.crowded)\n" * SHARED_READ_LIMIT
+        + "print(b.crowded, a.solo)\n", encoding="utf-8")
+
+    _, dead, shared = _field_defs_and_reads((str(pkg),), (str(pkg), str(scripts)), ())
+    assert sorted(shared) == ["dark", "twin"], sorted(shared)
+    assert dead == ["t.py::A.dark", "t.py::B.dark"], dead
+    slots, n, files = shared["twin"]
+    assert list(slots) == ["t.py::A", "t.py::B"], slots
+    assert n == SHARED_READ_LIMIT, n
+    assert sorted(Path(f).name for f in files) == ["run.py"], files
+    assert shared["dark"] == (("t.py::A", "t.py::B"), 0, ()), shared["dark"]

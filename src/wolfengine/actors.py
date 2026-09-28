@@ -82,7 +82,6 @@ class Proposal:
     rung: int = -1
     deviations: tuple[str, ...] = ()
     parse_errors: list[dict[str, Any]] = field(default_factory=list)
-    rejected: tuple[dict[str, Any], ...] = ()
     response: dict[str, Any] = field(default_factory=dict)
     # what the actor actually sent, for `Event.request`. Only the actor knows this:
     # `agent.py` assembles bytes, `LlmActor` chooses the generation params.

@@ -1535,7 +1535,7 @@ Z9–Z11 第一版是 **SURVIVED** 的：`tests/test_batch_paired.py` + `tests/t
 会把"升级之前跑的批"说成"那批桌没有指派需求"。
 
 12:28:35Z 那份 audit 读数里两格比率都是 1.0，`by_assigned` 与 `speech_acts` 逐键相同。这不是闸门通过，
-是 mock 桌由构造就听指派（`actors.py:234` 直接取 `legal.assigned_act`，真读数要等端点）。分辨力另有钉：
+是 mock 桌由构造就听指派（`actors.py:233` 直接取 `legal.assigned_act`，真读数要等端点）。分辨力另有钉：
 `test_a_forked_act_moves_the_final_rate_and_leaves_the_first_try_one_alone` 只改一条 `payload.act`，
 要求 `obeyed_final` 掉下来而 `obeyed_first_try` 不动——两格一起动就说明其中一格读错了东西。
 
@@ -1600,7 +1600,7 @@ VOTE 与 NIGHT_ACTION 这一路一声不响。守卫留不留，在最不可逆�
 字段都不对——真号是 `f"{phase}:{day}:{seat}:{as_of}"`，`actor` 从不参与，而 `as_of` 恰恰是唯一的轮次
 标记。留着这句错话的代价不是"文档不准"：照着"键里没有轮次"去理解，PK 复投被第一张票吞掉就成了设计
 如此，而 W2 证明那 10 位读者要的正是轮次。已改成与代码一致（行内改、**行数不变**——文档里点 `events.py`
-行号的那几处引用，一行都不许被这次编辑顶错位）。`agent.py:372` 那条讲 `as_of` 的注释本来就写着"没有
+行号的那几处引用，一行都不许被这次编辑顶错位）。`agent.py:370` 那条讲 `as_of` 的注释本来就写着"没有
 轮次标记，复投就会从日志里消失"——写注释的手知道，测试的名单里没有人。
 
 基准先自证：跑电池之前全仓库 0 红（12:55:31Z，`767 passed in 47.04s`）。7 具（`/tmp/mut_idem69.py`，
@@ -1685,7 +1685,7 @@ plan §5 的 A/B/C 分段、字节稳定、同波共享前缀，全部是为了�
 | C1 | audit 那一格接了但是空的 | CAUGHT | 两条新 audit 用例（键集合那条**抓不到**它：键还在） |
 
 P6 不是没测到，是**今天测不出来**：全仓库只有一处往记录里写 `response`（`agent.take_turn`，
-`src/wolfengine/agent.py:379`），它追加的 kind 恰是 `DECISION_KINDS` 那五个，所以"有延迟"今天蕴含
+`src/wolfengine/agent.py:377`），它追加的 kind 恰是 `DECISION_KINDS` 那五个，所以"有延迟"今天蕴含
 "是决定"。两半合起来才是一句话，冗余的那半边留在原地并在 docstring 里说明它是**当前调用点的不变量、
 不是日志格式的性质**——第六种带答案的 kind 出现那天，它就是拦住账单的那半边。
 
@@ -3790,7 +3790,7 @@ RED 00:14:28Z（三条新用例先红，红的都是"句子少了一半"那一�
 落盘那一份是"校验之后必然相等"的复制品，零个第二个读者（`metrics.py` 数的是 `act`，渲染链不读它）。
 
 处理是把笔收回来、把证据留在原地：`legality` 那道自洽检查照旧（`schema.Action.potion` 还是模型答复上的
-字段，`potion_act_mismatch`/`potion_unavailable` 照退），但 `agent.py:353` 起那两行写入被两行注释顶替，
+字段，`potion_act_mismatch`/`potion_unavailable` 照退），但 `agent.py:351` 起那两行写入被两行注释顶替，
 行数一根没动——被校验过、不可能再和 `act` 不同的东西不必再抄一遍。被退回的那份原文一直都在 `attempts`
 里，`#114` 起这才是"模型自相矛盾"的唯一证物，
 `test_a_self_inconsistent_potion_is_kept_as_the_refused_answer_not_as_a_fact` 把那一整串 JSON 逐字钉住。
@@ -3809,7 +3809,7 @@ RED 00:14:28Z（三条新用例先红，红的都是"句子少了一半"那一�
 
 | 刀 | 砍在哪 | 结果 |
 |---|---|---|
-| M1 | 把 `agent.py:353` 的两行注释换回 `legality` 之后的那份 `action.potion` 抄写 | CAUGHT：`test_the_table_names_every_key_that_lands_on_disk`、`test_the_chosen_act_is_the_only_record_of_which_potion_was_spent`、`test_a_self_inconsistent_potion_is_kept_as_the_refused_answer_not_as_a_fact`、`test_the_save_is_recorded_as_a_potion_not_as_a_resurrection`（金样本那格也读这一列） |
+| M1 | 把 `agent.py:351` 的两行注释换回 `legality` 之后的那份 `action.potion` 抄写 | CAUGHT：`test_the_table_names_every_key_that_lands_on_disk`、`test_the_chosen_act_is_the_only_record_of_which_potion_was_spent`、`test_a_self_inconsistent_potion_is_kept_as_the_refused_answer_not_as_a_fact`、`test_the_save_is_recorded_as_a_potion_not_as_a_resurrection`（金样本那格也读这一列） |
 | M2 | 作者侧冒出一个表上没有的新键 | CAUGHT：只有形状闸门红 |
 | M3 | 表上少写一个真在落盘的键（`_idem`） | CAUGHT：只有形状闸门红 |
 | M4 | 表上多写一个没人产的键 | CAUGHT：只有反向那条红——它专治这个方向 |
@@ -3827,7 +3827,7 @@ RED 00:52:13Z（两条先红，红的正是"表漏了五行"与"mock 局写出�
 README 自己就是 `test_doc_citations.py` 与 `test_no_secrets.py` 的输入，所以本节再动一笔就得把这两页重跑一次。
 
 普查剩下的那一格（`COMPACTION` 的 `window` 与 `folded_days` 有没有第二个读者）量下来**不是病**，理由是
-两格各自的答案不同：`agent.py:338` 写下的 `folded_days` 与同一格里的 `summary` 确实是"同一件事的两份
+两格各自的答案不同：`agent.py:336` 写下的 `folded_days` 与同一格里的 `summary` 确实是"同一件事的两份
 说法"——`tests/test_live_path.py` 那条交叉校验就是拿正则从 `summary` 里抠出天数再对列表——但那一份是
 **可查询的投影**，另一份是**模型真看到的字节**，`#111`/`#113` 删的是"散文抄结构"的方向，这里方向反过来：
 `compress.py:90` 渲染读的是 `summary`，没人想再解析一遍散文去数天。`window` 在**产品链上零读者**——只有
@@ -3839,7 +3839,7 @@ README 自己就是 `test_doc_citations.py` 与 `test_no_secrets.py` 的输入�
 #### 形状表的另一半：每一格都得有人读（`#115`）
 
 上一节结尾那格"不动"到这一节为止仍然不是双写者缺陷——`window` 与 `folded_days` 全仓库只有一个写点
-（`agent.py:338`）。不对的是它另一层意思：形状表承诺的是"这一格里有这些键"，而"有键没人读"是同一族
+（`agent.py:336`）。不对的是它另一层意思：形状表承诺的是"这一格里有这些键"，而"有键没人读"是同一族
 缺陷的另一半（`#88` 的字段只活在返回值里、`#101` 的 `hollow.paths` 只活在文档里）。零读者的落盘键不会
 自己烂成假话，它会一直是一句"作者记得写过"。
 
@@ -4291,7 +4291,7 @@ stdin 用管道喂三行后就是 EOF）里，3 号那六回合各自说的是�
 
 **顺带量出来一件这一片没解决的事**（记账给 `#127`，下面那一节已经把它接掉）：`agent.py` 的修复重试对人也生效——第一句被驳回后
 再问一次，`retry=` 那一格跟着加，而第二次印的是**同一张卡片**：`ctx.attempt` 已经带着"这是第几次问"，
-`retry_note`（`agent.py:228` 算出来的拒绝理由）只进模型那一侧的 prompt，真人这一侧零读者。于是他会看到
+`retry_note`（`agent.py:227` 算出来的拒绝理由）只进模型那一侧的 prompt，真人这一侧零读者。于是他会看到
 自己刚读过的那屏原样重来，而卡片上那句"换成别的会被引擎代答一次"与实际发生的"会被再问一次"不一致。
 
 七把正刀、两把负控制、一具缺口刀（共十具）照 `/tmp/mut123.py`（2026-09-25T11:13Z，每具跑
@@ -4651,7 +4651,7 @@ A7 是这一片留下的**登记项而不是缺陷**：那一句严格性判据�
 而那份批次目录留下的 `drift.md` 写着 `异常探针：latency×0.14`、中位延迟比 0.137、**五个探针的
 批首答案与批尾答案逐字相同**。`report.py:284` 那条 `latency×` 追加与 `report.py:279` 的 `:answer`
 是两回事：这条红走的是延迟闸门，不是内容。而 `parse_human_line` 在生产链上只有一个调用者
-（`actors.py:359` 那一行），批次侧没有 HumanActor——一具改人话解析的刀没有路径去动端点延迟。
+（`actors.py:358` 那一行），批次侧没有 HumanActor——一具改人话解析的刀没有路径去动端点延迟。
 所以半径发布为 1，这一条记成"canary 的延迟通道对机器负载敏感"的又一例：同一只手、同一个理由，
 也是上面那个 4.6 倍不发布的理由。**一具刀弄红一条、而我说不清它为什么红的，不算证据。**
 
@@ -4814,7 +4814,7 @@ K2 的刀口要特别说明，不然这一具是**钝刀**。第一版只把判�
 
 ### 那一格落的席位终于有人读了：`#130`
 
-真人在狼队私聊那一栏打「讨论 5 今晚刀他」：`#128` 把那个 5 解析成 `target`，`agent.py:348` 给每一条
+真人在狼队私聊那一栏打「讨论 5 今晚刀他」：`#128` 把那个 5 解析成 `target`，`agent.py:346` 给每一条
 决策无条件写它，`events.py:72` 的形状表也确实给 `wolf_chat` 声明了这一格。三段都成立，两头却没人接。
 
 * **落盘之前没人管**：席位校验原本长成 `if action.target is not None and action.act not in
@@ -8516,7 +8516,7 @@ E           KeyError: 'contract_version'
 * `board`（`game.py:100` 写）：**接线了**——`cli.py:369` 那串键名多了它，`tests/test_cli.py:470` 两条下标读钉住它。
 * `reproducibility_note`（当时写在 `game.py` 的第 115 行，`#181` 把这一格删掉了）：扫面里除写它自己那一次，**零出现**。
 * `created_utc`（`batch.py:210`）、`pair_keys`（`batch.py:211`）、`n_logs`（`batch.py:222`）：同上，只剩写它们的那一行。
-* `rows`（`batch.py:222`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:288` 读清单里那一格；`tests/test_wiring.py:2011` 读的是另一份文档的 `rows`）——不是缺陷。
+* `rows`（`batch.py:222`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:288` 读清单里那一格；`tests/test_wiring.py:2028` 读的是另一份文档的 `rows`）——不是缺陷。
 
 两层豁免各自当场拦下一次误判：`render_html.py:209` 那个 `class="board"` 和 `tests/test_calibrate_guard.py:51` 那个 `"rows": […]` 都是**另一个命名空间里的同名**，若算成读者，`board` 和 `rows` 会被各自销案成假阴性；反方向上，`pair_keys` 与 `n_logs` 被第二层从"零读者"降级成"只被发布"——同一对名字在 `cli.py:577` 有属性级读者（`res.n_logs`、`res.pair_keys[0]`），零的只是清单里那两格。
 
@@ -9564,9 +9564,9 @@ helper 与死簇 `#155`/`#165`/`#166`、字段 `#172`、模块级常量 `#160`�
 * `NotImplementedError` 桩：收两种写法（裸名与带括号调用），控制 1/1/0 ⇒ **真语料 0**。
 * 常量条件 `if`：`if True` 与 `if False` 两种都算，先赋值再判的变量条件不算（控制 1/1/0）⇒ **真语料 0**。
 * 函数体只剩一行：控制 docstring / `pass` / `...` 各 1、两行的 0 ⇒ **真语料 5 处**，逐格读原文。
-  * `src/wolfengine/actors.py:110` 声明的是 `timeout_for`。`src/wolfengine/actors.py:112` 声明 `act`，
+  * `src/wolfengine/actors.py:109` 声明的是 `timeout_for`。`src/wolfengine/actors.py:111` 声明 `act`，
     那一格的返回类型写着 `Proposal`。两格都住在 `Actor` 协议里，`timeout_for` 真正的调用落在
-    `src/wolfengine/agent.py:298`，`act` 的具体实现同文件另有三处。
+    `src/wolfengine/agent.py:296`，`act` 的具体实现同文件另有三处。
   * `src/wolfengine/transport.py:108` 声明的是 `chat`，那一格是 `LLMTransport` 协议成员。认领它的
     是 `src/wolfengine/llm.py:122` 那个形参注解里的 `LLMTransport`。
   * 剩下两格在测试的桩端点里。`tests/test_calibrate_rehearsal.py:64` 覆空的函数叫 `log_message`，
@@ -9580,7 +9580,7 @@ helper 与死簇 `#155`/`#165`/`#166`、字段 `#172`、模块级常量 `#160`�
 三处真语料，不是零读者的空转分支，所以它该写进将来的判据而不是现在。
 
 **登记这一节时自己撞到的一条尺界**：行号闸门要求同一句话把被指的东西**写成名字**，而它取词的下限是四个
-字符，所以三字母的方法名 `act` 不能替 `actors.py:112` 背书——把句子改成引用同一行的 `Proposal` 才绿。
+字符，所以三字母的方法名 `act` 不能替 `actors.py:111` 背书——把句子改成引用同一行的 `Proposal` 才绿。
 这一格不是缺陷（判据宁可要求长名字），但它决定了"手册里能不能给短名字写号"，值得在册。
 
 **读数的限界要点名**：这四把尺全是静态的，答的是"这个形状在不在"，答不了"这条分支有没有人被跑到"。
@@ -9839,7 +9839,7 @@ sha256 各自比过，三次 match 全 True。K3 那一跑比 `#103` 记下的�
 角色，只有那一支不可达的分支拦着（`board_for` 只发 9 人板，生产链进不到它）。按"零读者就删分支而不是
 留断言"的老规矩，先问的是这一格该由谁守，而不是给它补一条用例让它看起来活着。
 
-**搬动**：不变量落到 `src/wolfengine/roles.py:84` 的 `__post_init__`——坏板在定义那一行就构不出来，
+**搬动**：不变量落到 `src/wolfengine/roles.py:82` 的 `__post_init__`——坏板在定义那一行就构不出来，
 出厂那块板由 import 盖章；`src/wolfengine/rules.py:21` 的 `deal` 因此不必再自己算第二遍，那两行守卫
 连同 `RuleError` 一起删掉（rules.py 净减 6 行）。
 
@@ -9940,7 +9940,11 @@ K1 把 `src` 那一刀整文件退回 `b6bc28b` 那一版 → **2 failed, 187 pa
 的同名赋值也算声明）→ **1 failed**，红的仍是假数据那一格。
 
 顺带登记同普查的两格读数：`src` 里真 Enum 只有一个（`Phase`，九个成员全有人读）；七个别名里 `Ability` 的取值有一个今天
-没有用例按名字点它（`shoot_on_death`，生产链三处读它，所以不是死值而是测试面的空格）。这两格都不动代码，留作补覆盖的候选。
+没有用例按名字点它（`shoot_on_death`，生产链三处读它，所以不是死值）。`#205` 更正这后半句：缺的只是那个**字面量**没在
+tests 里出现过，开枪那条行为是有用例的——被毒的猎人不开枪在 `test_rules.py`、房规不许时不排队在 `test_house_wired.py`
+的 P9 那一刀、开枪事件本身在 `test_golden_game.py`、开枪那一相的合法性在 `test_legality.py`。写"测试面的空格"把
+"没点名字"说成了"没测"，而这两件事在这一族里恰恰不同价钱：前者只欠一个字符串，后者欠一条用例。Enum 那一格照旧不动代码，
+这一格因此不再是补覆盖的候选。
 
 * 跑次账：20:11:48Z 那趟两条新用例合 `#161` 版本号那两条 **4 passed**；20:16:39Z 全量 **1092 passed in 65.72s**，离线，
   比 `#203` 那一趟多的正是这一片新写的两格；20:17:12Z 与 20:17:29Z 两趟文档侧分别 **109 passed in 5.55s**（行号引用、
@@ -9948,3 +9952,64 @@ K1 把 `src` 那一刀整文件退回 `b6bc28b` 那一版 → **2 failed, 187 pa
   的全部改动，而每一趟都不含写下它自己读数的那半句。
 * 正文落盘之后补的那一趟：20:20:40Z 全量 **1092 passed in 67.39s**，退出码单独回显过 `rc=0`。这一趟的树含上面那几行，
   不含它自己这一条读数——上面那片改过一次口径（那三处的出处从转述换成逐字判词），换完才跑的这一趟。
+
+### #205 同名多类字段的替付账：三格死字段躲在别类的读数下面，立「读者属于哪一具类」的点名登记
+
+**发现**：`#172` 那把字段尺只问过"这一格有没有读者"，没问过"这些读者是谁的"。它按**裸名**归属读数，所以一具类的
+读者能把另一具同名字段顶绿。本条把那一格补成一面：两具以上类共用一个裸名、裸名读数不超过 `SHARED_READ_LIMIT`
+（今天取 8）的名字进面，每一格由人点名"读者属于哪一具、在那本文件里"，机器查点没点名。20:44:33Z 现测：292 格字段、
+14 格零生产读者、224 个字段名里 43 个被两具以上类共用，上限挡掉 28 个，面上 15 个。这 15 个里有三个一查就是缺陷：
+
+* `roles.py::RoleSpec.consumables`（本条删掉）—— 那个 6 处读数的 `consumables` 全在 `state.py::LegalSet` 那一具上（两处成员
+  检查与判据在 `legality.py`、两处用药判据在 `actors.py`、"可用药"那一句在 `assemble.py` 且同句出现两次）。女巫的
+  药量今天活在 `state.py` 的 `save_left`／`poison_left`，`RoleSpec` 那份 `{"save": 1, "poison": 1}` 是第三份抄本，
+  写下之后没人读。
+* `actors.py::Proposal.rejected`（本条删掉）—— 那 3 处 `.rejected` 都是 `report.py::AxisDiff` 的差集，和这具类无关。
+* `agent.py::TurnOutcome.failure`（本条删掉）—— 那 2 处都是 `actors.py::Proposal.failure`（写 `attempts[]` 那一格）；它自己
+  只在构造时写进一个空串或一句原因，写进去之后没人读。
+
+删的依据不是"读数低"，是"没有一处读者落在自己那一具类上"。
+
+**作者不是自由选择**：归属本该由尺算。试过按接收者反推类型——那一趟有八个名字一个类都归不到。而真要归的那一形并不
+简单：`ctx.legal.consumables` 得连穿两跳注解才落到 `LegalSet`（`ctx: TurnContext`、`TurnContext.legal: LegalSet`）。
+一把需要人工豁免的尺比它要抓的 bug 更不可信，所以这一层的归属由人写、机器只查"点没点名"：名册每一格要点名声明它的
+每一具类，读数非零时还要点到读者那本文件。
+
+**代价先量后动**：三处删除顶掉 18 根行号引用（`docs/iterations.md` 十五行里十七根、`docs/metrics.md` 一根），两种
+幅度——`agent.py` 下游那些在两个删除点之下所以 −2，`retry_note` 那一根夹在两点之间所以 −1。20:40:56Z→20:42:07Z
+全量 **1 failed, 1093 passed in 70.17s**，唯一一条红是行号闸门，报的正是这一族。按"闸门报的行号只当线索"逐处读回
+原句和目标行再动笔：17 根锚点各 `count==1`、两个文件行数一字不变，脚本一次写盘没 ABORT；顶完 20:46:15Z 那一本
+**79 passed in 3.97s**。另两处连带：`roles.py` 的 `field` import 只喂那一行默认工厂，摘掉（不摘会被 `#83`／`#84`
+那一族点名）；`tests/test_legality.py` 三格夹具把 `consumables` 写成 dict，而活下来的那一具声明是 `tuple[str, ...]`
+——`in` 对两种形状给同一个答案，所以换前换后都是 39 条绿，这是一处**假话而不是一个 bug**，改成 tuple 之后行数不变。
+删的都是"没人读"的格，行为本该一字不动：20:46:14Z `test_rules.py`＋`test_legality.py`＋`test_agent_turns.py`
+三本 **113 passed in 0.32s**，那个"本该"就是这一趟。
+
+**红→绿**：登记那一条是真的红过。20:34:29Z 回 **1 failed**，报出的名单 18 个名字，三格缺陷自己就在名单里——那一刻
+它们还在树上。删完三格、逐格读回读者、填名册，20:36:26Z **1 passed in 0.49s**。
+
+**夹具那一条是尺写好之后补的对照**（这个次序偏离按 `#153` 记在这里）：它没有天然的红，所以红得起来靠刀量。六把
+（窗口 20:40:16Z 起、20:40:23Z 止，每一把逐文件对 sha256 还原，收尾复算整本哈希与 pristine 相等）：K1 撤掉"两具以上"
+那一格下限 → **2 failed**，面上一下涌进 172 个名字（名册报出的"只在树上"名单 157 个）；K2 撤掉上限 → **2 failed**；
+K3 让尺不再数读数 → **1 failed**；K4 让尺丢掉"哪本文件读的" → **1 failed**，这两把红在夹具那一条；K5 把上限调成 7、
+K6 调成 9 → 各 **1 failed, 1 passed**，红的只有名册那一条。K5/K6 是这一片最想要的形状：夹具自己按
+`SHARED_READ_LIMIT` 现场算读数，所以常数往两边走它都绿，而名册把那个**具体值**钉住——`alive` 的裸名读数正好等于 8，
+挡在它上面的最近邻居是 9 那两个名字。
+
+**正控制（这一片最硬的一格）**：把删掉的三格逐格放回去，各跑一次三条判据（窗口 20:45:32Z 起、20:45:37Z 止，三本
+src 逐把对 sha256 还原）：K7a 报「只在树上 `['consumables']`」、K7b 报 `['rejected']`、K7c 报 `['failure']`，
+三把都是 **1 failed, 2 passed**。它同时说了两件事：这一片确实抓得到它当初要抓的那一格；旧的零读者判据抓不到——
+那三格在原尺下一直是绿的。
+
+**限界两条**：① 尺按裸名数读数，方法调用与字段读是同一个形状，`alive` 那 8 处里有 3 处其实是 `Table.alive()` 那具
+**方法**。名册对这一格的处置是"必须点名"，不是"读数正确"。② 上限把 28 个名字留在没登记的那一边，`day`、`kind`、
+`seat` 这些被三具以上类共用、裸名读数几十次的名字都在里面——赌的是"读这么多不太可能一具都不沾"，而这一面判据证明
+不了这个赌注。292／14 与 43／28／15 都由本条那把尺现测，随树动。
+
+* 跑次账：20:39:48Z 夹具与名册两条合跑 **2 passed in 0.76s**；上面那六把与三把正控制都在同一棵已删格的树上跑，
+  每把只换那一格；20:46:14Z 与 20:46:15Z 那两趟分别钉行为与行号。本节正文写在这两趟之后，所以正文里的每个时刻
+  都是落盘前量过的数。
+* 正文落盘之后补的两趟：20:49:30Z 行号那一本先红了一次——新写的三格点了树上已经没有的成员，而句子少一个"这是历史"
+  的记号（`#158` 那一条），三句各补「本条删掉」之后 20:49:35Z **79 passed in 4.04s**，判据一行没动；20:49:44Z→
+  20:50:58Z 全量 **1094 passed in 73.52s**，退出码单独回显 `rc=0`。比 `#204` 那一趟多的两格是本片的新闸与它的夹具。
+  这一条不含它自己报的那个读数。

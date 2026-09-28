@@ -1,4 +1,4 @@
-"""Board definitions: roles, abilities, consumables, night order, house rules.
+"""Board definitions: roles, abilities, night order, house rules.
 
 Pure declarations. No logic lives here — `rules.py` reads these and decides. The point
 of putting the house rules in a named dataclass is that each ambiguity in Chinese
@@ -8,7 +8,7 @@ which convention this engine follows is visible and testable rather than buried 
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Literal
 
 Ability = Literal["kill", "wolf_chat", "check", "save", "poison", "shoot_on_death"]
@@ -23,15 +23,13 @@ class RoleSpec:
     name_zh: str
     team: Team
     abilities: tuple[Ability, ...] = ()
-    consumables: dict[str, int] = field(default_factory=dict)
     knows_teammates: bool = False
 
 
 WOLF = RoleSpec("wolf", "狼人", "wolf", ("kill", "wolf_chat"), knows_teammates=True)
 VILLAGER = RoleSpec("villager", "平民", "villager", ())
 SEER = RoleSpec("seer", "预言家", "god", ("check",))
-WITCH = RoleSpec("witch", "女巫", "god", ("save", "poison"),
-                 consumables={"save": 1, "poison": 1})
+WITCH = RoleSpec("witch", "女巫", "god", ("save", "poison"))
 HUNTER = RoleSpec("hunter", "猎人", "god", ("shoot_on_death",))
 
 

@@ -148,7 +148,7 @@ def test_abstaining_is_never_a_violation_when_the_rules_allow_it():
 
 def test_a_used_up_potion_is_refused_by_name():
     legal = state.LegalSet(acts=("save", "poison"), targets=frozenset({2}),
-                           consumables={"poison": 1})
+                           consumables=("poison",))
     v = check_action(schema.Action(act="save", potion="save"), legal=legal,
                      percept=VILLAGER_TURN, phase=state.Phase.NIGHT_WITCH)
     assert not v.ok and "potion_unavailable:save" in v.reason
@@ -156,7 +156,7 @@ def test_a_used_up_potion_is_refused_by_name():
 
 def test_potion_and_act_must_agree():
     legal = state.LegalSet(acts=("save", "poison"), targets=frozenset({2}),
-                           consumables={"save": 1, "poison": 1})
+                           consumables=("save", "poison"))
     v = check_action(schema.Action(act="poison", target=2, potion="save"), legal=legal,
                      percept=VILLAGER_TURN, phase=state.Phase.NIGHT_WITCH)
     assert not v.ok and "potion_act_mismatch" in v.reason
@@ -233,7 +233,7 @@ CASES = [
     ("wolf night", night(("kill",), {2, 3, 4}), state.Phase.NIGHT_WOLF),
     ("seer night", night(("check",), {2, 3, 4}), state.Phase.NIGHT_SEER),
     ("witch", state.LegalSet(acts=("save", "poison"), targets=frozenset({2}),
-                             consumables={"save": 1, "poison": 1}, allow_pass=True),
+                             consumables=("save", "poison"), allow_pass=True),
      state.Phase.NIGHT_WITCH),
     ("vote", state.LegalSet(acts=("vote",), targets=frozenset({2, 3}), allow_pass=True),
      state.Phase.DAY_VOTE),
