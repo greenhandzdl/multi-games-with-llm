@@ -456,6 +456,21 @@ def test_audit_carries_the_version_stamps_the_log_was_written_with(played, capsy
         assert stats["meta"][k], f"{k} 印了个空的"
 
 
+def test_audit_carries_which_board_the_log_was_dealt_on(played, capsys):
+    """同一把尺（`#177` 的零读者普查）量出来的六格之一：`board` 落了盘、没有人读。
+
+    这一格和三份版本戳不是同一种缺陷——版本戳是"问得出但没接线"，`board` 是"机器出口分不出
+    这两份日志坐在哪张桌上"：座位数不同的两块板，接线之前 `audit` 出的六个键里只有
+    `config_hash` 那串 12 位十六进制会不同，而那串是**整体配置**的指纹，说不了"是板子不同"。
+    """
+    _, path = played
+    assert cli.main(["audit", str(path)]) == 0
+    stats = _last_json_block(capsys.readouterr().out)
+    raw = json.loads(path.read_text(encoding="utf-8").splitlines()[0])["meta"]
+    assert stats["meta"]["board"] == raw["board"]
+    assert stats["meta"]["board"], "board 印了个空的"
+
+
 def test_audit_prints_metrics_and_nothing_else(played, capsys):
     """`audit` is machine-readable by contract: one JSON object, no prose to parse around it,
     and the numbers are the M-keys a batch report also uses — not a parallel set of names for
