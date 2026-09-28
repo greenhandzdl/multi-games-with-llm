@@ -15,10 +15,6 @@ from .roles import Board, Team
 from .state import Death, GameState, LegalSet, Phase, Winner
 
 
-class RuleError(RuntimeError):
-    pass
-
-
 # --------------------------------------------------------------------------- dealing
 
 
@@ -27,8 +23,6 @@ def deal(board: Board, rng: random.Random) -> dict[int, str]:
     same seed always yields the same table. Model randomness is a separate thing and is
     not reproducible on this endpoint at all (plan §2 principle 5)."""
     pool: list[str] = [r.id for r, n in board.composition for _ in range(n)]
-    if len(pool) != board.seat_count:
-        raise RuleError(f"board {board.id} declares {board.seat_count} seats but pools {len(pool)} roles")
     seats = list(range(1, board.seat_count + 1))
     rng.shuffle(pool)
     return dict(zip(seats, pool))

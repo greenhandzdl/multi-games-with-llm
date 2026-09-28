@@ -2530,7 +2530,7 @@ seq 101 vote_result  {"summary": "票型：3号2票。弃票1人。3号被投票
 根因是**一个谓词两处写**：这个条件原本只写在 `phases.run_vote` 的那一支 `and` 上
 （`res.tied and res.pk_seats and house.tie_break == "pk_once_then_nobody"`），而句子（当天在 `phases.py`
 里拼，`#113` 起搬进 `compress._vote_summary`）根本没读房规，于是分支和文案各说各话。收成一条 `rules.will_pk(state, res)`
-（`src/wolfengine/rules.py:291`），两边同问它：分支在 `phases.py:229`，句子经 `_publish` 的
+（`src/wolfengine/rules.py:285`），两边同问它：分支在 `phases.py:229`，句子经 `_publish` 的
 `pending_pk` 旗标（`phases.py:229/275`）随结算记录一起落盘，如今由 `compress.py:147` 的 `_vote_summary`
 读它决定说哪一句。
 **旗标而不是在渲染侧重算**：
@@ -2596,8 +2596,8 @@ PK 发言确实是 3、5 号，防止"永远不说无人出局"这种退化修�
 （11:27Z 在全仓 `*.py` 里 grep 那个文件名：只有 `tests/test_judge_wording.py` 的 docstring 命中一处——
 散文读者，不是断言）。修好的是以后的日志。
 
-第三处发现**没有修**，因为它的代价不是这一条该付的：`rules.NightResolution.peace`（平安夜，`rules.py:146`，
-`rules.py:213` 算出来）在产物链上**零读者**，只有 `tests/test_rules.py` 和 `tests/test_night_guards.py` 读它。
+第三处发现**没有修**，因为它的代价不是这一条该付的：`rules.NightResolution.peace`（平安夜，`rules.py:140`，
+`rules.py:207` 算出来）在产物链上**零读者**，只有 `tests/test_rules.py` 和 `tests/test_night_guards.py` 读它。
 于是女巫救人的那一夜什么公开句子都不发——上面那份留存日志的第一夜正是这一种：seq 13 狼刀 3号，seq 15
 5号交出解药（`"potion": "save"`，可见域只有 `[5]`；`#114` 之后的日志不再有这一格，那一瓶由 `act` 说），seq 17 验人，seq 18 直接"天亮了，第1天开始。"，中间
 既没有 `death` 也没有一句"昨晚平安夜"。那瓶药花掉了，而这在九个座位的公开视图里等于没发生，"昨晚是平安夜"
@@ -9828,3 +9828,49 @@ sha256 各自比过，三次 match 全 True。K3 那一跑比 `#103` 记下的�
   只在正文，代码那一侧一字未动。这三趟的树都不含报告它们的那几行自己——和上面那条是同一件事。
 * `docs/calibration.md` 一字未动，也没有重渲染：那份 sidecar 本来就没有抄本，`model` 缺失时否认那一支
   也进不去，loader 那句 note 的输入没变——它在 19:04:39Z 那一趟里由 page==render 那条断言盯着，是绿的。
+
+### #202 席位和角色池在发牌函数里对账、在板的构造处没人管：把那一格搬进 Board，顺手收掉一个零证人的异常类
+
+异常类这一层的普查按三种口径数（`raise` 点、`except` 点、`pytest.raises` 点），在册 8 个类里
+`rules.RuleError`（已删）是唯一三样都为零的那一个：1 处 raise、0 处 except、0 条用例点它的名字，
+搬之前它那半句判词也没进过 `tests/` 与 `docs/`。它守的是 `seat_count == Σ composition`，而这条不变量
+今天没有任何构造点在管——`Board` 是纯声明的 frozen dataclass，`BOARD_9` 那两个数是人自己填的。
+于是"板配错了会怎样"的实际答案是：发牌用 `zip` 摆桌，池短了静默少发两张身份牌、长了静默多几个没人坐的
+角色，只有那一支不可达的分支拦着（`board_for` 只发 9 人板，生产链进不到它）。按"零读者就删分支而不是
+留断言"的老规矩，先问的是这一格该由谁守，而不是给它补一条用例让它看起来活着。
+
+**搬动**：不变量落到 `src/wolfengine/roles.py:84` 的 `__post_init__`——坏板在定义那一行就构不出来，
+出厂那块板由 import 盖章；`src/wolfengine/rules.py:21` 的 `deal` 因此不必再自己算第二遍，那两行守卫
+连同 `RuleError` 一起删掉（rules.py 净减 6 行）。
+
+**代价先量后动**：`roles.py` 和 `test_rules.py` 在语料里 0 处被按行号点名，插行不欠账；被删那六行的
+下游有三处 `rules.py` 的行号点名（`#113` 与 `#88` 那两段里的 291／146／213），19:32:27Z 那趟文档单本
+**1 failed, 78 passed** 报的正是这三处。号是定位器不是读数，按"红掉的引用改句子、不改闸门"换成
+285／140／207，19:33:55Z 文档四本 **293 passed in 19.13s**。
+
+**红→绿**：19:31:07Z 先写的那条用例报 `DID NOT RAISE ValueError`（**1 failed, 3 passed, 56 deselected**），
+补上构造那一支之后 19:31:34Z **4 passed, 56 deselected**。两个方向各钉一格（池短、池长），另加一条
+`test_a_smaller_consistent_board_still_deals` 钉"这一格不是 9 人板专属"。
+
+**六具**：K1 把 `!=` 换成 `>`（只拦池长）、K2 换成 `<`（只拦池短）、K3 整个 `__post_init__` 拿掉、
+K4 判词只留 `pools` 而把两个数删掉——这四具各自把那条用例打红（每具 **1 failed, 3 passed**）；
+K5 把发牌的席位少摆一格 → `test_a_smaller_consistent_board_still_deals` 红；
+K6 把发牌的席位写死成 1..9 → **四格全绿，预期等价**：`zip` 以池长为界，"池=席位"已经由构造兜住之后
+那一行再没有可观测量。这一具报的不是"断言太松"，是那一格今天确实读不出来——所以 K5 才是它唯一还剩下
+的可读形。基线 **4 passed**，六具都按 sha256 逐具还原比过。
+
+* 跑次账：19:36:34Z 全量 **1090 passed in 66.95s**，离线，比 `#201` 那一趟多的正是这一片新写的两条。
+  那一趟的树里只有代码和用例两侧——本节正文在那之后才落盘，所以"含正文"那句话留给下面这一趟。
+* 正文落盘后第一趟文档四本没绿：19:40:18Z 回来的是 **1 failed, 292 passed**，红的是一处量词。我写
+  「那一本里有 7 个断言点了「配置错误」」时把量词用成了"条"，于是那一行被闸门读成在主张这个模块的
+  用例总数，而它实际的 def 数是 70。数字本身复核过没错（断言 7 处 + docstring 里 2 处 = grep 到的 9 行），
+  错的只是形状；按"红掉的引用改句子、不改闸门"换掉量词之后，19:42:01Z 起的那一趟文档四本
+  **293 passed in 19.02s**、19:43:30Z 回的全量 **1090 passed in 68.63s**。这两趟的树含本节正文，
+  不含上面报告它们的那几行字。换掉量词之后 19:46:30Z 再跑一趟文档四本 **293 passed in 19.18s**，
+  它看的是这一句还没落全的那半棵树——每一趟都不含写下它自己读数的那半句。
+* 普查扫描器自己的形状 bug 记一笔：第一版只认 `except Name`，把 `except batch.BadOverride` 那种属性形
+  读成 0 处，于是 `BadOverride` 一度被报成"零读者"；改成同时认 `ast.Attribute` 之后它是
+  raise 14／except 3／用例 8。同一口径下 `ConfigError` 的 `pytest.raises` 是 0，但它有人看着的是 CLI
+  那一行人话——`test_cli.py` 那一本里有 7 个 assert 点了「配置错误」，另有 2 处写在 docstring 里——类型名
+  本身没人点名，这一格登记成口径不对称而不是死代码（1 处 raise、2 处 except 都活着）。`info.IsolationError`
+  的 0 处 except 是另一件事：它是往外逃逸的不变量，两处 raise 都有用例盯着，这一片不动它。

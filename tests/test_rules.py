@@ -16,7 +16,7 @@ import pytest
 
 from wolfengine import persona
 from wolfengine.config import Config
-from wolfengine.roles import BOARD_9, HouseRules, board_for
+from wolfengine.roles import BOARD_9, Board, HouseRules, SEER, VILLAGER, WOLF, board_for
 from wolfengine.rules import (
     NightPlan,
     alive_team_counts,
@@ -69,6 +69,24 @@ def test_board_pool_sums_to_seat_count():
 def test_board_for_rejects_other_seat_counts():
     with pytest.raises(ValueError):
         board_for(8)
+
+
+def test_a_board_whose_pool_does_not_fill_its_seats_cannot_be_built():
+    """Both directions: `rules.deal` pairs the pool to the seats with `zip`, so a pool one short
+    silently leaves a seat undealt and a pool one long silently leaves a role nobody holds."""
+    with pytest.raises(ValueError, match="pools") as caught:
+        Board(id="bad8", seat_count=8, composition=BOARD_9.composition)
+    assert "8" in str(caught.value) and "9" in str(caught.value), \
+        f"拒的是哪一格要对得上数：{caught.value}"
+    with pytest.raises(ValueError, match="pools"):
+        Board(id="bad10", seat_count=10, composition=BOARD_9.composition)
+
+
+def test_a_smaller_consistent_board_still_deals():
+    """The other side of that guard: it compares counts, so nothing here is 9-seat specific."""
+    board = Board(id="tiny3", seat_count=3,
+                  composition=((WOLF, 1), (VILLAGER, 1), (SEER, 1)))
+    assert set(deal(board, random.Random(1))) == {1, 2, 3}
 
 
 def test_deal_is_seed_deterministic_and_role_accurate():

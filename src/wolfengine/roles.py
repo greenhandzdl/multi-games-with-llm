@@ -81,6 +81,13 @@ class Board:
     composition: tuple[tuple[RoleSpec, int], ...]
     house: HouseRules = HouseRules()
 
+    def __post_init__(self) -> None:
+        # 席位数和角色池必须刚好对上。`rules.deal` 用 zip 摆桌：池短了会静默少发身份牌，
+        # 长了会静默多几个没人坐的角色，两种都让一局从一开始就不是那张板。
+        pooled = sum(n for _, n in self.composition)
+        if pooled != self.seat_count:
+            raise ValueError(f"board {self.id} declares {self.seat_count} seats but pools {pooled} roles")
+
     @property
     def team_counts(self) -> dict[str, int]:
         out: dict[str, int] = {}
