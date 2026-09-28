@@ -98,8 +98,8 @@ wolf replay "$LOG" --seat 3 | head -3   # 3号的视图：看不到别人的身�
 wolf export "$LOG"                      # 观众模式 HTML（不写 -o 就落在日志旁边）
 wolf watch "$LOG" --once                # 打一帧终端画面就退出（截图/脚本用）
 wolf audit "$LOG" | head -20            # 质量与成本计数（JSON）
-# M7 的漂移自检要用到日志之外的拟合常数，所以那一条得显式递 sidecar；而 `data/calibration.json`
-# 是 `scripts/calibrate.py` 体检真端点的产物，`data/` 不入库，新克隆的仓库上没有它：
+# M7 的漂移自检要用到日志之外的拟合常数，所以那一条得显式递 sidecar。`data/calibration.json`
+# 是 `scripts/calibrate.py` 体检真端点的产物，那一份是有意留在仓库里的（`data/` 里只有它入库）：
 # wolf audit "$LOG" --calibration data/calibration.json | grep -A7 '"calibration"'
 ```
 

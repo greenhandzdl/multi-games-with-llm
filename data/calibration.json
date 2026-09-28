@@ -1,0 +1,363 @@
+{
+  "features": {
+    "models_endpoint": {
+      "status": 200,
+      "body": {
+        "data": [
+          {
+            "id": "gemma-4-26b-a4b-nvfp4",
+            "object": "model",
+            "created": 1626777600,
+            "owned_by": "openai",
+            "supported_endpoint_types": [
+              "openai"
+            ]
+          }
+        ],
+        "object": "list",
+        "success": true
+      },
+      "version_field_available": false,
+      "model_fields": [
+        "created",
+        "id",
+        "object",
+        "owned_by",
+        "supported_endpoint_types"
+      ],
+      "version_debt": "端点不提供模型版本/修订字段，因此'服务被人重启换了权重'只能靠 canary 探针间接发现，无法直接依据。这是口径债，不要假装有。"
+    },
+    "tokenize/tokenize": "<elided>",
+    "tokenize/v1/tokenize": "<elided>",
+    "apc_visibility": {
+      "probe_ok": true,
+      "has_cached_tokens": "<elided>",
+      "cached_value": null
+    },
+    "usage_keys_seen": "<elided>",
+    "n_gt_1": "rejected (400)",
+    "response_format_json": "rejected (400)",
+    "logprobs": "supported",
+    "stop_honored": true,
+    "greedy_seed42_distinct_of_3": 3,
+    "determinism_verdict": "NON-deterministic (temp=0 + seed do not pin output)"
+  },
+  "stream": {
+    "supported": true,
+    "chunks": 83,
+    "ttft_s": 1.127,
+    "median_interchunk_s": 0.017,
+    "verdict": "缓冲式（全部 chunk 在末尾同时到达）"
+  },
+  "ratio": {
+    "en_tokens_per_char": "<elided>",
+    "en_chars_per_sample": [
+      3550,
+      10650,
+      21300,
+      35500
+    ],
+    "zh_pt": 3221,
+    "zh_tokens_per_char": "<elided>",
+    "unit_tokens_estimate": "<elided>",
+    "fallback_rule_under_test": "ASCII/4 + CJK/1.6"
+  },
+  "latency": [
+    {
+      "prefix_reps": 35,
+      "pt": 573,
+      "k": 1,
+      "cold_s": 1.16,
+      "warm_s": 1.19,
+      "apc_speedup": 0.97,
+      "wall_s": 1.64,
+      "lat_p50_s": 1.64,
+      "lat_max_s": 1.64,
+      "agg_decode_tps": 14.7,
+      "agg_prefill_tps": 350.1,
+      "n_errors": 0
+    },
+    {
+      "prefix_reps": 35,
+      "pt": 573,
+      "k": 2,
+      "cold_s": 1.16,
+      "warm_s": 1.19,
+      "apc_speedup": 0.97,
+      "wall_s": 2.93,
+      "lat_p50_s": 2.93,
+      "lat_max_s": 2.93,
+      "agg_decode_tps": 15.4,
+      "agg_prefill_tps": 391.0,
+      "n_errors": 0
+    },
+    {
+      "prefix_reps": 35,
+      "pt": 573,
+      "k": 4,
+      "cold_s": 1.16,
+      "warm_s": 1.19,
+      "apc_speedup": 0.97,
+      "wall_s": 4.09,
+      "lat_p50_s": 3.69,
+      "lat_max_s": 4.09,
+      "agg_decode_tps": 19.1,
+      "agg_prefill_tps": 560.3,
+      "n_errors": 0
+    },
+    {
+      "prefix_reps": 35,
+      "pt": 573,
+      "k": 8,
+      "cold_s": 1.16,
+      "warm_s": 1.19,
+      "apc_speedup": 0.97,
+      "wall_s": 8.95,
+      "lat_p50_s": 6.24,
+      "lat_max_s": 8.9,
+      "agg_decode_tps": 16.8,
+      "agg_prefill_tps": 448.3,
+      "n_errors": 1
+    },
+    {
+      "prefix_reps": 35,
+      "pt": 573,
+      "k": 9,
+      "cold_s": 1.16,
+      "warm_s": 1.19,
+      "apc_speedup": 0.97,
+      "wall_s": 12.08,
+      "lat_p50_s": 9.17,
+      "lat_max_s": 11.87,
+      "agg_decode_tps": 13.7,
+      "agg_prefill_tps": 379.6,
+      "n_errors": 1
+    },
+    {
+      "prefix_reps": 130,
+      "pt": 1999,
+      "k": 1,
+      "cold_s": 1.19,
+      "warm_s": 1.29,
+      "apc_speedup": 0.92,
+      "wall_s": 1.78,
+      "lat_p50_s": 1.78,
+      "lat_max_s": 1.78,
+      "agg_decode_tps": 13.5,
+      "agg_prefill_tps": 1121.4,
+      "n_errors": 0
+    },
+    {
+      "prefix_reps": 130,
+      "pt": 1999,
+      "k": 2,
+      "cold_s": 1.19,
+      "warm_s": 1.29,
+      "apc_speedup": 0.92,
+      "wall_s": 2.78,
+      "lat_p50_s": 2.78,
+      "lat_max_s": 2.78,
+      "agg_decode_tps": 14.4,
+      "agg_prefill_tps": 1438.4,
+      "n_errors": 0
+    },
+    {
+      "prefix_reps": 130,
+      "pt": 1999,
+      "k": 4,
+      "cold_s": 1.19,
+      "warm_s": 1.29,
+      "apc_speedup": 0.92,
+      "wall_s": 4.32,
+      "lat_p50_s": 4.29,
+      "lat_max_s": 4.32,
+      "agg_decode_tps": 22.5,
+      "agg_prefill_tps": 1851.8,
+      "n_errors": 0
+    },
+    {
+      "prefix_reps": 130,
+      "pt": 1999,
+      "k": 8,
+      "cold_s": 1.19,
+      "warm_s": 1.29,
+      "apc_speedup": 0.92,
+      "wall_s": 9.42,
+      "lat_p50_s": 6.62,
+      "lat_max_s": 9.42,
+      "agg_decode_tps": 15.3,
+      "agg_prefill_tps": 1485.6,
+      "n_errors": 1
+    },
+    {
+      "prefix_reps": 130,
+      "pt": 1999,
+      "k": 9,
+      "cold_s": 1.19,
+      "warm_s": 1.29,
+      "apc_speedup": 0.92,
+      "wall_s": 11.34,
+      "lat_p50_s": 7.31,
+      "lat_max_s": 11.33,
+      "agg_decode_tps": 14.0,
+      "agg_prefill_tps": 1234.1,
+      "n_errors": 2
+    },
+    {
+      "prefix_reps": 270,
+      "pt": 4098,
+      "k": 1,
+      "cold_s": 1.61,
+      "warm_s": 1.2,
+      "apc_speedup": 1.35,
+      "wall_s": 1.71,
+      "lat_p50_s": 1.71,
+      "lat_max_s": 1.71,
+      "agg_decode_tps": 15.2,
+      "agg_prefill_tps": 2400.4,
+      "n_errors": 0
+    },
+    {
+      "prefix_reps": 270,
+      "pt": 4098,
+      "k": 2,
+      "cold_s": 1.61,
+      "warm_s": 1.2,
+      "apc_speedup": 1.35,
+      "wall_s": 4.48,
+      "lat_p50_s": 4.48,
+      "lat_max_s": 4.48,
+      "agg_decode_tps": 10.3,
+      "agg_prefill_tps": 1828.0,
+      "n_errors": 0
+    },
+    {
+      "prefix_reps": 270,
+      "pt": 4098,
+      "k": 4,
+      "cold_s": 1.61,
+      "warm_s": 1.2,
+      "apc_speedup": 1.35,
+      "wall_s": 4.47,
+      "lat_p50_s": 3.98,
+      "lat_max_s": 4.47,
+      "agg_decode_tps": 24.1,
+      "agg_prefill_tps": 3664.2,
+      "n_errors": 0
+    },
+    {
+      "prefix_reps": 270,
+      "pt": 4098,
+      "k": 8,
+      "cold_s": 1.61,
+      "warm_s": 1.2,
+      "apc_speedup": 1.35,
+      "wall_s": 15.39,
+      "lat_p50_s": 8.51,
+      "lat_max_s": 15.38,
+      "agg_decode_tps": 18.8,
+      "agg_prefill_tps": 1864.4,
+      "n_errors": 1
+    },
+    {
+      "prefix_reps": 270,
+      "pt": 4098,
+      "k": 9,
+      "cold_s": 1.61,
+      "warm_s": 1.2,
+      "apc_speedup": 1.35,
+      "wall_s": 16.17,
+      "lat_p50_s": 10.42,
+      "lat_max_s": 16.17,
+      "agg_decode_tps": 17.4,
+      "agg_prefill_tps": 2027.2,
+      "n_errors": 1
+    },
+    {
+      "prefix_reps": 520,
+      "pt": 7850,
+      "k": 1,
+      "cold_s": 2.96,
+      "warm_s": 1.24,
+      "apc_speedup": 2.39,
+      "wall_s": 5.94,
+      "lat_p50_s": 5.94,
+      "lat_max_s": 5.94,
+      "agg_decode_tps": 13.5,
+      "agg_prefill_tps": 1321.2,
+      "n_errors": 0
+    },
+    {
+      "prefix_reps": 520,
+      "pt": 7850,
+      "k": 2,
+      "cold_s": 2.96,
+      "warm_s": 1.24,
+      "apc_speedup": 2.39,
+      "wall_s": 5.87,
+      "lat_p50_s": 5.87,
+      "lat_max_s": 5.87,
+      "agg_decode_tps": 8.5,
+      "agg_prefill_tps": 2672.5,
+      "n_errors": 0
+    },
+    {
+      "prefix_reps": 520,
+      "k": 4,
+      "error": "<style>\n            p {\n              margin: 10px 0;\n              color: white"
+    },
+    {
+      "prefix_reps": 520,
+      "k": 8,
+      "error": "{\"error\":{\"message\":\"upstream error: do request failed (request id: 202609201256"
+    },
+    {
+      "prefix_reps": 520,
+      "k": 9,
+      "error": "{\"error\":{\"message\":\"upstream error: do request failed (request id: 202609201256"
+    },
+    {
+      "prefix_reps": 800,
+      "k": 1,
+      "error": "{\"error\":{\"message\":\"upstream error: do request failed (request id: 202609201256"
+    },
+    {
+      "prefix_reps": 800,
+      "k": 2,
+      "error": "{\"error\":{\"message\":\"upstream error: do request failed (request id: 202609201256"
+    },
+    {
+      "prefix_reps": 800,
+      "k": 4,
+      "error": "{\"error\":{\"message\":\"upstream error: do request failed (request id: 202609201256"
+    },
+    {
+      "prefix_reps": 800,
+      "k": 8,
+      "error": "{\"error\":{\"message\":\"upstream error: do request failed (request id: 202609201256"
+    },
+    {
+      "prefix_reps": 800,
+      "k": 9,
+      "error": "{\"error\":{\"message\":\"upstream error: do request failed (request id: 202609201256"
+    }
+  ],
+  "temps": [
+    {
+      "temperature": 0.3,
+      "error": "all calls failed"
+    },
+    {
+      "temperature": 0.7,
+      "error": "all calls failed"
+    },
+    {
+      "temperature": 0.9,
+      "error": "all calls failed"
+    },
+    {
+      "temperature": 1.1,
+      "error": "all calls failed"
+    }
+  ]
+}

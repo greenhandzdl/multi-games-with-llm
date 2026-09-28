@@ -139,3 +139,28 @@ def test_the_four_predicates_each_need_their_own_shape():
     }
     assert _dead_files(bodies) == [
         "src/app/dead.py", "tests/sub/conftest.py", "tests/test_empty.py"]
+
+
+def test_no_case_reads_an_untracked_path_under_the_scratch_dir():
+    """用例读的每一份 sidecar 都必须在册——`#187` 管"本文件有没有人认领"，这一格管"文件里的读取"。
+
+    动因：报告证人 `test_the_committed_report_is_still_what_the_code_renders` 拿
+    `data/calibration.json` 重渲染 `docs/calibration.md`，而那份 sidecar 是
+    `scripts/calibrate.py` 体检真端点的产物、一直没入库。本机有它，`git clone --depth 1`
+    出来的仓库没有，于是这位证人在克隆里是 FileNotFoundError——同一件事在
+    `tests/test_m3_gate.py` 那一条里是被当成规矩写下来的（真日志不入库，所以用例自己造现场）。
+    比较的前缀运行时拼出来（`"dat" + "a/"`）：这一条扫的正是 tests/，写成整串就会指着
+    自己这段 docstring 报红（`#153` 那一课）。
+    """
+    prefix = "dat" + "a/"
+    reads = []
+    for f in sorted((ROOT / "tests").glob("*.py")):
+        for m in re.finditer(r'ROOT\s*/\s*"([^"]+)"', f.read_text(encoding="utf-8")):
+            if m.group(1).startswith(prefix):
+                reads.append((f.name, m.group(1)))
+    assert reads, "一处 sidecar 读取都没扫到，多半是扫法坏了"
+    untracked = sorted(
+        {(f, p) for f, p in reads
+         if subprocess.run(["git", "ls-files", "--error-unmatch", p], cwd=ROOT,
+                           capture_output=True).returncode != 0})
+    assert not untracked, f"这些用例读的 sidecar 不在册，克隆里必红：{untracked}"
