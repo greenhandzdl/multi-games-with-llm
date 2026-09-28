@@ -1185,13 +1185,18 @@ FIELD_TRIAGE: dict[str, str] = {
     "config.py::RegionBudget.c_task": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C4' 那一格，见 src/wolfengine/metrics.py",
     "rules.py::NightResolution.peace":
         "待判：这一格已经有票了——#88 问的是『平安夜要不要在公开产物里留痕』，那是处置变更不是清理，"
-        "见 src/wolfengine/rules.py 与 docs/iterations.md 里 `#88` 那一节",
+        "见 src/wolfengine/rules.py。`#176` 量过删它的顶号代价：点 `src/wolfengine/rules.py` 行号的引用"
+        "共 3 处，全在第 146 行那格注解的下游，另见 docs/iterations.md 里 `#88` 那一节",
     "state.py::GameState.hunter_seat":
         "待判：`src/wolfengine/game.py` 发牌时算出并写进状态，之后没人读（猎人那一枪走的是别的路径，"
-        "见 src/wolfengine/phases.py）——接进产物还是删掉是决定，见 src/wolfengine/state.py",
+        "见 src/wolfengine/phases.py）——接进产物还是删掉是决定，见 src/wolfengine/state.py。"
+        "`#176` 量过的代价很小：点 `src/wolfengine/state.py` 行号的引用全仓库只有 1 处、在第 92 行下游，"
+        "这一格留在待判不是因为删不动，是因为没有一条判据能替我决定猎人该不该在状态里留名",
     "state.py::LegalSet.assigned_target":
         "待判：`src/wolfengine/phases.py` 里 `replace(..., assigned_act=act, assigned_target=target)` "
-        "成对写，`#68` 只给 `assigned_act` 补了读者（服从率），target 那一半零读者，见 src/wolfengine/state.py",
+        "成对写，`#68` 只给 `assigned_act` 补了读者（服从率），target 那一半零读者，见 src/wolfengine/state.py。"
+        "`#176` 量过的代价与上一格同一笔账（同一个文件的同一个 1 处引用，它在第 76 行下游），"
+        "所以这两格是同一个决定的两半：要么一起接进读数，要么一起删，见 src/wolfengine/state.py",
     "assemble.py::Prompt.legal_acts":
         "待判：`src/wolfengine/assemble.py` 里 `Prompt` 构造时写入，而落盘那格走的是同文件 "
         "`payload_for_log` 的白名单、不含它；`src/wolfengine/schema.py` 里同名的那一格是**函数参数**"
@@ -1203,13 +1208,19 @@ FIELD_TRIAGE: dict[str, str] = {
         "待判：同 `legal_acts`，成对写入、零读者、不在落盘白名单里，代价也与它同一笔（同一份顶号账），见 src/wolfengine/assemble.py",
     "batch.py::BatchResult.rows":
         "待判：落盘那一格 `\"rows\"` 写的是同函数里的**局部变量**（`src/wolfengine/batch.py` 里 "
-        "`\"n_logs\": len(rows), \"rows\": rows`），字段这一份是它的第二份抄本且没人回读，见 src/wolfengine/batch.py",
+        "`\"n_logs\": len(rows), \"rows\": rows`），字段这一份是它的第二份抄本且没人回读，见 src/wolfengine/batch.py。"
+        "`#176` 量过删它的顶号代价，是全名册里最贵的一格：点 `src/wolfengine/batch.py` 行号的引用共 22 处"
+        "（手册 17 处、tests 5 处），最小的那处落在第 90 行，全在第 66 行这格注解的下游，见 src/wolfengine/batch.py",
     "info.py::Percept.at_seq":
         "待判：`src/wolfengine/metrics.py` 与 `src/wolfengine/agent.py` 里那两处 `at_seq=` 都是 "
-        "`percept_for` 的**入参**（定义在 `src/wolfengine/info.py`），不是这格的读者——同名替付账，见 info.py",
+        "`percept_for` 的**入参**（定义在 `src/wolfengine/info.py`），不是这格的读者——同名替付账，见 info.py。"
+        "`#176` 量过的代价：点这个文件行号的引用共 3 处，全在第 34 行那格注解的下游；删得动，但它记的是"
+        "这份投影切到哪一局面，留不留与 #157 那族「视图该由什么渲染」是同一个决定，见 src/wolfengine/info.py",
     "schema.py::ParseOutcome.raw_used":
         "待判：`src/wolfengine/schema.py` 里两处写入（`raw_used=cand`）、零读者——它是『最后发出去的是"
-        "哪一个候选』的出处格，要不要进产物链由 `#114` 那张载荷普查说了算，见 src/wolfengine/schema.py",
+        "哪一个候选』的出处格，要不要进产物链由 `#114` 那张载荷普查说了算，见 src/wolfengine/schema.py。"
+        "`#176` 量过的代价：点这个文件行号的引用共 3 处、都在第 188 行下游，那两处写入还能按行内收掉不移动"
+        "任何行，所以卡着它的只剩普查那条决定，见 src/wolfengine/schema.py",
 }
 FIELD_VERDICTS = ("删", "搬", "接", "留", "待判")
 
