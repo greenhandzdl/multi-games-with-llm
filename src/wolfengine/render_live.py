@@ -36,8 +36,8 @@ from rich.text import Text
 
 from .compress import render_line
 from .events import Event, EventLog, Kind, empty_notice, meta_notice, roster_notice, seq_notice
-from .render_html import (event_flags, game_over_event, markers, mind_pairs, role_zh,
-                          roles_by_seat, seats_of, shown_events)
+from .render_html import (event_flags, game_over_event, markers, mind_pairs, provenance,
+                          role_zh, roles_by_seat, seats_of, shown_events)
 
 DEAD = "✕"
 REVEAL = "{seat}号视角（仅本席可见）"
@@ -229,7 +229,7 @@ def draw(console: Console, events: list[Event], meta: dict[str, Any], *,
             line(f"{seat}号 嘴上说：" + "；".join(said))
 
     line(f"本局不可复现：端点没有确定性，本画面读的是已落盘的日志 {meta.get('game_id', '')}"
-         f" · {HELP}", style="dim")
+         + "".join(f" · {v}" for v in provenance(meta)) + f" · {HELP}", style="dim")
 
 
 # ---------------------------------------------------------------------------------- the loop

@@ -170,6 +170,18 @@ def game_over_event(events: Iterable[Event]) -> Event | None:
     return next((e for e in events if e.kind == Kind.GAME_OVER), None)
 
 
+def provenance(meta: dict[str, Any]) -> list[str]:
+    """Which build wrote this file — the three version stamps the log carries, plus its board.
+
+    A header line otherwise says only what happened in the game. These four answer what measured
+    it, and they sit in the log's first line, which is exactly the line a person holding the
+    rendered page (or looking at the live terminal) does not have. Empty for a log written before
+    the stamps existed, so a view prints nothing rather than a row of `None`.
+    """
+    board = meta.get("board")
+    return [v for v in (meta.get("contract_version"), meta.get("rules_version"),
+                        meta.get("compress_version"), f"板{board}" if board else "") if v]
+
 
 def _board(events: list[Event], *, god: bool) -> str:
     """Nine cards, in seat order, showing only what any viewer may know: who is sitting where,
@@ -337,10 +349,13 @@ def render(events: list[Event], meta: dict[str, Any], *, god: bool = False,
     # The roster sentence gets no ⚠: the four after it say the file is damaged, and a person at
     # seat 3 is not damage. It heads them because it is a claim about who answered, not a verdict
     # on these bytes. The ⚠ chain stays contiguous, so the ordering claim above still holds.
+    # The four provenance values answer a different question than the rest of the line: not what
+    # happened in this game but which build wrote this file. See `provenance`.
     roster = roster_notice(meta)
     meta_line = (f"第{max(by_day, default=0)}天结束 · {_esc(over.get('terminal', '未结束'))} · "
                  f"发言{counts['speech']}条 · 私有事件{counts['private']}条 · "
                  f"闸门拒绝{counts['refused']}次 · 视角：{'上帝' if god else '观众'}"
+                 + "".join(f" · {_esc(v)}" for v in provenance(meta))
                  + (f" · {_esc(roster)}" if roster else "")
                  + "".join(f" · ⚠ {_esc(n)}"
                            for n in (meta_notice(meta), empty_notice(events, meta),

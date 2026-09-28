@@ -300,6 +300,21 @@ def test_the_frame_never_prints_the_endpoint_host(gold):
     assert probe[200:280] not in doc
 
 
+def test_the_footer_names_the_stamps_the_log_carries(gold):
+    """`#178`/`#179` 把三份版本戳和 `board` 接进了机器出口 `audit`，给人看的两块屏幕得答出同一句。
+
+    直播画面本来就整行读那个文件的第一行（`#48` 修的就是它自己另解析一份），所以它比 HTML 更没有
+    借口不念这四格。念的是同一处定义：`provenance` 住在 `render_html`，这一侧 import——两块屏幕
+    各自决定"说哪几格"就是 `docs/views.md` 反对的那两份说法。
+    """
+    _, events, meta = gold
+    for god in (False, True):
+        frame = frame_text(events, meta, god=god)
+        for key in ("contract_version", "rules_version", "compress_version"):
+            assert meta[key] in frame, f"god={god} 的画面上没有 {key}"
+        assert f"板{meta['board']}" in frame, f"god={god} 的画面上没有板名"
+
+
 # --------------------------------------------------------------------------- the key handling
 def test_g_toggles_the_god_view_and_q_quits(gold):
     """Keys change *what is shown*, never what is read: toggling must not re-derive anything,

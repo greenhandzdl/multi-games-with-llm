@@ -241,6 +241,7 @@ VIEWING_RULES: dict[str, tuple[str, list[str]]] = {
     "roles_by_seat": ("render_html", ["render_live"]),
     "role_zh": ("render_html", ["render_live"]),
     "game_over_event": ("render_html", ["render_live"]),
+    "provenance": ("render_html", ["render_live"]),
     "voting_waves": ("events", ["render_html", "metrics"]),
 }
 

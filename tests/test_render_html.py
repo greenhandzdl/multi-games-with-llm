@@ -462,6 +462,40 @@ def test_the_two_pages_print_one_number_for_each_of_the_three_counts(pair):
     assert ms == mg, f"one file, two numbers: {_meta_line(spectator)} vs {_meta_line(god)}"
 
 
+def test_the_header_of_each_page_names_the_stamps_the_log_carries(pair, gold):
+    """`#178`/`#179` 把四格接进机器出口 `audit`，给人看的这一页还答不出同一句话。
+
+    页眉那一条念的是"这一局发生了什么"（天数、终局、三个计数、视角、名册、破损），没有一格说
+    "这份文件是哪一版规则写的、坐在哪张板上"。四格从开局就落在文件第一行里，而拿到一个 HTML
+    文件的人手边没有那个文件第一行——`docs/views.md` 说这页是**当时落盘日志的渲染**，那就得连
+    量过它的那几把尺子一起印。
+    """
+    _, _, meta = gold
+    spectator, god = pair
+    for page in (spectator, god):
+        for key in ("contract_version", "rules_version", "compress_version"):
+            assert meta[key] in _meta_line(page), _meta_line(page)
+        assert f"板{meta['board']}" in _meta_line(page), _meta_line(page)
+
+
+def test_a_log_with_no_manifest_line_prints_no_invented_provenance(gold, tmp_path):
+    """四格是"这份文件是谁写的"，所以它们只能从文件里来；文件没写的时候这一格必须整段缺席。
+
+    现场把金样本的第一行（开局记录）撕掉，读侧给的是 `meta == {}` 加一句 ⚠「这个文件没有开局
+    记录」。页眉同一条既说"没有开局记录"、又印出三个版本号，就是本页自相矛盾——而 `#90` 钉的
+    是同一页两行互相打架的那一类。
+    """
+    res, _, _ = gold
+    body = res.path.read_text(encoding="utf-8").splitlines()[1:]
+    bare = tmp_path / "no-manifest.jsonl"
+    bare.write_text("\n".join(body) + "\n", encoding="utf-8")
+    evs, meta, torn = EventLog.read_split(bare)
+    assert meta == {}, "读侧换了口径：这一具就不再是无开局记录那一形，得另找文件"
+    line = _meta_line(render_html.render(evs, meta, torn=torn))
+    assert "没有开局记录" in line, line
+    assert "None" not in line and "板" not in line, line
+
+
 def test_a_refusal_in_a_private_channel_is_counted_by_both_pages_but_shown_by_one(gold):
     """The header counts it in both modes; only the god page gets to show the line.
 

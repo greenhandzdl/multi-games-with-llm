@@ -10,7 +10,7 @@
 一份判定改一次就够；真流式和缓冲式只差观感不差功能——UI 的逻辑是"日志多了一条就重画"，那么
 M0 量出什么都不用改这块代码。**把风险变成非风险**。
 
-代价是这些规则只能有一份定义，于是 `tests/test_wiring.py` 直接扫源码钉住（下表 6 行 = 8 个函数名，
+代价是这些规则只能有一份定义，于是 `tests/test_wiring.py` 直接扫源码钉住（下表 7 行 = 9 个函数名，
 `test_the_two_views_share_one_definition_of_each_viewing_rule` 一条参数化用例钉一个）：
 
 | 规则 | 唯一所有者 | 回答的问题 |
@@ -20,6 +20,7 @@ M0 量出什么都不用改这块代码。**把风险变成非风险**。
 | `mind_pairs` | `render_html.py` | 哪些轮次算"说了心里的话" |
 | `roles_by_seat` / `role_zh` | `render_html.py` | 谁是什么身份，中文叫什么 |
 | `game_over_event` | `render_html.py` | 这局结没结束（`身份公开` 的唯一闸门） |
+| `provenance` | `render_html.py` | 这份文件是哪一版写的、坐在哪张板上 |
 | `voting_waves` | `events.py` | 一轮投票从哪到哪（复盘的格子与指标的 mandate 共用，见下） |
 
 `render_live.py` 全部 import，不许另起一份。两份定义意味着两块屏幕描述的不是同一局游戏。
@@ -145,6 +146,15 @@ engine belief（`build_belief(seat, [e for e in events if e.visible_to(seat)])`�
   过滤；那一轮私有频道被拒两次，为的是把"被拒几次"和"有几轮被拒"这两个读数分开——两者在每次只拒一轮
   的输入上恰好相等，第一刀的变异就是从这里漏过去的）、`test_the_audience_footer_owns_the_which_ones_shown_claim`
   （页脚那句被删就红）。
+* **页眉那一行也念这份文件自己的四格出处**：`provenance` 从开局记录里取三份版本戳和那块板的名字，
+  两个视图各自把它拼进自己那一条——页面在「视角」之后、⚠ 链之前，直播在最后一行的局号之后。
+  四格不是排版上的点缀：`#178`/`#179` 把它们接进 `audit` 之后，拿到一个 HTML 文件的人仍然答不出
+  「这是哪一版规则写的、坐在哪张板上」，而那句话只写在文件的**第一行**里。和上面几条同一个理由，
+  两侧念的是同一处定义（`tests/test_wiring.py` 的名单里第 9 个名字），钉它的三条是
+  `test_the_header_of_each_page_names_the_stamps_the_log_carries`、
+  `test_the_footer_names_the_stamps_the_log_carries` 和
+  `test_a_log_with_no_manifest_line_prints_no_invented_provenance`（撕掉开局记录那一形：四格整段缺席，
+  页眉不能一边说"没有开局记录"一边印出三个版本号）。
 * **四句话同时亮时的先后也是内容**：转录与页面页眉的追加顺序固定为 认不出局号 → 没记下来 → 编号破损
   → 末尾截断，页面里那几个 ⚠ 就是同一个顺序（`render_html` 里那句注释说的就是这件事）。它不是排版
   偏好："页眉那个 ⚠ 和转录最后一行是同一句话"这条对账，只在输入只带一句时成立，两句同时亮时只有顺序
@@ -249,7 +259,7 @@ rich 有两条坑，都各有一条测试钉着：
 
 ## 这些守卫是怎么验的
 
-渲染层 56 条用例（`test_render_html.py` 27 + `test_render_live.py` 29）里，每条都被"把被保护的
+渲染层 59 条用例（`test_render_html.py` 29 + `test_render_live.py` 30）里，每条都被"把被保护的
 分支改坏"验过一次它会真的红，改完再按 sha256 校验还原成字节相同的文件。这张表记的是**哪一具刀归
 哪条用例盯**；某一轮跑出来的判决读数（具名红用例、判词、超时秒数）逐轮记在 `docs/iterations.md`
 〈表头没写「变异」的那张账表搬进这一份〉与〈另外三本手册页里的逐片电池账搬进这一份〉两节。
