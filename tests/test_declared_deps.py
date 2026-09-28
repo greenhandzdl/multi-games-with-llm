@@ -12,16 +12,23 @@
    按"只在 import 语句里找读者"来判，104 条 `async def test_` 会被判成没有背书人。
 3. 每一条在册依赖要在 `uv.lock` 里有同名包。`uv sync` 照的是锁不是 pyproject：加了依赖忘了重锁，
    README 那条安装命令在新机器上直接报错，而本机什么都绿。
+4. `[project.scripts]` 里每一个 `wolf = "模块:属性"` 的两半都要在树里：模块是某本在册 .py，
+   属性是它那一段顶层定义（`#193`）。入口是安装时才解析、并且**装的那一刻烤进 `bin/wolf`** 的，
+   所以写错一个字母并不会让所有人都撞见：照着错版本重装出来的那本 `.venv` 里 README 那三条执行证人
+   会红，而本机那本早就装好的 venv 里它们照旧绿（现测：错入口 + 旧 venv → 3 passed）。
+   这一格读的是 pyproject 自己，不靠谁重装。
 
-判定住在 `_undeclared_imports()` / `_unread_dependencies()` / `_missing_from_lock()` 三个纯函数里，
+判定住在 `_undeclared_imports()` / `_unread_dependencies()` / `_missing_from_lock()` /
+`_broken_entry_points()` 四个纯函数里，
 真仓库和夹具共用同一份（`#153` 那条规矩：判据不许在守卫和夹具里各抄一遍）。名字比对一律先过
 `_canonical()` 走 PEP 503 口径——`pydantic-core` 和 `import pydantic_core` 是同一只包，换个分隔符
 或大小写不算缺陷，`uv` 自己也不这么认；报出来的仍是文件里写着的原样。
 
-限界三条，写的都是这一本明知会放过什么：只看顶层名，所以 `import a.b.c` 里住着的三方子模块
+限界四条，写的都是这一本明知会放过什么：只看顶层名，所以 `import a.b.c` 里住着的三方子模块
 不会被拆开对账；`optional-dependencies` 的每一组都算进"在册"，所以一个只有文档里提到、
 从来没人装的第二组 extra 不会被这本报出来；锁那一格只问"有没有同名包"，不问版本区间是否还对得上
-——`uv lock --check` 那一步仍然归人（或 CI）跑，本包不假设那把命令在机器上存在。
+——`uv lock --check` 那一步仍然归人（或 CI）跑，本包不假设那把命令在机器上存在；第四条只认冒号后
+那一个顶层属性名，所以 `pkg:Class.method` 那一形会被它报成缺陷，真要改成那种写法得先改这一本。
 """
 from __future__ import annotations
 
@@ -118,15 +125,71 @@ def _missing_from_lock(deps: set[str], lock_names: set[str]) -> list[str]:
     return sorted(d for d in deps if _canonical(d) not in locked)
 
 
-def _real_inputs() -> tuple[set[str], set[str], set[str], set[str], list[str], set[str]]:
+def _candidate_paths(module: str) -> tuple[str, ...]:
+    """一个点分模块名在册树里可能的落点：src 布局与平铺布局各两种（模块 / 包根）。"""
+    slash = module.replace(".", "/")
+    return (f"src/{slash}.py", f"{slash}.py", f"src/{slash}/__init__.py", f"{slash}/__init__.py")
+
+
+def _defines_toplevel(text: str, attr: str) -> bool:
+    """属性名是否在这本模块的顶层定义过（def/class/赋值/带注解的赋值）。"""
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return False
+    names: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+    return attr in names
+
+
+def _broken_entry_points(scripts: dict[str, str], tracked: set[str],
+                         bodies: dict[str, str]) -> list[str]:
+    """第四条判据：每个 console script 的目标要写成 `模块:属性`，且两半都在树里。
+
+    只认顶层那一个属性名，所以 `pkg.mod:Class.method` 这一形会被报成缺陷——那是处置变更不是放过，
+    真要这么写的人得先改这一本。
+    """
+    broken: list[str] = []
+    for name, target in sorted(scripts.items()):
+        module, sep, attr = target.partition(":")
+        hit = next((p for p in _candidate_paths(module) if p in tracked), None) if sep else None
+        if hit is None or not attr or not _defines_toplevel(bodies.get(hit, ""), attr):
+            broken.append(f"{name} -> {target}")
+    return broken
+
+
+def _tracked_py_files() -> set[str]:
     out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True)
     assert out.returncode == 0, out.stderr.strip()[:120]
     files = {f for f in out.stdout.split("\n") if f.endswith(".py")}
     assert len(files) >= 60, f"只数到 {len(files)} 本在册 .py，多半是 `git ls-files` 这步坏了"
+    return files
+
+
+def _pyproject() -> dict:
+    with (ROOT / "pyproject.toml").open("rb") as fh:
+        return tomllib.load(fh)
+
+
+def _real_entry_points() -> tuple[dict[str, str], set[str], dict[str, str]]:
+    files = _tracked_py_files()
+    scripts = _pyproject()["project"].get("scripts", {})
+    assert scripts, "pyproject 里没有 [project.scripts] 这一段，第四条判据没有对象"
+    bodies = {f: (ROOT / f).read_text(encoding="utf-8", errors="replace") for f in files}
+    return scripts, files, bodies
+
+
+def _real_inputs() -> tuple[set[str], set[str], set[str], set[str], list[str], set[str]]:
+    files = _tracked_py_files()
     bodies = {f: (ROOT / f).read_text(encoding="utf-8", errors="replace") for f in files}
 
-    with (ROOT / "pyproject.toml").open("rb") as fh:
-        project = tomllib.load(fh)
+    project = _pyproject()
     assert "dependencies" in project["project"], "pyproject 里没有 dependencies 这一段，这一本无从对账"
     deps = {_dep_name(s) for s in project["project"]["dependencies"]}
     for group in project["project"].get("optional-dependencies", {}).values():
@@ -189,6 +252,21 @@ def test_declared_names_match_regardless_of_spelling_variants():
     assert _missing_from_lock({"pytest_asyncio"}, {"pytest-asyncio"}) == []
 
 
+def test_every_console_script_target_resolves_in_the_tracked_tree():
+    """`#193` 第四条：`[project.scripts]` 指的那个 `模块:属性` 要在在册的树里真存在。
+
+    现测为空：`wolf = "wolfengine.cli:main"`，`src/wolfengine/cli.py` 在册且顶层定义着 `main`。
+    写错成 `wolfengine.clie:main` 或 `wolfengine.cli:run` 之后会不会有人撞见，取决于他手上那本
+    `.venv` 是什么时候装的：重装过的会撞见（README 那三条执行证人在那种树上一起红，红是
+    `ModuleNotFoundError`），没重装的一律绿——那三条走的是 `bin/wolf`，而那一行是装的时候烤进去的。
+    这一格不靠重装：它读 pyproject 那一句自己，所以"改了声明而没重装、也没敲那条命令"这一形
+    第一次有人看着。它是 `#191` 那一族"公开克隆才是现场"的入口脚本档。
+    """
+    scripts, tracked, bodies = _real_entry_points()
+    broken = _broken_entry_points(scripts, tracked, bodies)
+    assert not broken, f"这些 console script 指到树里不存在的东西：{broken}"
+
+
 def test_the_three_predicates_each_need_their_own_shape():
     """夹具：一份合成 manifest 与一本合成代码，三格各自该报的报出来，该放行的一个都不报。
 
@@ -221,3 +299,28 @@ def test_the_three_predicates_each_need_their_own_shape():
     assert _missing_from_lock(deps, {"tenacity", "orphanlib", "pytest-asyncio"}) == ["unlocked"]
     assert [_dep_name(s) for s in ["httpx>=0.27", "rich<14,>=13.7", "a ; extra == 'x'", "plain"]] == [
         "httpx", "rich", "a", "plain"]
+
+
+def test_a_console_script_is_only_fine_when_both_halves_of_the_target_exist():
+    """夹具：`模块:属性` 那一形的四种走法，只有全对的那一种不报。
+
+    这一形值得单独钉，因为它的两种失败在装出来之前都不响：模块名拼错和属性名拼错都会被
+    `uv sync` 原样接受（入口是安装时才解析的），只有真去敲那条命令才看得见——而没有人敲。
+    包根那一种（`src/<pkg>/__init__.py` 顶层定义的属性）是放行面的一部分：`packages = ["src/wolfengine"]`
+    这个布局下包根也是合法目标，把它判成缺陷会误报。
+    """
+    tracked = {"src/wolfengine/cli.py", "src/wolfengine/__init__.py", "other.py"}
+    bodies = {
+        "src/wolfengine/cli.py": "def main():\n    pass\n",
+        "src/wolfengine/__init__.py": "ROOT_ATTR = 1\n",
+        "other.py": "def main():\n    pass\n",
+    }
+    assert _broken_entry_points({"wolf": "wolfengine.cli:main"}, tracked, bodies) == []
+    assert _broken_entry_points({"wolf": "wolfengine:ROOT_ATTR"}, tracked, bodies) == []
+    assert _broken_entry_points({"wolf": "other:main"}, tracked, bodies) == []
+    assert _broken_entry_points({"wolf": "wolfengine.clie:main"}, tracked, bodies) == [
+        "wolf -> wolfengine.clie:main"]
+    assert _broken_entry_points({"wolf": "wolfengine.cli:run"}, tracked, bodies) == [
+        "wolf -> wolfengine.cli:run"]
+    assert _broken_entry_points({"wolf": "wolfengine.cli"}, tracked, bodies) == ["wolf -> wolfengine.cli"]
+    assert _broken_entry_points({}, tracked, bodies) == []
