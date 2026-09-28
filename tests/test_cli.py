@@ -1317,19 +1317,21 @@ DEMO_MARKERS = {
 }
 
 
-def _readme_block(heading: str = DEMO_HEADING) -> str:
-    """那一节里那个 ```bash 块，原样，一个字不改。
+def _doc_block(doc: Path, heading: str) -> str:
+    """那一节里那个 ```bash 块，原样，一个字不改——README 和 `docs/` 那几本同一个取法。
 
     测试不抄一份"等价"的命令清单：抄写就是第二份主张，而两份会在下一次改文档时各自演化
     ——`#136` 那一片的 bug 恰恰是文档里那句 shell 和目录的真实内容对不上。
     标题按整行相等找，不按前缀：`find()` 会把 `## 三分钟离线演示x` 也算命中（K4 那具刀量出来的）。
+    `doc` 是相对仓库根的路径：`#197` 把同一套机械接到 `docs/comparison.md` 时，取块这一段
+    本来可以照抄一份，那就是 `#153` 反对的那第二份实现。
     """
-    readme = (Path(__file__).resolve().parents[1] / "README.md").read_text(encoding="utf-8")
-    lines = readme.splitlines()
+    text = (Path(__file__).resolve().parents[1] / doc).read_text(encoding="utf-8")
+    lines = text.splitlines()
     try:
         at = next(i for i, l in enumerate(lines) if l.strip() == heading)
     except StopIteration:
-        raise AssertionError(f"README 里没有整行等于 {heading!r} 的标题") from None
+        raise AssertionError(f"{doc} 里没有整行等于 {heading!r} 的标题") from None
     rest = lines[at + 1:]
     try:
         opened = next(i for i, l in enumerate(rest) if l.strip() == "```bash")
@@ -1345,7 +1347,7 @@ def _readme_block(heading: str = DEMO_HEADING) -> str:
 
 
 def _bash_the_block(tmp_path: Path, block: str, name: str, stdin: str | None):
-    """把一坨 README 文本原样写成脚本、交给真 bash 跑，返回那条子进程。
+    """把文档围栏里的文本原样写成脚本、交给真 bash 跑，返回那条子进程。
 
     这一跑**不在** `no_network` 的保护范围里：那个夹具 patch 的是本进程的 socket 与 transport，
     而这里发命令的是子进程。所以调用它之前，块里不许留有会拨端点的命令行——那道前置断言写在
@@ -1373,7 +1375,7 @@ def _bash_the_block(tmp_path: Path, block: str, name: str, stdin: str | None):
 HUMAN_STDIN = "票 5 先听听\n票 5 我投他\n过 没想好\n"
 
 
-def _readme_statements(block: str) -> list[tuple[str, str]]:
+def _block_statements(block: str) -> list[tuple[str, str]]:
     """把围栏文本切成 `(种类, 原文)`：`live` 是一条完整命令，`comment` 是整行注释。
 
     `live` 存的是**原样的那几行**（续行不合成一行）：反斜杠续行是 README 交给读者的形状，
@@ -1429,7 +1431,7 @@ def test_the_readme_demo_block_runs_verbatim(tmp_path, no_network):
     dumps = sorted(p.name for p in (tmp_path / "data").glob("*.prompts.jsonl"))
     assert dumps, "夹具没能造出「同一目录里两种 jsonl」这个现场，用例就在空转"
 
-    block = _readme_block()
+    block = _doc_block(Path("README.md"), DEMO_HEADING)
     proc = _bash_the_block(tmp_path, block, "demo", None)
     evidence = (f"--- 块 ---\n{block}\n--- stdout ---\n{proc.stdout}\n"
                 f"--- stderr ---\n{proc.stderr}")
@@ -1469,8 +1471,8 @@ def test_the_human_seat_block_runs_verbatim(tmp_path):
     """
     import shutil
 
-    block = _readme_block(HUMAN_HEADING)
-    live = [text for kind, text in _readme_statements(block) if kind == "live"]
+    block = _doc_block(Path("README.md"), HUMAN_HEADING)
+    live = [text for kind, text in _block_statements(block) if kind == "live"]
     dialers = _dialer_statements(live)
     assert not dialers, (
         f"这一块是给人整块粘贴的，而这几条会去拨局域网判官：{dialers}")
@@ -1530,8 +1532,8 @@ def test_the_command_menu_lines_run_in_sequence(tmp_path):
     条挪到 `batch` 之前，它们会在空目录里撞上「配置错误」而 rc 变 2——这一格的 1 因此同时
     在替"这一节的读法是从上往下"作证。
     """
-    block = _readme_block(MENU_HEADING)
-    statements = _readme_statements(block)
+    block = _doc_block(Path("README.md"), MENU_HEADING)
+    statements = _block_statements(block)
     live = [text for kind, text in statements if kind == "live"]
     dialers = _dialer_statements(live)
     assert not dialers, (
@@ -1565,6 +1567,41 @@ def test_the_command_menu_lines_run_in_sequence(tmp_path):
         f"这一节里有两条举例往同一个目录的同一个 seed 上写局日志：{doubled}。局号是「秒 + seed」，"
         f"所以它们只是**碰巧**没撞上——挨着敲的时候后一条会退回 rc 2（实测十次里八次，"
         f"2026-09-26T08:00Z）。逐条跑的那一圈因此量不到这一格：它过得去可能只是跨了一秒。")
+
+
+# ------------------------------- docs/comparison.md〈两个命令〉那一块整块能跑（#197）
+RECIPE_DOC = Path("docs/comparison.md")
+RECIPE_HEADING = "## 两个命令"
+
+
+def test_the_comparison_recipes_block_runs_verbatim(tmp_path):
+    """把 `docs/comparison.md` 那一整块原样交给 bash，落在一个空目录里。
+
+    README 的〈命令一览〉在 `#138` 就有了逐条执行证人，这一块一直没有；而它是**整块**粘得动的形状，
+    这一块以前第一条就写着 `--games 20` 的真端点批次。按 `#136`/`#137` 为 README 立的同一条规矩，需要
+    端点的那一条只能留在可粘贴区外面——跑块的是子进程，`no_network` 那层夹具挡不住它，所以"块里没有
+    会拨判官的命令行"必须是执行**之前**的断言。
+
+    期望退出码是 1 而不是 0，这一格不是宽容：整块交给 bash 时进程的退出码就是最后那条的退出码，
+    而最后那条是 `compare`，它对合成桌**故意**返回 1。文档开头那段"复现方式"把这句话写成了主张
+    （"退出码 1，verdict SYNTHETIC_TABLE"），所以这一跑就是把那句主张接进执行。
+    """
+    block = _doc_block(RECIPE_DOC, RECIPE_HEADING)
+    live = [text for kind, text in _block_statements(block) if kind == "live"]
+    dialers = _dialer_statements(live)
+    assert not dialers, f"这一整块要离线粘进终端，块里却坐着会拨判官的命令行：{dialers}"
+
+    proc = _bash_the_block(tmp_path, block, "recipes", None)
+    evidence = (f"--- 块 ---\n{block}\n--- stdout ---\n{proc.stdout}\n"
+                f"--- stderr ---\n{proc.stderr}")
+    assert proc.returncode == 1, f"整块的退出码不是最后那条 compare 的 1：{evidence}"
+    assert "批次 -> data/plumbing" in proc.stdout, evidence
+    assert "SYNTHETIC_TABLE -> data/plumbing/comparison.md" in proc.stdout, evidence
+    assert (tmp_path / "data/plumbing/comparison.md").exists(), evidence
+    per_arm = {d.name: sorted(p.name for p in d.glob("*.jsonl"))
+               for d in (tmp_path / "data/plumbing").iterdir() if d.is_dir()}
+    assert {k: len(v) for k, v in per_arm.items()} == {"A": 2, "B": 2}, (
+        f"文档那一块写的是 `--configs A,B --games 2`，落盘因此该是两臂各两局：{per_arm}")
 
 
 # ------------------------------------------------------------------- replay 的出处四格（`#183`）

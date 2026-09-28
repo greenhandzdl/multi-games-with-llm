@@ -12,12 +12,20 @@
 ## 两个命令
 
 ```bash
-wolf batch --out data/temp09-vs-06 --configs A,B \
-           --set B.temperature=0.6 --games 20 --seed0 1000          # 真端点
 wolf batch --out data/plumbing --configs A,B --set B.temperature=0.6 \
            --games 2 --seed0 1000 --mock                            # 只验管线
-wolf compare data/temp09-vs-06 --axis temperature                   # → comparison.md
+wolf compare data/plumbing --axis temperature                       # → comparison.md，退出码 1
+# 真端点那一条留在可粘贴区外面，规矩和 README〈命令一览〉那条一样：它要 `100.87.65.60:13000`
+# 上那个判官，而照着这一块粘进终端的人不一定带着导出的 key——粘错了不是慢，是 401。
+# wolf batch --out data/temp09-vs-06 --configs A,B \
+#            --set B.temperature=0.6 --games 20 --seed0 1000
 ```
+
+这一块是被**整块**执行过的：`test_the_comparison_recipes_block_runs_verbatim` 把围栏里的原文一个字
+不改地写成脚本、交给真 bash、落在一个空目录里，然后要求末条的退出码是 `1`、两臂各落两局、
+`comparison.md` 就在那个目录里。执行**之前**还有一道：块里不许留有会拨判官的命令行——跑这块的是
+子进程，测试那层 `no_network` 夹具 patch 的是本进程的 socket，管不到它，所以"需要端点的那一条只能
+留在注释里"必须是断言而不是提醒。
 
 `--set` 只认 `<臂名>.<字段>`，字段名写错会停下并给出相近拼写；`model` / `base_url` /
 `api_key_env` / `actor_kinds` 四个**根本不许当处理轴**（`config.FORBIDDEN_AXIS`）——命令行上
