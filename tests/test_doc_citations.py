@@ -1263,7 +1263,7 @@ def test_the_artifact_scanner_scans_every_manual_page():
     """语料组成：手册==目录里的 markdown 全部减去那一本归档。
 
     把判据收窄（把某一本人册也排除掉）时，上一条用例**不红**——它断言的是"没有"，越收窄越像绿。
-    这条钉的是"每一本都在被读"，`#126` 用的是同一招。地板取 4：现测手册 4 本（README + 三本参考
+    这条钉的是"每一本都在被读"，`#126` 用的是同一招。地板取 4：现测手册 5 本（README + 四本参考
     文档），低于它说明 glob 或文件名变了。
     """
     manual = _manual_pages()
@@ -1674,6 +1674,104 @@ def test_the_archive_is_where_a_moved_run_tally_lands():
     assert passed >= 150, f"归档里只剩 {passed} 处「N passed」，语料或扫法出问题了"
 
 
+# --------------------------------------------------------------- 逐片时刻读数
+# `#162` 那一族管的是"这一刻套件多大"，这一族管的是"这一刻量过"：现场钟点写进手册，下一次提交就把它
+# 变成"手册声称它今天还成立"的假话——`#184` 四步摘掉的 39 处全是这一形。三形分开留，合并式从三个分支
+# 拼出来，不抄第四份。
+# **三种形状/一格人册明确不进判据**，账记在这里：
+# * 裸 `HH:MM`——`100.87.65.60:13000` 那种 IP:端口 撞不得（去掉 `(?![\d:])` 那一格就会把它报成时刻），
+#   现测手册五本 0 处裸形，所以这一条形只能靠 `Z` 或靠日期立起来；限界写在注释里而不是断言里。
+# * 裸 ISO 日期——手册里 18 处「2026-09-21 起落盘」是能力历史（"什么时候开始有断言"），不是逐片取证。
+# * `CLOCK_EXEMPT` 那一格——`calibration.md` 的文件 mtime 是**产物谱系**：sidecar 早于该字段没记采集
+#   时间，那一格是这份延迟常数唯一能说"数据是哪一刻的"的东西。它不进"摘掉"那一档，但必须报名字。
+CLOCK_HMS = re.compile(r"\d{2}:\d{2}:\d{2}Z")
+CLOCK_MIN = re.compile(r"\d{2}:\d{2}Z(?![\d:])")
+CLOCK_ISO = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}(?::\d{2})?(?::\d{2})?Z?")
+ANY_CLOCK = re.compile(rf"(?:{CLOCK_HMS.pattern})|(?:{CLOCK_MIN.pattern})|(?:{CLOCK_ISO.pattern})")
+CLOCK_EXEMPT = {("calibration.md", "2026-09-20T12:56:24Z"): "产物谱系：文件 mtime，不是某一片的现场取证"}
+
+
+def _clock_lines(pages: dict[str, str],
+                 exempt: dict[tuple[str, str], str] | None = None) -> list[tuple[str, int, str]]:
+    """The check itself: which manual lines hold a per-slice wall-clock reading."""
+    exempt = CLOCK_EXEMPT if exempt is None else exempt
+    bad: list[tuple[str, int, str]] = []
+    for page, text in pages.items():
+        for no, line in enumerate(text.splitlines(), 1):
+            for m in ANY_CLOCK.finditer(line):
+                if (page, m.group()) in exempt:
+                    continue
+                bad.append((page, no, line.strip()))
+                break
+    return bad
+
+
+def _clock_tokens(pages: dict[str, str]) -> set[tuple[str, str]]:
+    return {(page, m.group()) for page, text in pages.items() for m in ANY_CLOCK.finditer(text)}
+
+
+def test_a_clock_reading_is_told_from_an_endpoint_and_a_history_date():
+    """夹具：三形都认，三种邻居都放过，而放过的那格豁免必须能被关掉。
+
+    第 6 行（能力历史日期）与第 4 行（IP:端口）放过是**故意的**：把它们算进逐片取证，连"什么时候开始
+    有断言"这种手册该留的句子会一起报掉。第 7 行走的是另一条腿——同一具钟点，在册时放过、把名册换成
+    `{}` 时必须被抓，所以豁免是一个可核对的开关而不是一句"这格不算"。夹具页必须叫 `calibration.md`：
+    名册的键是（文件, 时刻）两样，换具别的名字这一腿就只在测一具永远落不到实处的豁免了。
+    """
+    page = "\n".join([
+        "08:06:23Z 数到 **704**、09:00:43Z 数到",
+        "页眉静默少一格。2026-09-22T00:49Z 实测复现：同一份文件",
+        "照样绿。13:38Z 实测语料里就有两处把同一个",
+        "它要 `100.87.65.60:13000` 上那个判官，见上面〈配置：密钥的值永远不进文件〉。",
+        "出厂值下端点判决的最坏时刻 `3×5.0 + (1.5 + 3) = 19.5s` 必须小于席位 deadline 45s。",
+        "（一局一格，2026-09-21 起落盘）带着同一份 `RegionBudget`，所以 audit 能从另一侧再减一遍。",
+        "唯一可依据的是文件 mtime 2026-09-20T12:56:24Z；本报告离线重渲染自 `data/calibration.json`",
+    ])
+    bad = _clock_lines({"calibration.md": page}, exempt={})
+    assert [b[1] for b in bad] == [1, 2, 3, 7], \
+        f"名册关掉之后，逐片时刻只认带 `Z` 的两形与带日期的 `T` 形，别把 IP:端口、延迟常数、能力历史日期一起报掉：{bad}"
+    assert [b[1] for b in _clock_lines({"calibration.md": page})] == [1, 2, 3], \
+        "第 7 行应当由名册豁免掉——名册不生效说明豁免那一条是空话"
+
+
+def test_the_manual_carries_no_per_slice_clock_reading():
+    bad = _clock_lines({f.name: f.read_text(encoding="utf-8") for f in _manual_pages()})
+    assert not bad, (
+        "手册里还坐着逐片的现场钟点（格式 文件:行 原文）："
+        f"{[(b[0], b[1], b[2][:50]) for b in bad]}——`#184` 把 39 处摘干净并逐字抄进了归档，"
+        "再往手册里写时刻等于重新制造那句假话。落点：`docs/iterations.md` 对应片节的〈跑次〉；"
+        "确实该留在手册的那一刻（产物谱系）要写进 `CLOCK_EXEMPT` 并附理由，不是把这行删了交差。"
+    )
+
+
+def test_every_declared_clock_exemption_is_still_a_live_reading():
+    """豁免名册的每一格都要有主人：文件里还在、且理由非空——否则名册会慢慢变成垃圾桶。
+
+    `#183` 之前那一族"预先声明的缺席"用的是同一个形状：声明本身要可核对，删掉被声明的那格要红。
+    """
+    live = _clock_tokens({f.name: f.read_text(encoding="utf-8") for f in _manual_pages()})
+    ghosts = [k for k in CLOCK_EXEMPT if k not in live]
+    assert not ghosts, f"名册里这些时刻在手册里已经找不到了，要么删掉声明要么它在等谁：{ghosts}"
+    assert all(reason.strip() for _, reason in CLOCK_EXEMPT.items()), "豁免必须逐格带理由"
+
+
+def test_the_archive_is_where_a_moved_clock_reading_lands():
+    """搬运只许往归档里加：三形各自的地板取 `#184` 动手之前那一版（`de94602`）的实测量。
+
+    地板取**动手前**的数（828 / 928 / 47；今天 870 / 985 / 57）而不是今天的数，因为把地板钉在今天的
+    读数上，等于每往归档抄一条时刻就要重顶一次地板——`#151` 与"守卫顶历史"那一族记过这种账。代价要
+    如实说：这一形今天有 42 / 57 / 10 的余量，零星少几条不红（电池里那一具截尾 60 行的刀就没红），
+    它防的是整节被抹；"摘走的每一句逐字在册"由〈摘走必逐字在册〉那一族管。
+    """
+    text = (ROOT / "docs" / ARCHIVE).read_text(encoding="utf-8")
+    got = [len(p.findall(text)) for p in (CLOCK_HMS, CLOCK_MIN, CLOCK_ISO)]
+    floors = [828, 928, 47]
+    assert all(g >= fl for g, fl in zip(got, floors)), (
+        f"归档里的逐片时刻比 `#184` 动手之前少了：现读 {got}，地板 {floors}——"
+        "手册侧摘掉的东西必须在归档里找得到主人，少了就是搬运搬丢了"
+    )
+
+
 # --------------------------------------------------------------- 〈标题〉指针
 # `#135`/`#143` 把逐片取证搬去 `docs/iterations.md` 之后，手册里"细节在归档"的入口几乎全写成
 # 「见〈某节标题〉」：README 的能力清单压成指针形之后也只有这一个落点。读者照它搜索，标题被改过
@@ -1705,7 +1803,7 @@ def _headings(pages: dict[str, str]) -> list[str]:
 
 
 def _pointer_corpus() -> dict[str, str]:
-    """被扫的那几本：手册四本加归档——历史里指错地方也一样是指错。"""
+    """被扫的那几本：手册五本加归档——历史里指错地方也一样是指错。"""
     return {f.name: f.read_text(encoding="utf-8") for f in DOCS}
 
 
