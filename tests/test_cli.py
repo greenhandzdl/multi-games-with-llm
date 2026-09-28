@@ -437,6 +437,25 @@ def test_audit_counts_match_the_log_it_was_handed(played, capsys):
         stats["fallback_copy_check"]
 
 
+def test_audit_carries_the_version_stamps_the_log_was_written_with(played, capsys):
+    """三份版本戳从开局就落了盘，机器出口里却没有它们（`#178` 的三格）。
+
+    `open_log` 把 `contract_version` / `rules_version` / `compress_version` 写进 meta，
+    `prompts/templates.py` 顶上那句"改这里就是新的 `rules_version`/`contract_version`"讲的就是
+    它们——可今天没有任何一条读侧的路问得出"这份日志是哪一版规则写的"：`audit` 的 meta 那一格是
+    一串**拼出来的**键名，里面只有 game_id / deal_seed / config_hash / actor_kinds / model /
+    reproducible 六个。同一趟普查把这一串里的 `reproducible` 也报成了零读者，那一格是假缺陷——
+    它有人读，就在这同一串键名里，所以这把尺换成闸门之前得先补这一层。
+    """
+    _, path = played
+    assert cli.main(["audit", str(path)]) == 0
+    stats = _last_json_block(capsys.readouterr().out)
+    raw = json.loads(path.read_text(encoding="utf-8").splitlines()[0])["meta"]
+    for k in ("contract_version", "rules_version", "compress_version"):
+        assert stats["meta"][k] == raw[k], f"{k} 出的不是这份日志自己的值"
+        assert stats["meta"][k], f"{k} 印了个空的"
+
+
 def test_audit_prints_metrics_and_nothing_else(played, capsys):
     """`audit` is machine-readable by contract: one JSON object, no prose to parse around it,
     and the numbers are the M-keys a batch report also uses — not a parallel set of names for

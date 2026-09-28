@@ -366,8 +366,8 @@ def cmd_audit(args: argparse.Namespace) -> int:
     check = metrics.region_budget_check(g)
     flags = Counter(f.split(":")[0] for e in events for f in e.result.get("flags", ()))
     print(json.dumps({
-        "meta": {k: meta.get(k) for k in ("game_id", "deal_seed", "config_hash",
-                                          "actor_kinds", "model", "reproducible")},
+        "meta": {k: meta.get(k) for k in ("game_id", "deal_seed", "config_hash", "actor_kinds", "model",
+                                          "reproducible", "contract_version", "rules_version", "compress_version")},
         "synthetic": g.is_synthetic,
         "events": len(events),
         "terminal": g.terminal,
