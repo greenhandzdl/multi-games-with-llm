@@ -23,19 +23,16 @@ class RoleSpec:
     name_zh: str
     team: Team
     abilities: tuple[Ability, ...] = ()
-    # Night order index; -1 = does not act at night. Wolves share one slot so the
-    # engine can run their private channel before the kill is committed.
-    night_slot: int = -1
     consumables: dict[str, int] = field(default_factory=dict)
     knows_teammates: bool = False
 
 
-WOLF = RoleSpec("wolf", "狼人", "wolf", ("kill", "wolf_chat"), night_slot=1, knows_teammates=True)
-VILLAGER = RoleSpec("villager", "平民", "villager", (), -1)
-SEER = RoleSpec("seer", "预言家", "god", ("check",), night_slot=3)
-WITCH = RoleSpec("witch", "女巫", "god", ("save", "poison"), night_slot=2,
+WOLF = RoleSpec("wolf", "狼人", "wolf", ("kill", "wolf_chat"), knows_teammates=True)
+VILLAGER = RoleSpec("villager", "平民", "villager", ())
+SEER = RoleSpec("seer", "预言家", "god", ("check",))
+WITCH = RoleSpec("witch", "女巫", "god", ("save", "poison"),
                  consumables={"save": 1, "poison": 1})
-HUNTER = RoleSpec("hunter", "猎人", "god", ("shoot_on_death",), -1)
+HUNTER = RoleSpec("hunter", "猎人", "god", ("shoot_on_death",))
 
 
 @dataclass(frozen=True)
@@ -82,7 +79,6 @@ class Board:
     id: str
     seat_count: int
     composition: tuple[tuple[RoleSpec, int], ...]
-    night_order: tuple[str, ...]  # role ids, in the order they act
     house: HouseRules = HouseRules()
 
     @property
@@ -103,9 +99,6 @@ BOARD_9 = Board(
     id="board9-v1",
     seat_count=9,
     composition=((WOLF, 3), (VILLAGER, 3), (SEER, 1), (WITCH, 1), (HUNTER, 1)),
-    # 狼人先商定刀口 → 女巫见刀口用药 → 预言家最后验（这样"当晚被刀的人验出结果"
-    # 这个边界在结算顺序上真的会发生，而不是被顺序掩盖掉）。
-    night_order=("wolf", "witch", "seer"),
 )
 
 BOARDS = {BOARD_9.id: BOARD_9}

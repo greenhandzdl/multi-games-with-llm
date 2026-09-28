@@ -1183,13 +1183,6 @@ FIELD_TRIAGE: dict[str, str] = {
         "改的是 audit 的超额判定、不动发出去的字节",
     "config.py::RegionBudget.c_private": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C3' 那一格，见 src/wolfengine/metrics.py",
     "config.py::RegionBudget.c_task": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C4' 那一格，见 src/wolfengine/metrics.py",
-    "roles.py::Board.night_order":
-        "待判：`src/wolfengine/phases.py` 里那一夜是**硬写的三次调用**（狼→女巫→预言家），没有一处读这格；"
-        "而同一文件开头的 docstring 说 'the night follows Board.night_order'——那是一句认领了不存在读者的"
-        "话，`#81` 那一形搬到字段层。要么把这格接成真的循环，要么连 docstring 那句话一起删",
-    "roles.py::RoleSpec.night_slot":
-        "待判：`src/wolfengine/roles.py` 给三个角色各写了一个序号，零读者——**同一个事实的第三份声明**"
-        "（前两份是上面那格与 phases 里硬写的那三次调用），见 src/wolfengine/phases.py",
     "rules.py::VoteResult.top_seats":
         "待判：`src/wolfengine/rules.py` 里由 `tied_seats` 写入，全仓库零读者，而并列这件事已经由 "
         "`tied_seats` 那张表本身落盘——先确认这格不是第二份抄本，见 src/wolfengine/rules.py",
@@ -1223,9 +1216,10 @@ FIELD_VERDICTS = ("删", "搬", "接", "留", "待判")
 
 def test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_disposition():
     """`#172`：`#81`→`#166` 那一族数过函数、方法、类、导入、模块级常量，唯独没数过**类体里
-    带注解的字段**。本条自己数：298 格字段、17 格零生产读者（其中 6 格连测试都不点它名）——
-    落笔前那份不共用这把尺的复算报的是 24 格（08:14:58Z），差的 7 格就是这具尺多认的那两形：
-    `row["名字"]` 式的落盘回读与 src 自己那两张 INERT 表。
+    带注解的字段**。本条自己数：296 格字段、15 格零生产读者（其中 5 格连测试也不点它名，那是
+    下面九格"待判"里的五格）。`#172` 那份不共用这把尺的复算当时报 24 格（08:14:58Z 那棵树比
+    现在多两格），多的 7 格正是这具尺多认的那两形：`row["名字"]` 式的落盘回读与 src 自己那两张
+    INERT 表。
 
     本条不要它们都"有读者"，只要**每一格都有一条登记过的处置**：名册与本条数的零读者两侧相等
     （多一格＝新长出来没登记，少一格＝登记的那格已不在树上）、处置词必须是那五个之一、落点路径

@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from wolfengine import info, legality, roles, schema, state
+from wolfengine import info, legality, schema, state
 from wolfengine.events import Event, Kind
 from wolfengine.legality import check_action, default_action, impossible_percept
 
@@ -282,11 +282,10 @@ def test_the_engine_default_cites_nothing_it_cannot_show():
     assert d.speech == ""
 
 
-def test_roles_module_agrees_with_the_gates_targetless_list():
+def test_discuss_needs_no_target_so_a_wolf_chat_never_burns_its_retry():
     """`discuss` is wolf-chat prose: it needs no target, and if it were missing from
     TARGETLESS_ACTS every wolf discussion would burn its one retry and end in a fallback."""
     assert "discuss" in legality.TARGETLESS_ACTS
     legal = state.LegalSet(acts=("discuss",), targets=frozenset({4, 5}))
     assert check_action(schema.Action(act="discuss", speech="刀4号"), legal=legal,
                         percept=VILLAGER_TURN, phase=state.Phase.NIGHT_WOLF).ok
-    assert roles.BOARD_9.spec("wolf").night_slot == 1

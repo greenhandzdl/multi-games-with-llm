@@ -13,8 +13,8 @@ Three ordering facts are load-bearing rather than stylistic:
   `as_of` pinned to the moment the phase opened. Either half alone would leak.
 * **The night is serial, and for a rule reason.** The witch is told who fell tonight, so her
   turn cannot precede the knife. The plan's concurrency table counts three parallel night
-  calls; that would let her act blind, so the night follows `Board.night_order` and the
-  saving is about two seconds.
+  calls; that would let her act blind, so `run_night` below hardcodes knife -> potion ->
+  check, the seer last; and the saving is about two seconds.
 * **Deaths are settled by `rules.resolve_night`, never by a phase.** A phase collects
   intentions; only the rules engine turns them into corpses.
 """
