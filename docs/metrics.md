@@ -23,7 +23,8 @@
 | M7 | `m7_cost_profile(events)` | `m7_cost` | 逐阶段的 token / 墙钟 / 兑现率 + 漂移自检 |
 | M8 | `m8_strategy_proxies(events)` | `m8_strategy` | 策略代理指标（不需要统计力就能看出塌没塌） |
 
-`audit` 的顶层还有 `meta`（含 `config_hash`、`actor_kinds`、`reproducible`）、`synthetic`、
+`audit` 的顶层还有 `meta`（含 `config_hash`、`actor_kinds`、`reproducible`，连同这份日志自己的三份
+版本戳与 `board`——「哪一版规则写的」「坐在哪张板上」这两问从这里答）、`synthetic`、
 `kinds`、`speech_acts`、`assignment`、`prompt_tokens_est`、`prefix_cache`、`compactions`、
 `region_budget_check`、`fallback_copy_check`、`degraded_game`。这一串说的是"还有"，不是"只有"：顶层键的完整集合钉在
 `test_audit_prints_metrics_and_nothing_else` 那条断言上，加一格删一格都会先让它红。
