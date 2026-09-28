@@ -40,7 +40,7 @@ def cal():
 
 
 def _md(cal, features):
-    return cal.render_md(features, {}, {}, {}, [], [], argparse.Namespace(quick=True))
+    return cal.render_md(features, {}, {}, {}, [], [], argparse.Namespace(quick=True), twin=cal.TWIN_PROMISE)
 
 
 def test_the_mark_is_findable_and_the_findings_are_not_blind(cal):
@@ -160,3 +160,46 @@ def test_the_script_asks_transport_for_the_usage_block_and_keeps_no_copy(cal, mo
     got = _call(cal, monkeypatch, {"prompt_tokens": 900, "completion_tokens": 8,
                                    "prompt_tokens_details": {"cached_tokens": 777}})
     assert got["cached"] == 777, got
+
+
+def _twin_of(cal, src: Path, out: Path) -> str:
+    """离线重渲染一遍，取回页眉里那条讲孪生件的 bullet（判据只看那一行，别的改动不该顶绿它）。"""
+    cal.render_from_json(str(src), str(out))
+    lines = [l for l in out.read_text(encoding="utf-8").splitlines() if l.startswith("- 机器可读的孪生件")]
+    assert len(lines) == 1, f"页眉那条孪生件的话应当只有一句，读到的是：{lines}"
+    return lines[0]
+
+
+def test_the_twin_line_refuses_when_the_sidecar_has_no_block(cal, tmp_path):
+    """`docs/calibration.md` 第 5 行那句"取值以孪生件为准"今天是一句假话。
+
+    在册的 sidecar 里根本没有 `constants` 块（顶层只有 features/stream/ratio/latency/temps），
+    `metrics.load_calibration()` 对它给的是 `usable=False` 并写着"重跑 scripts/calibrate.py"——
+    那条拒绝的话甚至就住在 loader 自己的分支里，注释还点名"仓库里现存的那份 sidecar 就是这一类"。
+    而页面 promise 的那个块不存在，读的人照 README 里那条注释把文件递进去，拿到的是拒绝。
+    """
+    line = _twin_of(cal, ROOT / "data" / "calibration.json", tmp_path / "c.md")
+    assert "取值以孪生件为准" not in line, line
+    assert "没有 constants 块" in line, f"应当原样带上 loader 的拒绝，读到的是：{line}"
+
+
+def test_the_twin_line_keeps_its_promise_for_a_sidecar_that_carries_the_block(cal, tmp_path):
+    """反向那一格：修成"按 sidecar 里真有的东西说话"之后，带可用常数块的那一份仍要说"为准"。
+
+    少了这一格，上一条可以靠"永远说读不出常数"来绿——那只是把假话换成了废话。这份合成 sidecar 是
+    自洽的：`throughput` 与 `latency` 供 `derive_constants()` 拟合，`constants` 是它拟合出来的那三个数，
+    所以页面上不许同时出现"为准"和"本节尚不构成常数来源"。
+    """
+    import json
+    payload = {"throughput": {"decode_tps_overhead_corrected": 40.0,
+                              "per_call_fixed_overhead_s": 1.2},
+               "latency": [{"prefix_reps": 130, "k": 1, "wall_s": 2.0, "agg_prefill_tps": 2000.0}],
+               "temps": [], "features": {}, "stream": {}, "ratio": {},
+               "constants": {"D_decode_tok_s": 40.0, "per_call_fixed_overhead_s": 1.2,
+                             "P_prefill_tok_s_best_observed": 2000.0}}
+    src = tmp_path / "good.json"
+    src.write_text(json.dumps(payload), encoding="utf-8")
+    line = _twin_of(cal, src, tmp_path / "g.md")
+    assert "取值以孪生件为准" in line, line
+    page = (tmp_path / "g.md").read_text(encoding="utf-8")
+    assert "尚不构成常数来源" not in page, "同一页不许一边说为准、一边说自己不是来源"

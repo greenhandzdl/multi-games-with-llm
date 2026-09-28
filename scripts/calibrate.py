@@ -528,8 +528,37 @@ def sidecar(ran_utc: str, quick: bool, features: dict, stream: dict, ratio: dict
             "constants": derive_constants(lat, tp)}
 
 
+TWIN_PROMISE = ("- 机器可读的孪生件：`data/calibration.json` 的 `constants` 块（`wolf audit "
+                "--calibration <该文件>` 读它）。本文件负责说清这份体检**完不完整**，取值以孪生件为准；"
+                "两处由同一次运行、同一个 `derive_constants()` 产生。\n")
+
+
+def twin_line(src: str) -> str:
+    """页眉那条"孪生件"的话只能说 sidecar 里真有的东西。
+
+    在册的这一份 `data/calibration.json` 顶层只有 features/stream/ratio/latency/temps——`constants`
+    块是后来才有的字段，所以它承诺的那一侧今天读到的是拒绝，而拒绝的话本来就有作者：
+    `metrics.load_calibration()`。这里不重写它，只把它那句搬进页面（`#153` 同一条规矩：同一个理由
+    在两处各自组装，迟早一处说"缺 D"、另一处说"文件不存在"）。
+
+    note 的开头是"哪个文件"，被 `；` 之后的子句才是"为什么"。整条 note 里嵌着调用方给的**路径**，
+    而这一页说的是仓库里那一份，所以取子句、不取整句——否则一次 `--from-json` 用相对路径、
+    守卫测试用绝对路径，报告就会因为写法分叉。
+    """
+    from wolfengine.metrics import load_calibration  # 不进模块级导入：那会把 `CRED_KEYS` 顶到 54，归档里有一处按 53 点它
+    verdict = load_calibration(src)
+    if verdict["usable"]:
+        return TWIN_PROMISE
+    note = verdict["note"]
+    clause = note.split("；", 1)[1] if "；" in note else note
+    return (f"- 机器可读的孪生件：`data/calibration.json` **今天读不出常数**——{clause}。"
+            "`wolf audit --calibration <该文件>` 打印的就是 loader 这一句，本页与它一起等下一次体检："
+            "补不出常数时，两边都不许被当成来源。\n")
+
+
 def render_md(features, stream, ratio, tp, lat, temps, args, *, provenance: str = "",
-              base_url: str | None = None, model: str | None = None) -> str:
+              base_url: str | None = None, model: str | None = None,
+              twin: str) -> str:
     def table(rows, cols):
         head = "| " + " | ".join(cols) + " |\n"
         head += "|" + "|".join(["---"] * len(cols)) + "|\n"
@@ -579,9 +608,7 @@ def render_md(features, stream, ratio, tp, lat, temps, args, *, provenance: str 
          f"{' --quick' if args.quick else ''}`",
          f"- base_url：{stamp(base_url, CONF.base_url)}  model：{stamp(model, CONF.model)}",
          "- 密钥仅从环境变量读取，本文件不含其值。\n",
-         "- 机器可读的孪生件：`data/calibration.json` 的 `constants` 块（`wolf audit "
-         "--calibration <该文件>` 读它）。本文件负责说清这份体检**完不完整**，取值以孪生件为准；"
-         "两处由同一次运行、同一个 `derive_constants()` 产生。\n"]
+         twin]
     if provenance:
         L.append(f"- 数据来源：{provenance}\n")
     if refusals:
@@ -684,7 +711,8 @@ def render_from_json(src: str, out: str) -> None:
         render_md(data.get("features", {}), data.get("stream", {}), data.get("ratio", {}),
                   data.get("throughput", {}), data.get("latency", []), data.get("temps", []),
                   argparse.Namespace(quick=data.get("quick", False)), provenance=provenance,
-                  base_url=data.get("base_url"), model=data.get("model")),
+                  base_url=data.get("base_url"), model=data.get("model"),
+                  twin=twin_line(src)),
         encoding="utf-8")
     print(f"re-rendered {out} from {src}（零 API 调用）")
 
@@ -729,14 +757,7 @@ async def main() -> None:
         lat = await latency_matrix(c, cl, args.quick)
 
     stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    # Stamped into both halves here, not left to `render_md`'s reading of live config: the
-    # round-trip test compares this header against the one a later `--from-json` rebuilds from
-    # the sidecar, so if the two writers ever disagree about which endpoint was measured, that
-    # test goes red instead of the report quietly gaining a second, unwitnessed source.
-    md = render_md(features, stream, ratio, tp, lat, temps, args, provenance=f"实测于 {stamp}",
-                   model=CONF.model, base_url=CONF.base_url)
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.out).write_text(md, encoding="utf-8")
+    # 先落 sidecar 再渲染：页眉那条"孪生件"的话要从那份文件读回来，live 与 `--from-json` 才是同一个作者。
     Path(args.json).parent.mkdir(parents=True, exist_ok=True)
     Path(args.json).write_text(
         json.dumps(redact(sidecar(stamp, args.quick, features, stream, ratio, tp, lat, temps,
@@ -744,6 +765,14 @@ async def main() -> None:
                    ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    # Stamped into both halves here, not left to `render_md`'s reading of live config: the
+    # round-trip test compares this header against the one a later `--from-json` rebuilds from
+    # the sidecar, so if the two writers ever disagree about which endpoint was measured, that
+    # test goes red instead of the report quietly gaining a second, unwitnessed source.
+    md = render_md(features, stream, ratio, tp, lat, temps, args, provenance=f"实测于 {stamp}",
+                   model=CONF.model, base_url=CONF.base_url, twin=twin_line(args.json))
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(md, encoding="utf-8")
     blind = elided_paths(redact(report_sections(features, stream, ratio, tp, lat, temps)))
     if blind:
         # Twenty minutes of a shared box is expensive to repeat; the run still counts, but the

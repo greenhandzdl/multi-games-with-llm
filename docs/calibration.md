@@ -2,7 +2,7 @@
 - 生成命令：`export WOLF_LLM_API_KEY=<key> && python scripts/calibrate.py`
 - base_url：未记录（当前配置为 `http://100.87.65.60:13000/v1`，不是本次测量的出处）  model：未记录（当前配置为 `gemma-4-26b-a4b-nvfp4`，不是本次测量的出处）
 - 密钥仅从环境变量读取，本文件不含其值。
-- 机器可读的孪生件：`data/calibration.json` 的 `constants` 块（`wolf audit --calibration <该文件>` 读它）。本文件负责说清这份体检**完不完整**，取值以孪生件为准；两处由同一次运行、同一个 `derive_constants()` 产生。
+- 机器可读的孪生件：`data/calibration.json` **今天读不出常数**——没有 constants 块（这份 sidecar 早于该字段，或那次体检在写出常数之前就断了）：重跑 scripts/calibrate.py。`wolf audit --calibration <该文件>` 打印的就是 loader 这一句，本页与它一起等下一次体检：补不出常数时，两边都不许被当成来源。
 - 数据来源：采集时间未记入 sidecar（早于该字段），唯一可依据的是文件 mtime 2026-09-20T12:56:24Z；本报告离线重渲染自 `data/calibration.json`
 > **本节尚不构成常数来源**：D_decode_tok_s、per_call_fixed_overhead_s 没有可用的值（未测得或不为正）。见第 0 节。补齐之前，引用这些位置的报告一律标『未标定』，不得回填计划里的估计值。
 ## 0. 体检完整性

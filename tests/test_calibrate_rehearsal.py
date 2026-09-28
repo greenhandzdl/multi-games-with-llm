@@ -439,6 +439,7 @@ def test_a_model_the_endpoint_does_not_advertise_is_flagged(run, tmp_path):
     # 反面：数值对得上时不许凭空报警——否则这条结论会在每次真体检里稀释成一个背景噪音。
     data = json.loads(Path(run.json_path).read_text(encoding="utf-8"))
     data["features"]["models_endpoint"]["body"]["data"][0]["id"] = cal.CONF.model
+    data["model_declared"] = [cal.CONF.model]
     src = tmp_path / "matches.json"
     src.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     out = tmp_path / "matches.md"
