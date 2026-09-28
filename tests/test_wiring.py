@@ -2557,3 +2557,87 @@ def test_a_full_turn_round_trip_needs_no_endpoint(tmp_path):
                               known_ids=frozenset(info.eid(e.seq) for e in log.all()))
     assert v.ok, (v.violations, parsed.errors)
     assert v.citation_stats["valid"] == ["e11"]
+
+
+def _is_literal_subscript(value: ast.expr) -> bool:
+    """等号右边是不是 `Literal[...]` 那一形，两种写法（裸名与 `typing.Literal`）都认。"""
+    if not isinstance(value, ast.Subscript):
+        return False
+    base = value.value
+    if isinstance(base, ast.Name):
+        return base.id == "Literal"
+    return isinstance(base, ast.Attribute) and base.attr == "Literal"
+
+
+def _literal_alias_homes(corpus: dict[str, str]) -> dict[str, list[tuple[str, int]]]:
+    """模块级 `名字 = Literal[...]` 的声明点按名字归堆——同一个名字落在两本模块就是两份抄本。
+
+    只数模块级那一条赋值，`X: TypeAlias = Literal[...]` 那一形同样算（换写法不是躲过这把尺的办法）。
+    注释、docstring、`from … import 名字`、函数体里的同名局部赋值、只做类型标注都不算又抄了一份。
+
+    落点是 `(文件, 行号)` 两段而不是一根 `文件:行号`——这一本自己就在行号闸门的扫面里，拼成一体的形状
+    会被当成文档在给 src 点名，假数据就成了一笔真欠账。
+    """
+    homes: dict[str, list[tuple[str, int]]] = {}
+    for path, text in sorted(corpus.items()):
+        for node in ast.parse(text).body:
+            if isinstance(node, ast.Assign):
+                if len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+                    continue
+                name = node.targets[0].id
+            elif isinstance(node, ast.AnnAssign):
+                if not isinstance(node.target, ast.Name) or node.value is None:
+                    continue
+                name = node.target.id
+            else:
+                continue
+            if _is_literal_subscript(node.value):
+                homes.setdefault(name, []).append((path, node.lineno))
+    return homes
+
+
+def test_no_module_level_literal_alias_is_declared_twice_in_src():
+    """`#204`：`ActorKind` 在 `config.py` 与 `actors.py` 的模块级各写了一遍，两格今天相等而没有任何东西在核对。
+
+    与 `#161` 的版本号同族：一份事实两个作者，改一份时另一份不会红。作者不是自由选择——`actors.py`
+    已经在模块级 import `config.py`，反过来让 `config.py` 去 import 自己的下游就是循环导入。这一格本来就
+    住在 `config.py`（`Config.actor_kinds` 是它的字段，`FORBIDDEN_AXIS` 名单里也有它），所以那边留、`actors.py`
+    改成共用。
+
+    名册地板是这条尺「扫到了东西」的唯一证据：修好之后真语料上是零命中，重名名单空着是真话也是坏话，
+    所以先钉别名总数，判据本身由下面那格喂假数据来证它不是永远不开火的枪。
+
+    为什么只认 `Literal` 而不铺到所有模块级赋值（K3 那把刀量出来的）：`FIRST_PERSON` 在 `belief.py` 与
+    `legality.py` 各有一遍，两格**值集合本来就不同**（那两把尺管的是两件事），同名不是同一种事实。铺开的
+    判据会把这一形报成缺陷，所以限界写死在这里——这一条只管"同一份类型别名抄了两遍"。
+    """
+    corpus = {str(p): p.read_text(encoding="utf-8")
+              for p in sorted(Path("src/wolfengine").rglob("*.py"))}
+    assert len(corpus) >= 10, f"src 只数到 {len(corpus)} 个模块，多半是扫面坏了"
+    homes = _literal_alias_homes(corpus)
+    assert len(homes) >= 6, f"模块级 Literal 别名只数到 {len(homes)} 个，多半是收集坏了"
+    twice = {name: spots for name, spots in homes.items() if len(spots) > 1}
+    assert not twice, (f"这些类型别名在 src/ 里各有两份模块级声明：{twice}——"
+                       f"留一本做作者，另一本 import 它，别靠「两格数值碰巧相等」过日子")
+
+
+def test_the_literal_alias_scanner_fires_on_a_second_copy_in_either_spelling():
+    """判据两侧都有读者：同名的第二份要报，第二份换成 `TypeAlias` 写法也要报。
+
+    反向那一半同样要钉，否则真语料修好之后这把尺会因为误伤别的形状而被摘掉：一处声明、注释里的同名
+    句子、`import` 进来的名字、函数体里的同名赋值、只做类型标注（等号右边什么都没有）、模块级的普通
+    常量，以及等号右边不是那种下标形的带标注赋值——这几种都不许报。
+    """
+    homes = _literal_alias_homes({
+        "pkg/a.py": 'from typing import Literal\n\nActorKind = Literal["llm", "mock"]\n',
+        "pkg/b.py": "from .a import ActorKind\n\n\ndef f(kind: ActorKind) -> int:\n    return 1\n",
+        "pkg/c.py": 'from typing import Literal, TypeAlias\n'
+                    'ActorKind: TypeAlias = Literal["llm", "mock"]\n',
+        "pkg/d.py": '# ActorKind = Literal["llm", "mock"] 这一句是注释\n',
+        "pkg/e.py": 'from typing import Literal\n\n\ndef g() -> None:\n    Team = Literal["a", "b"]\n',
+        "pkg/f.py": 'import typing\n\nWinner = typing.Literal["good", "bad"]\n',
+        "pkg/g.py": "SHARED = 9\n",
+        "pkg/h.py": "Seat: int = 9\n",
+    })
+    assert homes == {"ActorKind": [("pkg/a.py", 3), ("pkg/c.py", 2)],
+                     "Winner": [("pkg/f.py", 3)]}, homes

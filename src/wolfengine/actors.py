@@ -23,20 +23,18 @@ from __future__ import annotations
 import asyncio
 import random
 from dataclasses import dataclass, field
-from typing import Any, Literal, Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from . import human
 from .assemble import Prompt
 from .belief import BeliefState
-from .config import Config
+from .config import ActorKind, Config
 from .events import Kind
 from .info import Percept, eid
 from .llm import LLM
 from .persona import PersonaParams
 from .schema import Action, Belief, Suspect, parse_action
 from .state import LegalSet, Phase
-
-ActorKind = Literal["llm", "mock", "human"]
 
 # The two strings this seat says out loud, as constants because `human.py`'s card is checked
 # word by word against the legal act set (`test_human_seat.py`), and a re-ask that quietly

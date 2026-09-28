@@ -199,7 +199,7 @@ async def test_the_connect_phase_gets_its_own_bound_below_the_seat_deadline(monk
     实测形状（2026-09-25T01:44:20Z，端点黑洞——SYN 无应答，不是 `ConnectError` 那种立刻被拒）：
     13 个回合**全部**记成 `timeout_after_45s`、`result.ok: true`、`fallback: 1`，一局打到第 2 天
     用了 585s、整局预计 ~37 分钟。`agent._ask` 的 deadline 取 `llm_timeout_floor_s`=45s
-    （`actors.py:133`），`llm.py:146` 又把同一个 45 当作 `timeout_s` 交给 transport，
+    （`actors.py:131`），`llm.py:146` 又把同一个 45 当作 `timeout_s` 交给 transport，
     `transport.py` 改前那一行用裸 float 传下去 = 四个阶段都是 45。于是本文件上面那条
     `test_an_unreachable_endpoint_is_the_endpoints_fault_not_the_models` 所承诺的分类根本到不了：
     `asyncio.wait_for` 与 httpx 的 connect 超时同时响，抢先进入 `except` 的是前者，
