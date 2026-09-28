@@ -477,13 +477,30 @@ def test_the_reproducibility_flag_reaches_the_machine_exit(played, capsys):
     `#178`/`#179` 数读者的那把尺说这一格有人读，读它的就是那串键名；可**那一串里每一格都没有证人**。
     `#181` 的电池现形过一次：05:38:37Z 把 `game.py` 里这一格整行摘掉，红的只有读文件的那两条用例，
     这一本（`test_cli.py`）一条没红——也就是说把键名从 `audit` 的出口里删掉，当时没有任何东西会响。
-    这条钉的是"落盘的声明到得了机器出口"这一格，其余九格按同一形状逐格补。
+    这条钉的是"落盘的声明到得了机器出口"这一格，其余五格按同一形状逐格补。
     """
     _, path = played
     assert cli.main(["audit", str(path)]) == 0
     stats = _last_json_block(capsys.readouterr().out)
     raw = json.loads(path.read_text(encoding="utf-8").splitlines()[0])["meta"]
     assert stats["meta"]["reproducible"] is raw["reproducible"] is False
+
+
+@pytest.mark.parametrize("cell", ["game_id", "deal_seed", "config_hash", "actor_kinds", "model"])
+def test_audit_prints_this_meta_cell_with_the_value_the_file_carries(played, capsys, cell):
+    """`#181` 的 K3 现形的那一格：`audit` 的 meta 是一串**拼出来的**键名，那一串里每一格都没有证人。
+
+    05:38:37Z 那一趟（四本合跑、基线 177 个用例）把 `game.py` 里那个布尔整行摘掉，红的两条都在
+    `tests/test_golden_game.py`，`tests/test_cli.py` 一条没红。所以那一句"这一格有人读，读它的就是那串键名"
+    当时只能由键名推，不能由断言证。
+    `#181` 补了 `reproducible` 那一格；这条按同一形状补余下五格，一格一个参数——谁从 `audit` 的出口里掉出去，
+    红的那一条就点名谁（不是整串一起红，那样只会说"名单钉子松了"）。
+    """
+    _, path = played
+    assert cli.main(["audit", str(path)]) == 0
+    stats = _last_json_block(capsys.readouterr().out)
+    raw = json.loads(path.read_text(encoding="utf-8").splitlines()[0])["meta"]
+    assert stats["meta"][cell] == raw[cell], f"{cell} 从机器出口里掉了，或出的不是这份文件自己的值"
 
 
 def test_audit_prints_metrics_and_nothing_else(played, capsys):
