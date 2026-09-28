@@ -1566,3 +1566,42 @@ def test_the_command_menu_lines_run_in_sequence(tmp_path):
         f"所以它们只是**碰巧**没撞上——挨着敲的时候后一条会退回 rc 2（实测十次里八次，"
         f"2026-09-26T08:00Z）。逐条跑的那一圈因此量不到这一格：它过得去可能只是跨了一秒。")
 
+
+# ------------------------------------------------------------------- replay 的出处四格（`#183`）
+def test_the_replay_transcript_carries_the_build_that_wrote_the_file(played, capsys):
+    """第三个给人看的出口以前不念那四格：`#180` 只接了两块屏幕，实录这一侧 06:46:45Z 实测没接。
+
+    那一趟（seed 7 那局）的 `wolf replay` 印 80 行，`CONTRACT`、`RULES`、`COMPACT`、板名一个都不在
+    里面——而这一个出口恰恰是唯一会被整段贴进问题报告的：页在浏览器里、画面在终端里，只有实录是字。
+    这条断的是**整串**，不是四个名字各出现过：`#182` 那一课，名字读者不算值证人。
+    """
+    _, path = played
+    assert cli.main(["replay", str(path)]) == 0
+    printed = capsys.readouterr().out
+    raw = json.loads(path.read_text(encoding="utf-8").splitlines()[0])["meta"]
+    want = " · ".join([raw["contract_version"], raw["rules_version"], raw["compress_version"],
+                       f"板{raw['board']}"])
+    assert want in printed, f"实录里没有「{want}」这一串：开头 {printed[:160]!r}／结尾 {printed[-160:]!r}"
+
+
+def test_a_log_written_before_the_stamps_prints_no_invented_provenance(played, tmp_path, capsys):
+    """反向：版本戳是后来加的字段，老文件上没有——不许替它造一个，也不许印 `None`。
+
+    复盘页那一侧早就钉着这一格（`test_a_log_with_no_manifest_line_prints_no_invented_provenance`），
+    实录这一侧要走同一口径才有意义，所以这条把同一份局日志的第一行改写成"没有那四格"再放给
+    `replay`：时间线照印（`[e1]` 必须在），出处那一族字样一个都不许出现。
+    """
+    _, path = played
+    lines = path.read_text(encoding="utf-8").splitlines()
+    head = json.loads(lines[0])
+    for cell in ("contract_version", "rules_version", "compress_version", "board"):
+        head["meta"].pop(cell, None)
+    old = tmp_path / "before_stamps.jsonl"
+    old.write_text(json.dumps(head, ensure_ascii=False) + "\n" + "\n".join(lines[1:]),
+                   encoding="utf-8")
+    assert cli.main(["replay", str(old)]) == 0
+    printed = capsys.readouterr().out
+    assert "[e1] 法官：开局座位" in printed, "这份文件还是能打出一条时间线，别把断言让给空输出"
+    for word in ("CONTRACT", "RULES", "COMPACT", "板"):
+        assert word not in printed, f"没有版本戳的文件被印了「{word}」：{printed[-200:]!r}"
+

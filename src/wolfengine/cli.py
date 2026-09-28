@@ -234,11 +234,11 @@ def render_chronicle_file(path: Path, *, god: bool = False, as_seat: int | None 
                           ) -> list[str]:
     events, meta, torn = EventLog.read_split(path)
     lines = render_chronicle(events, god=god, as_seat=as_seat)
-    # The transcript ends here, and a reader cannot tell that apart from a game that ended here
-    # unless it says so — including in a seat's own view, which is the one people act on. The
-    # other ways a transcript misleads are a file with no manifest at all, a manifest with nothing
-    # after it, and a numbering that isn't 1,2,3: same rule, five sentences, one owner each
-    # (`events.py`). Roster heads them: the tail two are about where the file stops, not who spoke.
+    if (stamp := render_html.provenance_line(meta)):
+        lines.insert(0, f"〔{stamp}〕")
+    # The 〔…〕 lines below are about the file, not the game: it ends here, or has no manifest, or
+    # nothing after it, or a numbering that isn't 1,2,3 — four rules, one owner each in `events.py`.
+    # The stamps head the file instead: 「哪一版写的」 is not something a tail notice gets to say.
     for notice in (roster_notice(meta), meta_notice(meta), empty_notice(events, meta),
                    seq_notice(events), torn_notice(torn)):
         if notice:

@@ -183,6 +183,15 @@ def provenance(meta: dict[str, Any]) -> list[str]:
                         meta.get("compress_version"), f"板{board}" if board else "") if v]
 
 
+def provenance_line(meta: dict[str, Any]) -> str:
+    """The four stamps as the one string a text screen prints — the join lives here, not at each site.
+
+    Two screens fold them into a header sentence, the transcript prints them alone; if each wrote
+    its own join, three orderings of the same four values is where it ends (`#174`'s three-times
+    night order started the same way). Empty string for a log written before the stamps existed."""
+    return " · ".join(provenance(meta))
+
+
 def _board(events: list[Event], *, god: bool) -> str:
     """Nine cards, in seat order, showing only what any viewer may know: who is sitting where,
     and who is face down. The role chip is a god-view addition, not a board default."""

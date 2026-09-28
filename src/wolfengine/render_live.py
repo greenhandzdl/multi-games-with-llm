@@ -36,7 +36,7 @@ from rich.text import Text
 
 from .compress import render_line
 from .events import Event, EventLog, Kind, empty_notice, meta_notice, roster_notice, seq_notice
-from .render_html import (event_flags, game_over_event, markers, mind_pairs, provenance,
+from .render_html import (event_flags, game_over_event, markers, mind_pairs, provenance_line,
                           role_zh, roles_by_seat, seats_of, shown_events)
 
 DEAD = "✕"
@@ -229,7 +229,7 @@ def draw(console: Console, events: list[Event], meta: dict[str, Any], *,
             line(f"{seat}号 嘴上说：" + "；".join(said))
 
     line(f"本局不可复现：端点没有确定性，本画面读的是已落盘的日志 {meta.get('game_id', '')}"
-         + "".join(f" · {v}" for v in provenance(meta)) + f" · {HELP}", style="dim")
+         + (f" · {stamp}" if (stamp := provenance_line(meta)) else "") + f" · {HELP}", style="dim")
 
 
 # ---------------------------------------------------------------------------------- the loop

@@ -241,7 +241,10 @@ VIEWING_RULES: dict[str, tuple[str, list[str]]] = {
     "roles_by_seat": ("render_html", ["render_live"]),
     "role_zh": ("render_html", ["render_live"]),
     "game_over_event": ("render_html", ["render_live"]),
-    "provenance": ("render_html", ["render_live"]),
+    # `provenance` 只有同文件那一格读它；跨模块共享的是它 join 出来的那一串——实录那一侧
+    # (`cli.py`) 走 `render_html.provenance_line(...)`，它的读者由 test_cli 的两条断言钉，不在本表里。
+    "provenance": ("render_html", []),
+    "provenance_line": ("render_html", ["render_live"]),
     "voting_waves": ("events", ["render_html", "metrics"]),
 }
 
