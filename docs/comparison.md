@@ -252,14 +252,14 @@ wolf compare data/temp09-vs-06 --axis temperature                   # → compar
   首尾自比，不需要金答案，但没有基线就分不清"权重变了"和"这题它一向答不稳"。等 M0 复跑时
   一起采。
 * 40 局（20 局 × 2 臂）的实际墙钟现在只有**一半**是估的：乘数量出来了，未知只剩端点吞吐。
-  `.venv/bin/wolf run --dry-run --games 20 --out /tmp/wolfcensus2`（2026-09-21T21:23Z 实跑，
+  `.venv/bin/wolf run --dry-run --games 20 --out /tmp/wolfcensus2`（实跑，
   10.8 秒、零 API 调用）末尾印的"成本合计"：**53.8 次调用/局**（23–75，随天数走：mock 桌均值
   3.2 天 ⇒ **17.1 次/天**，11.5–22.0）、**prompt 97,379 tok/局**、**完成预算 5,053 tok/局**
   （2,180–6,900）。括号里那句必须连着读：完成预算是"每次调用都问满 `max_tokens`"的**上限**，
   不是实测生成长度。
 * 那句折扣现在是一个读数而不是一次手算：`m7_cost_profile` 把 `request.max_tokens` 与
   `response.completion_tokens` 成对求和，报 `fill_rate`（外加 `asked_calls`/`n_calls` 说覆盖面）。
-  2026-09-21T22:06Z 三局 mock-HTTP 替身桌：全局 0.4242 / 0.4296 / 0.4314，逐阶段
+  三局 mock-HTTP 替身桌：全局 0.4242 / 0.4296 / 0.4314，逐阶段
   `day_speech` 0.2857、动作档 0.6667，`truncated` 全 0。**这些数说的是夹具的说话长度，不是模型的**
   （Oracle 只说法官给过的短答案，兑现率对它近乎常数）——买到的是"真桌跑完一局，这个格子就有值"，
   墙钟从此不必等人记得去除。日志里没有 `max_tokens` 时它报 `null` 加一句 `fill_rate_note`，
