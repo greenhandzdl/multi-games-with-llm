@@ -2441,3 +2441,143 @@ def test_the_dangling_member_rule_bites_on_a_never_existing_class_and_grants_his
         ("a.md", 7, dotted("GameState", gone_member))], f"实际报出：{bad}"
     assert census == {"resolved": 3, "member_gone": 2, "class_gone": 2,
                       "not_ours": 1, "noise": 1}, f"分档读数对不上：{census}；各处：{bad}"
+
+
+# ------------------------------------ 从手册摘走的每一行都要逐字躺在归档里（#171）
+
+MANUAL_CUT_ANCHOR = "2b57a58"          # #172 收尾那一版：README〈测试〉一节还没被摘过一行
+TEST_SECTION = "## 测试"
+
+
+def _section_of(text: str, heading: str) -> list[str]:
+    """切出一节：整行等于 heading 起，到下一个同级 `## ` 标题前止（不含两者）。"""
+    lines = text.splitlines()
+    try:
+        start = lines.index(heading)
+    except ValueError:
+        raise AssertionError(f"手册里没有整行等于 {heading!r} 的标题，扫的是空气") from None
+    body: list[str] = []
+    for ln in lines[start + 1:]:
+        if ln.startswith("## "):
+            break
+        body.append(ln)
+    return body
+
+
+def _mask_counts(line: str) -> str:
+    """把这一行里**被 `#44`/`#61` 认成计数主张的那些数字**换成 `N`，其余字符一个不动。
+
+    形状直接借那三条已有判据（`MINIMAL`/`BARE`/`COLLECTED`），不写第四份计数正则：闸门不认的
+    数字（`24 条自报文本`、`98 条` 那种后面还接得上词的）在这里也不许抹，否则"抹掉数字再比"会
+    比计数闸门本身更宽。
+    """
+    def rep(m: re.Match) -> str:
+        return re.sub(r"\d+", "N", m.group(0))
+
+    for pat in (MINIMAL, BARE, COLLECTED):
+        line = pat.sub(rep, line)
+    return line
+
+
+def _registered(ln: str, archive_lines: list[str], by_mask: dict[str, list[int]],
+                anchor: str) -> bool:
+    """这一行在归档里算不算在册：整行逐字相等，或者**只有计数数字被重数过**且锚点名在附近。
+
+    锚的窗口取"这一行往上共三行"——和 `_collected_claims` 给一句 `跑起来 N 个用例` 找模块名的
+    窗口同一个形状。它要装得下归档那一族的排版：说明行、围栏起行、被登记的那一行。
+    这里没有"这一行没有计数主张就先返回 False"那一记：抹不动数字的行，它的 mask 就是它自己，
+    能在 by_mask 里配上的归档行只能是逐字相等的那一行，而那种情况第一记已经放行了
+    （本片的 K8 删掉那一记后名册一字未变，是它证明的）。
+    """
+    if ln in archive_lines:
+        return True
+    return any(anchor in "\n".join(archive_lines[max(0, i - 2):i + 1])
+               for i in by_mask.get(_mask_counts(ln), ()))
+
+
+def _departures(old_text: str, now_lines: list[str], archive_lines: list[str],
+                heading: str = TEST_SECTION,
+                anchor: str = MANUAL_CUT_ANCHOR) -> tuple[list[str], list[str]]:
+    """(消失且未在册的行, 消失的行) —— 名册由 git 那头的原文算，测试里不重抄一份被搬走的散文。
+
+    口径：逐行整行相等才算"还在"。改一个字就算离开（旧句子是当年的话，要留档才谈得上核对），
+    搬到手册外任何地方都算还在（这一条只管"摘了没登记"，不管"挪了个位置"）；空行不进名册。
+    唯一的例外是 `_mask_counts` 那一族数字：见上一段的理由。归档那一侧的重数索引一次算完，
+    否则每消失一行都要把整本归档重扫一遍。
+    """
+    gone = [ln for ln in _section_of(old_text, heading) if ln.strip() and ln not in now_lines]
+    by_mask: dict[str, list[int]] = {}
+    for i, a in enumerate(archive_lines):
+        by_mask.setdefault(_mask_counts(a), []).append(i)
+    return [ln for ln in gone if not _registered(ln, archive_lines, by_mask, anchor)], gone
+
+
+def test_a_line_that_left_the_manual_is_registered_verbatim_in_the_archive():
+    """`#135` 那条"先逐字登记才有资格摘"从此有断言读它：摘走而没登记的每一行都会报出来。
+
+    动因是本轮数 README〈测试〉一节时现出来的形状：那一节 228 行（去掉空行 188 行）里坐着 D/K/A
+    三段的逐片叙事，而"搬走的东西一字未改"这几句一直只是散文——`#143` 那四张表、`#163` 那 22 行、
+    `#168` 那 13 处判决句，每一次都靠写盘脚本自觉，脚本改一半或有人手改 README 删一段，没有任何东西会红。
+    这一条不点名搬了哪些句子（那是第二份账，会和归档各自演化），它去问锚点 `2b57a58`
+    （08:49:01Z，#172 收尾那一跑之后）的 README：那一节里如今不在 README 中的每一行，
+    都要能在 `docs/iterations.md` 里逐字找到。
+    """
+    shown = subprocess.run(["git", "show", f"{MANUAL_CUT_ANCHOR}:README.md"], cwd=ROOT,
+                           capture_output=True, text=True)
+    assert shown.returncode == 0, f"锚点 {MANUAL_CUT_ANCHOR} 上读不到 README：{shown.stderr.strip()[:120]}"
+    now = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
+    archive = (ROOT / "docs" / ARCHIVE).read_text(encoding="utf-8").splitlines()
+    missing, gone = _departures(shown.stdout, now, archive)
+    assert len(gone) >= 8, (
+        f"锚点之后〈测试〉一节一行都没摘（消失 {len(gone)} 行）——名册是空的，这条判据还没活")
+    assert not missing, f"这些行从手册里消失了，却没在归档逐字在册：{missing[:3]}"
+
+
+def test_the_departure_judge_reads_a_reworded_line_as_gone_and_a_moved_one_as_registered():
+    """六格各钉一次：还在的、改了一个字的、整行搬去归档的、空行、重数过且点了锚的、重数过没点锚的。
+
+    第二格是这条判据的全部牙：只比"在不在"会放过就地改写，而改写恰恰是让旧句子无声消失的那只手。
+    第三格钉反方向——搬走了就算在册，否则判据会把每一次成功的搬运报成缺陷。
+    第五、六格管的是这一族里唯一会撞车的形状：摘来的行里带着"`x.py` N 条"这种计数主张，而当年那个
+    数在搬运的这一刻已经过期（本轮给这只闸门添了用例），照抄会让 `#44`/`#61` 红在归档里。处置是
+    **数字重数、其余逐字**，而重数过的那一行必须由它自己或往上两行之内的某一行点名摘来那一版的
+    SHA——不然第五格就成了"数字随便可改"的口子，第六格就是那口子不存在时红的那一格（第六格离锚
+    四行，量的正是这个窗口）。
+    """
+    old = ("## 测试\n"
+           "这一行留在原地。\n"
+           "这一行的旧说法被改了一个字。\n"
+           "这一行整行搬去了归档。\n"
+           "`tests/test_demo.py`（70 条、跑起来 70 个用例）重数过。\n"
+           "`tests/test_other.py`（70 条、跑起来 70 个用例）重数过。\n"
+           "\n"
+           "## 下一节\n"
+           "隔壁节的行不归这一条管。\n")
+    now = ["这一行留在原地。", "这一行的旧说法被改了一个字儿。", "隔壁节的行不归这一条管。"]
+    archive = ["这一行整行搬去了归档。", "顺手记一句别的。",
+               f"下面这一行的两个数按 {MANUAL_CUT_ANCHOR} 之后的那一版重数过。",
+               "```text",
+               "`tests/test_demo.py`（71 条、跑起来 71 个用例）重数过。",
+               "```", "隔开的一行", "再隔开的一行",
+               "`tests/test_other.py`（71 条、跑起来 71 个用例）重数过。"]
+    missing, gone = _departures(old, now, archive)
+    assert gone == [
+        "这一行的旧说法被改了一个字。",
+        "这一行整行搬去了归档。",
+        "`tests/test_demo.py`（70 条、跑起来 70 个用例）重数过。",
+        "`tests/test_other.py`（70 条、跑起来 70 个用例）重数过。"], gone
+    assert missing == ["这一行的旧说法被改了一个字。",
+                       "`tests/test_other.py`（70 条、跑起来 70 个用例）重数过。"], missing
+
+
+def test_the_count_mask_blind_spots_only_the_digits_a_rerun_forgets():
+    """夹具三向：数字换掉而模块名还在时两行**相等**，模块名换掉时**不等**，别处的数字不许被抹。
+
+    第二向是这条判据的牙：整段换成哨兵会让"将 70 条挂到另一个模块上"也判成在册。
+    对照用例调的是 `_mask_counts` 本身，不复算它的形状（`#153`）。
+    """
+    assert _mask_counts("`tests/test_a.py`（70 条、跑起来 70 个用例）") == \
+        _mask_counts("`tests/test_a.py`（71 条、跑起来 71 个用例）")
+    assert _mask_counts("`tests/test_a.py`（70 条）") != _mask_counts("`tests/test_b.py`（70 条）")
+    assert _mask_counts("`tests/test_a.py` 里有 98 条自报文本") == \
+        "`tests/test_a.py` 里有 98 条自报文本"
