@@ -2696,3 +2696,63 @@ def test_the_count_mask_blind_spots_only_the_digits_a_rerun_forgets():
     assert _mask_counts("`tests/test_a.py`（70 条）") != _mask_counts("`tests/test_b.py`（70 条）")
     assert _mask_counts("`tests/test_a.py` 里有 98 条自报文本") == \
         "`tests/test_a.py` 里有 98 条自报文本"
+
+
+# ------------------------------------------------- 可粘贴区里不许坐着拨端点的那一条（#198）
+BASH_FENCE = re.compile(r"^```bash[ \t]*\n(.*?)^```", re.S | re.M)
+
+
+def _pasteable_blocks(md: str) -> list[str]:
+    """每一块 ```bash 围栏的原文——只收围栏，不收散文里的反引号。
+
+    可粘贴区是"整块粘进终端"的那个单位，散文里用反引号包起来的一条命令不是。两头都锚在行首：
+    缩进四格的代码段在 Markdown 里不是围栏，而 `` ``` `` 若落在某一行的中间也不收尾。
+    """
+    return [m.group(1) for m in BASH_FENCE.finditer(md)]
+
+
+def _dialers_in_blocks(blocks: list[str]) -> list[str]:
+    """把每一块切成完整命令，再交给 `tests/test_cli.py` 里那两条共享谓词。
+
+    判据不在这里重写：`_block_statements` 管反斜杠续行、`_dialer_statements` 管"看完一整条再说话"
+    和行内注释要切掉，这两格的牙都由 `#137` 那两具刀量过。这里只做接线（`#153`）。
+    """
+    from test_cli import _block_statements, _dialer_statements
+
+    out: list[str] = []
+    for block in blocks:
+        out += _dialer_statements([text for kind, text in _block_statements(block)
+                                   if kind == "live"])
+    return out
+
+
+def test_the_pasteable_block_scanner_flags_a_dialer_and_skips_a_comment():
+    """夹具两向：一块里那条不带 `--mock` 的必须报，注释里的那条和带 `--mock` 的那条必须不报。
+
+    语料那一判据今天是 0 处可报（17:51Z 实测六本手册页共 22 个 bash 围栏），所以这条合成用例是它
+    唯一能证明"枚举没坏"的牙——没有它，"围栏一个都没扫到"和"文档真的干净"是同一副样子（`#153`）。
+    第三向是范围：散文里用反引号包起来的 `wolf run --god` 不是可粘贴区，不许算进来。
+    """
+    md = ("打一局：\n\n```bash\nwolf run --mock --seed 7 --out data\n"
+          "# 要端点的那条留在注释里\n# wolf run --seed 7 --games 1 --god\n```\n\n"
+          "另一块：\n\n```bash\nwolf run --seed 7 --out data\n```\n\n"
+          "散文里的 `wolf run --god` 不算可粘贴区。\n")
+    blocks = _pasteable_blocks(md)
+    assert len(blocks) == 2, f"围栏枚举读不动这块文本，看到的块是：{blocks}"
+    assert _dialers_in_blocks(blocks) == ["wolf run --seed 7 --out data"], _dialers_in_blocks(blocks)
+
+
+def test_no_pasteable_block_in_the_manual_pages_dials_the_endpoint():
+    """README 立的规矩「需要端点的那一条只能留在注释里」，从今往后由整本手册页一起守。
+
+    这条规矩以前只有三处前置断言（README 的〈人怎么上桌〉、〈命令一览〉，以及 `docs/comparison.md`
+    的〈两个命令〉），而第四个整块证人（README 的演示块）把"不会拨号"交给了 `no_network` 夹具——那层
+    夹具护得住本进程那次 `--dry-run`，护不到它下面那个 bash 子进程。四个证人都管不到**新加**的围栏：
+    谁在 `docs/metrics.md` 或归档里补一块直接可粘的真端点命令，它们一个都不会红，而照着粘的人撞上是
+    401——这个仓库是公开的。判据本身不重写一份，接的是 `tests/test_cli.py` 里那两条共享谓词（`#153`）。
+    """
+    blocks = [(doc.name, b) for doc in DOCS for b in _pasteable_blocks(doc.read_text(encoding="utf-8"))]
+    assert len(blocks) >= 15, f"只扫到 {len(blocks)} 个可粘贴围栏，多半是枚举或范围坏了"
+    assert len({n for n, _ in blocks}) >= 4, sorted({n for n, _ in blocks})
+    dialers = [(n, d) for n, b in blocks for d in _dialers_in_blocks([b])]
+    assert not dialers, f"可粘贴区里坐着会拨局域网判官的命令行：{dialers}"
