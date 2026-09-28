@@ -256,9 +256,9 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 
 文档点名的用例也在扫描范围内：`docs/*.md` 和 `README.md` 用 `` `test_名字` `` 的形式指认"是哪条
 用例钉住这个断言"，`tests/test_doc_citations.py` 把这些串对照 `tests/` 的 AST 函数名，点不到就
-红。补这个闸门时抓到的第一条就出在文档自己身上：`docs/comparison.md` 点名
-`test_each_arm_gets_its_own_gate_verdict_rather_than_one_shared_answer` 时被截掉了一半，读者按截
-短的样子复核会点空。截短的那个串本身不能写进这份文档——闸门连 README 一起扫，它同样算一次点空；
+红。点名要写完整的那个串：截短的那一形也算一次点空，因为闸门连 README 一起扫，手册自己也在这张网里。
+补这道闸门那一轮它报出的第一条红就落在文档自己身上，那段账逐字在册在
+`docs/iterations.md`〈README 文档闸门那两段的逐片叙事摘进这一份〉。
 占位符同理，ASCII 的 `test_` 后面跟一串字母就被当成一次引用，所以写成 `test_名字` 这种非 ASCII、
 正则接不住的形式。
 
@@ -268,8 +268,8 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 源码，那是典型的第二处实现。散文不参与：`metrics.md` 有一句"`compare` 这一侧没有 `--set`"，按行扫
 `wolf` 这个词会把它读成一条命令、报出一个并不存在的过期参数。这种**反向主张**由一张表钉住
 （`test_the_negative_flag_claims_in_the_docs_are_negatives`），因为"某参数不存在"没法从引用里扫出来。
-这张表换过一次行：它原先钉的是 `wolf run` 没有 `--set`，2026-09-24 给 `run` 加上这根旋钮的那天它红
-了一次、指名要改文档——反向主张会随代码追上而变假，而除了这张表没有别的机制看得见它。
+反向主张会随代码追上而变假，而除了这张表没有别的机制看得见它；这张表换过一次行的那笔账（原先钉的
+是哪根旋钮、哪一天红的）逐字在册在 `docs/iterations.md`〈README 文档闸门那两段的逐片叙事摘进这一份〉。
 
 一条只写"assert 没有过期引用"的守卫分不清"文档干净"和"扫描器坏了"，所以每一类引用都各配一条喂假数据的
 对照用例（`_stale` / `_stale_flags` / `_stale_values` / `_dead_pointers` 都是纯函数，语料由调用方给）和一条
