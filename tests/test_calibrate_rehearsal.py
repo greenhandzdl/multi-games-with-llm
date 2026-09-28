@@ -384,7 +384,8 @@ def test_the_sidecar_carries_the_evidence_that_discredits_itself(run):
     所以这份 sidecar 天生带着一条对自己不利的证据。它必须被原样记进机器可读的那一半，
     并且 `load_calibration` 要据它拒绝——只把对人有利的事实写进产物的话，读侧就永远看不到这件事。
     """
-    assert run.sidecar["model_declared"] == ["gemma-stub"], run.sidecar.get("model_declared")
+    assert metrics.declared_models(run.sidecar["features"]) == ["gemma-stub"], \
+        run.sidecar["features"]["models_endpoint"]
     read = metrics.load_calibration(run.json_path)
     assert read["usable"] is False
     assert "不承认" in read["note"], read["note"]
@@ -439,7 +440,6 @@ def test_a_model_the_endpoint_does_not_advertise_is_flagged(run, tmp_path):
     # 反面：数值对得上时不许凭空报警——否则这条结论会在每次真体检里稀释成一个背景噪音。
     data = json.loads(Path(run.json_path).read_text(encoding="utf-8"))
     data["features"]["models_endpoint"]["body"]["data"][0]["id"] = cal.CONF.model
-    data["model_declared"] = [cal.CONF.model]
     src = tmp_path / "matches.json"
     src.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     out = tmp_path / "matches.md"

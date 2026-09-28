@@ -9767,3 +9767,52 @@ sidecar，要求承诺还在、且同一页不许一边说"为准"一边说自�
 * 在册那一页全程没有手改：它由 `--from-json` 离线重渲染（零 API 调用、不碰端点、不需要 key），
   页眉那句"为准"在 18:41:37Z 数到出现 0 次，而"这一页就是代码现在渲染的那个字节"由守卫里那条
   page==render 的断言替我盯着——18:47:43Z 那一趟里它是绿的。
+
+### #201 端点自己列的清单在同一份文件里存了两处：删掉那份扁平抄本，读侧只留一个权威
+
+`sidecar()` 把 `declared_models(features)` 的结果又存了一份成顶层 `model_declared`，而 loader 读它
+的顺序是"先看抄本、没有才回落到 `features`"（`6697d54` 那一版的样子）。于是同一份
+JSON 里"端点自己承认过哪些名字"有两个落点，而报告的 §0 那一行只读 `features`——按 `docs/metrics.md`
+自己的话说，这就是"§0 报了、audit 放行"那一对（19:02:09Z 读到那一格，它写的是判据而不是待办）。
+收掉之后，`src/wolfengine/metrics.py:1165` 那一格里只剩 `declared_models` 这一个调用，读侧不再有
+第二个入口。
+
+**这一片是 `#200` 登记下来的那张处置票**：18:57:59Z 顺着那一节回看，两个落点今天还都在。
+`#200` 那句"要动它得先定两份要不要都留，那是处置而不是缺陷"是对的，但同一节里另一句
+「现测仓库里只有一处断言读过顶层那一份」是错的——19:08:49Z 拿 `git show 6697d54:tests/…` 逐处数：
+读写侧抄本的断言有三处（`test_calibration_loader.py` 的 `stamped["model_declared"]` 与
+`payload["model_declared"]`、`test_calibrate_rehearsal.py` 的 `run.sidecar["model_declared"]`），
+把抄本当夹具注入的还有五处。当时那句是按"读真跑产物的那一条"数的，口径没写出来就成了一句假话。
+
+**抄本值多少钱，改之前量两件事**：① 它不额外保住任何证据——`redact()` 按 `CRED_KEYS` 的键名清洗，
+`models_endpoint`/`body`/`data`/`id` 一格都不在名单上，两份落点的失效方向相同；② 仓库里在册那份
+`data/calibration.json` 根本没有 `model_declared` 这个键（18:58:44Z 数顶层键），而 `declared_models`
+从它自己的 `features` 照样得出一个名字（18:58:51Z）——也就是说今天真跑的读法走的已经是回落那一支，
+抄本那一支只在被手改过的文件里才生效。一份"只有手改才能让它说话"的落点，正是它该收的理由。
+
+**测试先写，一正一反**：`test_the_writer_stores_the_listing_only_in_the_raw_block` 要求写侧不再落那份
+扁平清单、而清单仍能从 `payload["features"]` 读出来；
+`test_a_flat_copy_of_the_listing_does_not_outvote_the_raw_block` 造一份"抄本说承认、原始探针说不承认"
+的文件，要求 loader 站在原始探针那一侧。19:03:43Z 那一趟 **2 failed, 22 passed in 0.07s**，红的正是
+这两格。反面的那条同时补上了 `#103` 那轮留下的缺口——当时给 E5 那具刀的注脚写着"loader 自己那批
+全绿：它没有一份'没有那个字段但清单打脸'的用例"，现在有了，而且不再需要伪造一份旧文件才进得去。
+另外三条老格把料从抄本换成原始探针（`_listing()` 那一格），断言的意图一字未改。
+
+**三把刀的落点**：K1 把读侧退回"先信抄本"，只红反面那一格；K2 把抄本落回盘，只红正面那一格；
+K3 让唯一剩下的权威 `declared_models` 找错键（当年 E8 那一形），红五格——`tests/test_calibration_loader.py`
+三格加 `tests/test_calibrate_rehearsal.py` 两格。19:06:16Z–19:06:25Z 一趟跑完，两本文件还原后按
+sha256 各自比过，三次 match 全 True。K3 那一跑比 `#103` 记下的四个证人多一个：收掉抄本之后，这条链
+的读数只剩一个入口，刀落在它身上更容易被所有读者一起接住。
+
+**这一片没有顶号**：`metrics.py` 那一格换的是同一行的文本（`git diff --numstat` 呈 4/4，1165 行仍是
+那一行），`docs/metrics.md` 那一格两行换两行，`test_calibrate_rehearsal.py` 一处折成两行、一处删一行
+（2/2 对称）。三本里唯一被按行号点过名的是 `test_calibrate_rehearsal.py:64` 那一格覆空的 `log_message`，在这几处改动的上游。
+`scripts/calibrate.py` 净多一行——18:59:51Z 数过这一本的具名引用：docs 与 `src/` 注释里合计只有一处，
+且不在它后面（19:08:36Z 在 `tests/` 里现数为零），所以那一段下面移动一行不欠任何账。
+
+* 跑次账：19:04:39Z loader/rehearsal/guard 三本合跑 **48 passed in 3.14s**；19:05:40Z 文档四本
+  （citations/wiring/report_stats/cli）**293 passed in 19.01s**；19:07:44Z 全量
+  **1088 passed in 68.83s**，离线，比 `#200` 那一趟多的正是这一片新写的一正一反两条。这一趟的树含
+  本节正文，不含这几行自己写进去的时刻。
+* `docs/calibration.md` 一字未动，也没有重渲染：那份 sidecar 本来就没有抄本，`model` 缺失时否认那一支
+  也进不去，loader 那句 note 的输入没变——它在 19:04:39Z 那一趟里由 page==render 那条断言盯着，是绿的。

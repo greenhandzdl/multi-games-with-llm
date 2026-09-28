@@ -1159,10 +1159,10 @@ def load_calibration(path: str | os.PathLike[str], *,
             issues.append(f"constants 里 {'、'.join(missing)} 没有可用的值（未测得或不为正）")
         else:
             constants = {k: block[k] for k in CALIBRATION_KEYS}
-    # The recorded listing is the source; `features` is the same run's raw probe, read only for
-    # sidecars written before the field existed. Without that fallback the report's §0 line and
-    # this refusal would disagree on exactly those files — same run, two rulers again.
-    declared = raw.get("model_declared") or declared_models(raw.get("features"))
+    # The listing is read out of the run's own raw probe and from nowhere else: a flat copy kept
+    # beside it in this same file is how the report's §0 line and this refusal would start
+    # disagreeing about one run — the failure `docs/metrics.md` names. Absent probe = no evidence.
+    declared = declared_models(raw.get("features"))
     denial = model_denial(model, declared)
     if denial:
         if constants is not None:

@@ -136,11 +136,16 @@ def test_a_sidecar_without_a_model_stamp_is_usable_but_cannot_be_attributed(tmp_
 
 
 # --------------------------------------------------- 端点自己承认过这个 model 吗
+def _listing(*ids: str) -> dict:
+    """`features` 里那个原始探针的形状——端点自己列出的名字只住在这一格。"""
+    return {"models_endpoint": {"body": {"data": [{"id": i} for i in ids]}}}
+
+
 def test_constants_from_a_model_the_endpoint_denies_are_refused(tmp_path):
-    """`/v1/models` 的清单现在也进了 sidecar（`model_declared`）。这是 R7（服务被人重启换了
-    权重）在机器可读这一侧唯一能直接依据的证据：请求体里的 model 永远是配置给的那个，端点却
-    可能把它打到别的权重上。清单里没有这个名字，这份常数就不能被当成"我们这个模型的成本"。"""
-    cal = metrics.load_calibration(_sidecar(tmp_path, model_declared=["some-other-weight"]))
+    """这是 R7（服务被人重启换了权重）在机器可读这一侧唯一能直接依据的证据：请求体里的 model
+    永远是配置给的那个，端点却可能把它打到别的权重上。清单里没有这个名字，这份常数就不能被
+    当成"我们这个模型的成本"。"""
+    cal = metrics.load_calibration(_sidecar(tmp_path, features=_listing("some-other-weight")))
     assert cal["usable"] is False
     assert "不承认" in cal["note"] and "some-other-weight" in cal["note"], cal["note"]
     assert "gemma-fit" in cal["note"], "被否认的那个名字也得在，否则读的人不知道去哪找它"
@@ -149,7 +154,7 @@ def test_constants_from_a_model_the_endpoint_denies_are_refused(tmp_path):
 def test_a_listing_that_names_the_model_adds_no_doubt(tmp_path):
     """反面对照：清单里有这个名字时必须一句都不多说。否则每条真体检都自带一句噪音，
     而噪音会把上面那条拒绝稀释成"反正它总在报警"。"""
-    cal = metrics.load_calibration(_sidecar(tmp_path, model_declared=["other", "gemma-fit"]))
+    cal = metrics.load_calibration(_sidecar(tmp_path, features=_listing("other", "gemma-fit")))
     assert cal["usable"] is True
     assert "不承认" not in cal["note"], cal["note"]
 
@@ -158,11 +163,36 @@ def test_an_absent_or_empty_listing_is_no_evidence_not_a_contradiction(tmp_path)
     """没有清单（老文件、或者那次探针自己失败了）不等于端点否认。把它当否认，audit 就会在
     所有真实数据上永远读不到常数——那正是"没有数字"和"有数字但不该用"两种病混成了一句。
     与 `model` 缺失那条不同：清单缺失只影响"端点是否承认"这一条，`model` 缺失连归属都做不了。"""
-    for payload in ({}, {"model_declared": []}, {"model_declared": None},
-                    {"model": None, "model_declared": ["some-other-weight"]}):
+    for payload in ({}, {"features": {}}, {"features": _listing()},
+                    {"features": {"models_endpoint": {"status": 500}}},
+                    {"model": None, "features": _listing("some-other-weight")}):
         cal = metrics.load_calibration(_sidecar(tmp_path, **payload))
         assert cal["usable"] is True, payload
         assert "不承认" not in cal["note"], payload
+
+
+def test_a_flat_copy_of_the_listing_does_not_outvote_the_raw_block(tmp_path):
+    """同一个文件里如果有两条路径能说出清单，读侧就必须在它们冲突时站在原始探针那一侧：
+    `docs/metrics.md` 里点名的失败正是这一对——报告的 §0 从 `features` 现推，它说"不承认"，
+    audit 却从另一格读出"承认"，于是放行了一份没人承认的常数。"""
+    cal = metrics.load_calibration(_sidecar(
+        tmp_path, features=_listing("some-other-weight"), model_declared=["gemma-fit"]))
+    assert cal["usable"] is False, cal["note"]
+    assert "不承认" in cal["note"] and "some-other-weight" in cal["note"], cal["note"]
+
+
+def test_the_writer_stores_the_listing_only_in_the_raw_block(cal):
+    """上面那对读者要成立，写侧就得只留一个落点：派生出来的扁平清单不再进 sidecar。
+    它与 `features` 由同一个 `declared_models()` 从同一格算出，而 redact 按 CRED_KEYS 的键名
+    清洗，`models_endpoint` / `body` / `data` / `id` 一格都不在名单上，所以抄本不额外保住任何证据。"""
+    lat = [{"k": 1, "prefix_reps": 130, "wall_s": 3.2, "agg_prefill_tps": 3600.0},
+           {"k": 2, "prefix_reps": 130, "wall_s": 5.0}]
+    tp = {"decode_tps_overhead_corrected": 41.2, "per_call_fixed_overhead_s": 0.83}
+    payload = cal.sidecar("2026-09-21T00:00:00Z", False, _listing("gemma-fit", "other"),
+                          {}, {}, tp, lat, [], model="gemma-fit",
+                          base_url="http://10.0.0.1:13000/v1")
+    assert "model_declared" not in payload, sorted(payload)
+    assert metrics.declared_models(payload["features"]) == ["gemma-fit", "other"]
 
 
 # ------------------------------------------------------------------ note 的单一来源
@@ -245,14 +275,17 @@ def test_the_sidecar_a_run_writes_contains_the_block_the_loader_reads(cal, tmp_p
     # `derive_constants` 交出的块比能引用的多（并发增益、 batching 结论）。原样透传会让
     # `drift.constants` 把整段体检结论印进 audit 里，读的人分不清哪一个数真的进了预测式。
     assert set(cal_read["constants"]) == set(metrics.CALIBRATION_KEYS)
-    # 写侧：端点自己列出的名字必须原样进 sidecar，而且必须由 `features` 现推——它是这份文件里
-    # 唯一一条可能自我否证的证据，让调用方传进来就等于给它一个"永远说 yes"的接口。
+    # 写侧：端点自己列出的名字只能由 `features` 现推，而且在这份文件里只落一处——它是这份文件里
+    # 唯一一条可能自我否证的证据，多存一份扁平抄本就是给"§0 报了、audit 放行"那种分叉留门。
     feats = {"models_endpoint": {"body": {"data": [{"id": "gemma-fit"}, {"id": "other"}]}}}
     stamped = cal.sidecar("2026-09-21T00:00:00Z", False, feats, {}, {}, tp, lat, [],
                           model="gemma-fit", base_url="http://10.0.0.1:13000/v1")
-    assert stamped["model_declared"] == ["gemma-fit", "other"], stamped["model_declared"]
+    assert metrics.declared_models(stamped["features"]) == ["gemma-fit", "other"]
     assert metrics.load_calibration(_write(tmp_path, stamped))["usable"] is True
-    assert payload["model_declared"] == [], "探针没答上来时记的是空清单，读侧据此保持沉默"
+    silent = cal.sidecar("2026-09-21T00:00:00Z", False, {}, {}, {}, tp, lat, [],
+                         model="gemma-fit", base_url="http://10.0.0.1:13000/v1")
+    note = metrics.load_calibration(_write(tmp_path, silent))["note"]
+    assert "不承认" not in note, "探针没答上来时读侧要沉默，不能把『没证据』说成『否认』"
 
 
 def test_redact_leaves_the_constants_block_alone(cal):

@@ -516,13 +516,14 @@ def sidecar(ran_utc: str, quick: bool, features: dict, stream: dict, ratio: dict
     about *the measurement*, so a re-render that read it from live config would re-sign old
     numbers with whatever address the box has today.
 
-    `model_declared` is the endpoint's own listing, kept beside the model we *asked* for. The
-    requested name comes from config and would match config forever, so on its own it can never
-    contradict anything — including R7, a box restarted on other weights. The listing is the one
-    field in here that can.
+    The endpoint's own listing is deliberately *not* flattened in beside `model`: it lives only in
+    `features.models_endpoint`, and `metrics.declared_models()` is the one place that reads it. A
+    second copy would give the report's §0 line and `load_calibration`'s refusal two answers about
+    one run. It matters that much because the requested name comes from config and would match
+    config forever — on its own it can never contradict anything, including R7, a box restarted on
+    other weights. The listing is the one field in here that can.
     """
     return {"ran_utc": ran_utc, "quick": quick, "model": model, "base_url": base_url,
-            "model_declared": declared_models(features),
             "features": features, "stream": stream, "ratio": ratio,
             "throughput": tp, "latency": lat, "temps": temps,
             "constants": derive_constants(lat, tp)}

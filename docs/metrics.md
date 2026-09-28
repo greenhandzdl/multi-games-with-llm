@@ -408,8 +408,8 @@ p95<20s、0 次 context 400），在此之前这些数字只被**打印**过，�
 组装，迟早一处说"缺 D"、另一处说"文件不存在"）：文件不存在 / 不是 JSON / **根本没有 constants
 块**（仓库里现存的那份 sidecar 就是这一类：一次跑断在半路的体检，对它报"某键为空"是假的）/
 某键未测得或不为正 / 常数拟合于**另一个 model** / **端点自己的 `/v1/models` 清单不承认这个 model**
-（清单在 `metrics.declared_models()` 一处解析，读侧先看 sidecar 的 `model_declared`、没有这个字段的
-旧文件回落到同一次跑留下的 `features`——两处若各读一半，就是"§0 报了、audit 放行"）。规则是三个数一起用、或不一起用：把缺失的
+（清单在 `metrics.declared_models()` 一处解析，而它在文件里也只有一处落点——`features` 里那块原始
+探针；再存一份扁平抄本就让两处各读一半，那就是"§0 报了、audit 放行"）。规则是三个数一起用、或不一起用：把缺失的
 `per_call_fixed_overhead_s` 当 0 会让每一个预测都偏短、每一个比值都偏大，自检于是报出一个假的
 suspect。常数齐了而一局里没有可比调用时 verdict 是 `not_evaluable`，不是 `ok`——"没读数"
 从来不算通过，M3 闸门同理。不给 `--calibration` 时 `audit` 不碰文件系统：那份 JSON 必须仍然
