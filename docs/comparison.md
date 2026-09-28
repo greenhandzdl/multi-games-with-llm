@@ -58,7 +58,7 @@ wolf compare data/temp09-vs-06 --axis temperature                   # → compar
 一起是记账格。顶层有挡的，往下走没有——`RegionBudget` 上没有 `axis_fields`，而 `report.axis_diff`
 的覆盖判断是 `_axis_covers(declared, k)` 加 `k.split(".")[0] in FORBIDDEN_AXIS` 两个**前缀**式比较，
 所以 `--set A.regions.b0=100` 一路穿过 `--axis regions`，两臂的 hash 差在一个谁都不会察觉的格子上，
-报告照样印"区域预算 A vs B"（09:40:35Z 现量：`axis=["regions"]` 对 `regions.b0` 的差异回 `ok=True`、
+报告照样印"区域预算 A vs B"（现量：`axis=["regions"]` 对 `regions.b0` 的差异回 `ok=True`、
 `undeclared=[]`，`config_hash` 却是 `06ed754ac19e` 对 `082f481667f6`）。
 
 门口那一半停在 `batch.apply_overrides` 的循环入口，不停在 `_set_path`：后者每层只看得见一个字段名，
@@ -127,7 +127,7 @@ wolf compare data/temp09-vs-06 --axis temperature                   # → compar
 * **编号破损点名（`## 编号破损`）**：每臂一行——几局的 `seq` 锚点不是引擎写出来的、缺号/重号/倒挂
   各几处、以及**具体的文件名**。和退化局同一条规则（只点名，不剔除：编号破了不说明这局算不算数），
   点的东西不一样——退化是局的事，编号破损是这份文件的字节属性。用文件名不用 `game_id` 不是为了区分
-  两臂（实测 2026-09-22T04:33:11Z：同 seed 的两个文件连名字都相同，`A/` 与 `B/` 下都是
+  两臂（实测：同 seed 的两个文件连名字都相同，`A/` 与 `B/` 下都是
   `<utc>_g00000005.jsonl`，分开它们的是目录），而是因为 `game_id` 住在文件里面，而这一格报的恰恰是
   "这个文件被人改过"——拿被改对象内部的标签指它，就是 `#54` 那个"两局 `cat` 在一起、页眉照着后一条
   manifest 报错局号"的形状。
@@ -148,7 +148,7 @@ wolf compare data/temp09-vs-06 --axis temperature                   # → compar
   对象的性质）。分母一个都不动：`n_dropped`、`n_pairs`、各臂局数全部照旧，这一节只交代"没有赢家"那条
   理由是怎么来的（plan §8 的"预先声明、不做事后剔除"）。算术仍然不在这里：数来自 `Game.torn_extent`，
   而那只手是 `events.torn_extent`，所以这一节印的字节数和 `replay` 那句〔日志在这里截断〕里的是同一个数
-  （实测 2026-09-22T05:04:06Z，同一份被砍的文件：两处都是 70）。结构用例
+  （实测同一份被砍的文件：两处都是 70）。结构用例
   `test_the_truncation_extent_has_one_arithmetic_and_three_readers` 钉的是"把算术抄进 property、或者让
   audit 那一格退回自己数行数和字节数，都照样红"——那两具的行为与真身一字不差，只有这一条读得到。
 * **两份 `fallback` 拷贝对账**（报告里那一节的标题是 `` ## 两份 `fallback` 拷贝对账（只点名不剔除） ``）：
@@ -157,7 +157,7 @@ wolf compare data/temp09-vs-06 --axis temperature                   # → compar
   `fallback_copies_by_arm` 逐局调 `metrics.fallback_copy_check` 再归约，键名原样搬（只多 `n`/`files`），
   `n` 按**文件**计、`divergent` 按**条**计，所以"一份文件漂了两条"不会被说成两局。干净那一臂照印，且
   `0 条对不上` 必须和"比过 N 条"同一行：单独一个 0 与"没人比过"在纸面上长得一样。找到不一致**不缩小
-  分母**（与末行截断那一节同一条规矩）。离线取证 2026-09-25T03:34:38Z（替身桌批 + 手工改标签，造的是
+  分母**（与末行截断那一节同一条规矩）。离线取证（替身桌批 + 手工改标签，造的是
   文件而不是行为）：`- A：比过 115 条，2 条两份拷贝对不上（2 局）：…g00004242.jsonl、…g00004243.jsonl`，
   改前改后分母都是 115。真端点上这一格还没有读数——臂级要批次，而那三局真日志是 `wolf run` 出的单局。
 

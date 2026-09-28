@@ -51,7 +51,7 @@ wolf watch   <file> [--god] [--seat N]   # 同一批判定，终端里 tail
 `dd111ac69f24`。这一格只能这样量：判定点只有一处，`cli.py:254` 那句 `if as_seat is not None` 排在
 `god` 那一支前面——给了座位就按那位玩家的可感知集合渲染，`god` 无从往上加。这句话钉在用例
 `test_sitting_at_a_seat_wins_over_the_god_view_on_the_same_file`（`tests/test_cli.py`）上：把两支换序
-只有它红（P1，08:03:54Z）。在那之前这一支没有任何读者——仓库里 `god=True` 的十几处
+只有它红（P1）。在那之前这一支没有任何读者——仓库里 `god=True` 的十几处
 全在别的文件、且只给一个参数，换序也不会红，而这条命令是**默认会被人在同一行里两个开关都给出去**的。
 
 ## 观众模式挡的是两种泄漏，`visibility` 只能看见一种
@@ -102,8 +102,8 @@ engine belief（`build_belief(seat, [e for e in events if e.visible_to(seat)])`�
 * **退出码也会被顶掉**：上面两句讲的都是"该说 2 的地方说了 1"，`#57` 是这一格的第三面——那个 1
   根本不是判据给的。修前 `run` 与 `batch` 在**第二个** event loop 里 `transport.aclose()`，
   `httpx.AsyncClient` 的 socket 绑在打开它的那个 loop 上，于是收尾抛 `RuntimeError: Event loop is
-  closed`，而它站在 `finally` 里，把 `return rc` 顶掉：05:23:33Z 实测一局**打完了**的局（60 个事件、
-  `draw_day_limit`）返回 1，05:25:14Z 一个跑完了的批次连 `批次 ->` 那一行都没印出来。按
+  closed`，而它站在 `finally` 里，把 `return rc` 顶掉：实测一局**打完了**的局（60 个事件、
+  `draw_day_limit`）返回 1，一个跑完了的批次连 `批次 ->` 那一行都没印出来。按
   [comparison.md](comparison.md) 第 38 行那句契约，1 是"拒绝出结论"——脚本读到的是一句判决，实际发生的
   是一次崩溃。现在请求和关闭共用同一个 loop（`cli._run_and_close`，两个读者 `cli.py:191` / `cli.py:569`），
   退出码重新只来自判据。证人不能是进程内调用：`rc` 被 `SystemExit` 接住就看不出形状了，所以那条用例
@@ -122,7 +122,7 @@ engine belief（`build_belief(seat, [e for e in events if e.visible_to(seat)])`�
 * **认不出是哪一局时，页眉说一句而不是留个空洞**：`meta_notice(meta)` 住在 `events.py`（和撕裂那句
   同一个待遇），manifest 缺席时三个出口各印一句"这个文件没有开局记录…"。`#48` 那条管的是"有那一行、
   页眉自己没读到"，这一条管"根本没有那一行"——同一个名槽，两种原因，而后一种以前是沉默的：`replay`
-  一个字都不印、退出码还是 0。2026-09-22T02:38:54Z 实测三个出口各有一行，退出码**仍然**是 0，因为
+  一个字都不印、退出码还是 0。实测三个出口各有一行，退出码**仍然**是 0，因为
   "没有可看的"就是这份文件的结论（2 归"命令本身不对"）。直播在这里说"没有开局记录"却不说"这里截断"：
   逐帧刷新的末行本来就在长，那是写进测试的决定（`test_a_torn_last_line_is_skipped_not_fatal`），
   不是漏掉的一格。
@@ -130,7 +130,7 @@ engine belief（`build_belief(seat, [e for e in events if e.visible_to(seat)])`�
   只有开局记录（`empty_notice`）、末尾被砍了一行（`torn_notice`），三只手都在 `events.py`，三个出口
   各调一遍。互斥的是前两句——同一份文件不能既"没有开局记录"又"开局记录后面是空的"，两个方向各有一条
   用例钉着。第三句讲的是**文件末尾**，不是"有没有内容"，所以它和前两句都能同时亮：manifest 在、后面
-  只有一条写了一半的行，转录就是两句（先"这一局只有开局记录"、再"日志在这里截断"）——2026-09-22T04:00:41Z
+  只有一条写了一半的行，转录就是两句（先"这一局只有开局记录"、再"日志在这里截断"）——
   实测，钉在 `test_a_cut_file_that_never_got_past_the_opening_record_says_both`（这一句以前只活在散文里，
   而且是写反的散文）。中间那句读的是**文件里**的事件数，不是这一屏被允许看的事件数：一局只留下私有
   频道记录的日志在观众屏上是空的，说它"只有开局记录"是假话——那格由
