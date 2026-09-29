@@ -377,21 +377,30 @@ def test_the_batch_reads_the_numbering_arithmetic_instead_of_recounting_it():
         "batch.py 绕开 Game 自己去数，批次读数和转录读数就有两套算法了")
 
 
-def _literal_alias(src: str, name: str) -> set[str]:
-    """模块级 `name = Literal[...]` 的取值集合。
+def _literal_values(src: str, name: str) -> set[str]:
+    """一枚取值名单：模块级别名 `name = Literal[...]`，或字段 `name: ...` 注解里嵌的那一枚。
 
-    从源码里读，是为了不在测试里抄第二份阵营表——抄一份就等于把"键空间只有一处定义"这条判据
-    自己违反掉（#80 要钉的就是这个）。
+    从源码里读是为了不在测试里抄第二份表（#80）；认两形是因为只认别名的收集器数不到
+    `schema.py:52` 那种嵌在 `dict[int, Literal[...]]` 里的一枚——少认一形就少一格不会红的读数。
     """
-    for node in ast.parse(src).body:
-        if (isinstance(node, ast.Assign) and len(node.targets) == 1
-                and isinstance(node.targets[0], ast.Name) and node.targets[0].id == name
-                and isinstance(node.value, ast.Subscript)
-                and ast.unparse(node.value.value) == "Literal"):
-            sl = node.value.slice
-            elts = sl.elts if isinstance(sl, ast.Tuple) else [sl]
-            return {e.value for e in elts if isinstance(e, ast.Constant)}
-    raise AssertionError(f"{name} 不是模块级的 Literal 别名，去 roles.py 里看它变成什么了")
+    def grab(sub: ast.Subscript) -> set[str]:
+        sl = sub.slice
+        elts = sl.elts if isinstance(sl, ast.Tuple) else [sl]
+        return {e.value for e in elts if isinstance(e, ast.Constant)}
+
+    for node in ast.walk(ast.parse(src)):
+        # 走整棵树而不是模块级的 `.body`：`schema.py:52` 那一格 `read` 住在一个 pydantic 类体里，
+        # 只扫模块层会把它当成不存在（这一条是 01:52:26Z 那趟红出来的，不是先验设计）。
+        is_alias = (isinstance(node, ast.Assign) and len(node.targets) == 1
+                    and getattr(node.targets[0], "id", "") == name)
+        is_field = isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == name
+        holder = (node.value if is_alias else node.annotation if is_field else None)
+        if holder is None:
+            continue
+        for sub in ast.walk(holder):
+            if isinstance(sub, ast.Subscript) and ast.unparse(sub.value) == "Literal":
+                return grab(sub)
+    raise AssertionError(f"{name} 既不是模块级的 Literal 别名，也不是某字段注解里嵌的 Literal")
 
 
 def test_the_win_check_names_its_key_space_as_teams_and_has_no_role_twin():
@@ -409,7 +418,7 @@ def test_the_win_check_names_its_key_space_as_teams_and_has_no_role_twin():
     0，屠边在第一次 `check_win` 就判狼赢——`tests/test_rules.py` 里那格把后果钉成了读数。
     """
     src = Path("src/wolfengine/rules.py").read_text(encoding="utf-8")
-    teams = _literal_alias(Path("src/wolfengine/roles.py").read_text(encoding="utf-8"), "Team")
+    teams = _literal_values(Path("src/wolfengine/roles.py").read_text(encoding="utf-8"), "Team")
     assert teams == {"wolf", "villager", "god"}, f"阵营键空间变了：{sorted(teams)}"
 
     fn = _defs_named(src, "winner_for")[0]
@@ -3003,3 +3012,69 @@ def test_no_seat_is_asked_in_a_phase_without_a_task_sentence(tmp_path):
     silent = sorted(asked - _phase_keys(assemble.PHASE_TASK_ZH))
     assert not silent, (f"这些相位上没有任务句却真的问了人，装配器会印那句兜底的「轮到你了。」：{silent}"
                         "——要么补那一格，要么让 `phases.py` 的 `t.ask` 别再在那一相位发问")
+
+
+def test_every_stored_fact_value_has_a_word_in_the_table_that_renders_it():
+    """落盘的三枚取值名单 ↔ 渲染它们的那三张人话表，两两对账、两个方向（`#209`）。
+
+    这是 `#207`（`ActName`→动词）、`#208`（`Phase`→任务句/标签）那一族剩下的三格。三处兜底都静默，
+    坏法不同：`compress.py:36` 那张 `CAUSE_ZH` 缺格时回退成「死亡」，把"怎么死的"整个抹平——而死因
+    决定猎人能不能开枪，这一行既给人看也喂模型；`compress.py:54` 的 `TEAM_ZH` 缺格时原样打印，
+    英文阵营名直接进「X阵营获胜」；`compress.py:53` 的 `VERDICT_ZH` 同形，验不了的那一格在法官私发
+    那一行里变成英文。写侧没有护栏兜着：`rules.py:206` 那格的 `cause` 是从一个 `dict[int, str]` 里
+    取的，后面还挂着一条 `type: ignore`，也就是说类型检查器被明确告知别管这一行。
+
+    口径不是拿表名配的。`TEAM_ZH` 名字像 `roles.py:17` 的 `Team`，下标其实是 `state.py:32` 的
+    `Winner`——按名字配会数出两格假缺词加一格假死词（"神""民"两营从来不会被宣布获胜），
+    而按取值配是两格对两格、两个方向都是空。查验那一枚的名单不住在模块级别名里，住在
+    `schema.py:52` 那格的 `read` 字段的注解里，所以收集器认两形（`#207` 的 `IfExp` 学过同一条）。
+
+    与 #207、#208 不同，这一具今天没有缺口：它是地板，管的是"加了第四枚死因忘了配词"和
+    "删了一格词"这两种将来，两者今天都不会被任何一条测试发现。
+    """
+    src = Path("src/wolfengine")
+    rosters = {
+        "CAUSE_ZH": _literal_values((src / "state.py").read_text(encoding="utf-8"), "DeathCause"),
+        "TEAM_ZH": _literal_values((src / "state.py").read_text(encoding="utf-8"), "Winner"),
+        "VERDICT_ZH": _literal_values((src / "schema.py").read_text(encoding="utf-8"), "read"),
+    }
+    tables = {"CAUSE_ZH": compress.CAUSE_ZH, "TEAM_ZH": compress.TEAM_ZH,
+              "VERDICT_ZH": compress.VERDICT_ZH}
+    # 地板只管收集坏了：三对里最小的一对今天有两格，所以数到一格以下才红。
+    # 两形一起缩（一枚取值和它那一格词同时删掉）是合法的收窄，这条不该拦。
+    assert min(len(v) for v in rosters.values()) >= 2, f"取值名单数出了 {rosters}，多半是收集坏了"
+    for name, roster in rosters.items():
+        words = set(tables[name])
+        assert words == roster, (
+            f"{name} 和它服务的那枚取值名单对不上——多出的={sorted(words - roster)} 是死词"
+            f"（读它的那个分支永远不会走），缺的={sorted(roster - words)} 会原样落进给人看的那一行。"
+            f"补词、删格，或者把这一对从名单里摘出去并说清是谁在渲染它")
+
+
+def test_the_copied_role_words_and_default_style_are_still_members_of_their_owners():
+    """两处抄本：`belief.py:141` 的 `ROLE_WORDS` 抄的是板上的角色名，`persona.py:47` 那格 `style`
+    的出厂值得是 `STYLE_ZH` 的键（`#209`）。
+
+    这两格不是"取值→人话"的对账，而是同一个字面量住了两处，坏法是**静默漏读**而不是印错字：
+    改了 `roles.py:23` 那一格 `name_zh` 的值（或者换一张板）而忘了同步解析器，「我是预言家」就再也
+    认不出来，`belief.py:117` 那一行的 `credibility` 加成从此不发生，对跳那一档静默失灵——
+    整套测试一条都不会红，因为它只钉"说了这句话要给分"，不钉"这句话还认得出来"。
+    改了 `STYLE_ZH` 的键而忘了默认值，性格卡片上「说话风格：」后面跟的是英文，而
+    `agent.py:147` 那条 `PersonaParams()` 兜底的路每一局没配人格的席位都走它。
+
+    身份表**不覆盖**全部角色是有意窄化（`belief.claimed_role` 的 docstring 写着宁可漏认也不误认），
+    所以这里不设"每枚角色都得有一个词"的方向，只把今天没被覆盖的那两枚钉住：多一枚少一枚都改变
+    `belief.py:115` 那一行 `claimed_role` 认不记这笔账，得让人先看一眼再改断言。
+    """
+    dealt = {spec.id: spec.name_zh for spec, _count in roles.BOARD_9.composition}
+    assert len(dealt) >= 4, f"出厂板只数到 {len(dealt)} 枚角色，多半是收集坏了"
+    stale = {word: rid for word, rid in belief.ROLE_WORDS.items() if dealt.get(rid) != word}
+    assert not stale, f"这些中文词已经不是板上那个 id 的名字了，解析器会漏认：{stale}（板上叫 {dealt}）"
+    invented = sorted(set(belief.ROLE_WORDS.values()) - set(dealt))
+    assert not invented, f"身份表认这些角色，出厂板却发不出来：{invented}"
+    assert sorted(set(dealt) - set(belief.ROLE_WORDS.values())) == ["villager", "wolf"], (
+        f"身份主张表的覆盖面变了：{sorted(set(dealt) - set(belief.ROLE_WORDS.values()))}")
+    default_style = next(f for f in dataclasses.fields(persona.PersonaParams) if f.name == "style").default
+    assert default_style in persona.STYLE_ZH, (
+        f"`PersonaParams` 的出厂风格 {default_style!r} 不在表里，卡片会回退成打印英文："
+        f"{sorted(persona.STYLE_ZH)}")

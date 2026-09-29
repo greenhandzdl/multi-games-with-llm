@@ -8516,7 +8516,7 @@ E           KeyError: 'contract_version'
 * `board`（`game.py:100` 写）：**接线了**——`cli.py:369` 那串键名多了它，`tests/test_cli.py:470` 两条下标读钉住它。
 * `reproducibility_note`（当时写在 `game.py` 的第 115 行，`#181` 把这一格删掉了）：扫面里除写它自己那一次，**零出现**。
 * `created_utc`（`batch.py:210`）、`pair_keys`（`batch.py:211`）、`n_logs`（`batch.py:222`）：同上，只剩写它们的那一行。
-* `rows`（`batch.py:222`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:288` 读清单里那一格；`tests/test_wiring.py:2030` 读的是另一份文档的 `rows`）——不是缺陷。
+* `rows`（`batch.py:222`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:288` 读清单里那一格；`tests/test_wiring.py:2039` 读的是另一份文档的 `rows`）——不是缺陷。
 
 两层豁免各自当场拦下一次误判：`render_html.py:209` 那个 `class="board"` 和 `tests/test_calibrate_guard.py:51` 那个 `"rows": […]` 都是**另一个命名空间里的同名**，若算成读者，`board` 和 `rows` 会被各自销案成假阴性；反方向上，`pair_keys` 与 `n_logs` 被第二层从"零读者"降级成"只被发布"——同一对名字在 `cli.py:577` 有属性级读者（`res.n_logs`、`res.pair_keys[0]`），零的只是清单里那两格。
 
@@ -10189,3 +10189,47 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   窗口只认被点那一行，于是两处各往前挪一行指到条目上。这一具闸门的判据是"点名的那个东西在不在那一行"，
   不是"那一行是不是那个东西的开头"。
 
+### #209 判定层进人话闸门：三枚封闭取值的词表双向零差，两份抄来的中文名单钉回各自的主人
+
+* 入口是 `#206`/`#207`/`#208` 关掉那几族之后剩下的半张图：判定层的取值里还有三枚靠**静默**兜底给人看，坏法各不相同。
+  第一枚是死因 `DeathCause`(`state.py:31`)，词表 `CAUSE_ZH`(`compress.py:36`)，取不到那一格时 `compress.py:48`
+  那一行回 `"死亡"`——句子被抹平成「某人死了」，而 `state.py:40` 的 `cause` 不只是文案：猎人能不能开枪读的就是这一格。
+* 第二枚是阵营 `Winner`(`state.py:32`)，词表 `TEAM_ZH`(`compress.py:54`)：拿不到那一格时 `compress.py:95`
+  把英文原样拼进那句「阵营获胜」。第三枚是先知的 verdict，取值住在 `schema.py:52` 那格 `read` 的注解里（一枚嵌在
+  pydantic 类体里的 Literal），词表 `VERDICT_ZH`(`compress.py:53`)，取不到时 `compress.py:113` 把 verdict 照原样印进查验播报。
+* 有一处兜底是**故意**的，得和上面三处分干净：`render_html.py:149` 的 `role_zh` 认不出角色时把 id 原样印出去，
+  docstring 写明理由是板会长出新角色、日志才是真相。`DeathCause` 与 `Winner` 都是封闭取值名单，没有「以后长出来一枚」
+  这回事，所以这一族不配豁免名单，两形对账就是双向零差。
+* 现测（01:48:10Z 一趟只读普查，五项各自零差）：`CAUSE_ZH` 与名册四枚同名、`TEAM_ZH` 两枚同名、`VERDICT_ZH` 三枚同名；
+  `ROLE_WORDS`(`belief.py:141`) 的三个中文键都还是它们那个 id 在出厂板上的 `name_zh`(`roles.py:23`)，没覆盖的两枚是
+  villager 与 wolf（解析器只认自报身份的那三枚）；`PersonaParams` 的出厂默认 style 是 hedged，它在
+  `STYLE_ZH`(`persona.py:25`) 里，另一处构造点 `agent.py:147` 走的就是这个默认。
+* **这一片一格缺陷都没挖出来**，和 `#207`（两格缺词）、`#208`（一格缺标签）不一样，所以它的证明只能是刀，不能是
+  「先红一条再登记」。刀之前先还掉一笔尺子债：普查里最贵的一格是**配对口径**——`TEAM_ZH` 的下标空间是 `Winner`，
+  不是同名的 `Team`(`roles.py:17`)，按表名去配对会报缺词 god 与 villager、死词 good，两格假缺词加一格假死词，
+  而这三格压根不是那张表读的东西。闸门按「渲染它的那一行用的是哪枚取值」配，不按表名配。
+* 收集器自己的一形 bug 是红出来的，不是想出来的：`_literal_values`(`tests/test_wiring.py:380`) 只遍历
+  `ast.parse` 结果的模块层时，`schema.py:52` 那一格看不见，因为那枚 Literal 住在类体里。01:52:26Z 那趟报的是
+  「既不是模块级的 Literal 别名，也不是某字段注解里嵌的 Literal」，改成走整棵树之后 01:53:03Z 两具都绿。
+  这一笔要分清：那次红是**尺子红**，不是缺陷红。
+* 两具闸门。前一具 `test_every_stored_fact_value_has_a_word_in_the_table_that_renders_it`
+  (`tests/test_wiring.py:3017`) 对账三张表：名册从源码的 Literal 里读，词表从渲染它那一行所用的那张字典里读，
+  两个方向都空才算过；另加一格地板（每张名册至少两枚），它只防「收集坏了」，两张表同时缩是合法改动。
+  后一具 `test_the_copied_role_words_and_default_style_are_still_members_of_their_owners`
+  (`tests/test_wiring.py:3054`) 钉的是两份**抄本**：`ROLE_WORDS`(`belief.py:141`) 的中文键必须等于同一个 id 在出厂板上的名字，
+  它的值必须是 `BOARD_9`(`roles.py:103`) 发得出来的角色（没覆盖的那两枚按名字点名，不是放过），
+  以及 `persona.py:47` 那格 `style` 的出厂默认必须仍在表里。
+* 五把刀各有一个只属于它的红法（干净基线 01:53:03Z 量过「2 passed」，逐把 01:54:30Z 起、末次落盘 02:01:11Z）：
+  K1 给 `DeathCause` 加第五枚 peace_kill → 两红，红在缺词那一支，红字含哨兵；
+  K2 往词表加一格死词 dragon → 两红，红在多出的那一支；
+  K3 把先知在板上的中文改成「先知」→ 六红，除我这一具之外四处渲染证人同时报（`test_render_html.py` 三处、
+  `test_render_live.py` 一处），这一把是五把里唯一证明词表不只被接线读的；
+  K4 把出厂默认 style 改成 quiet → 两红，红在后一具闸门的最后一支；
+  K5 把收集器收回只扫模块层 → 两红，红字正是那条「既不是模块级的 Literal 别名」，它是正控制，证明「认两形」那一格不是装饰。
+  逐把还原都逐字节比过哈希（「RESTORED sha match: True」），跑完 `git status` 只剩我自己那两处改动。
+* 顶号一处，还是那具行号闸门替我记的账：`_literal_values`(`tests/test_wiring.py:380`) 那处收拢长了九行，把归档里
+  指着 `rows = doc["rows"]` 的号从 2030 顶到 2039（本文件第 8519 行那处已随代码改口）。它在五把刀里每次都跟着红，
+  因为它是被我插的那九行动的、不是被刀动的——判 CAUGHT 时点名的始终是另一具，两红里得先扣掉它。
+* 文档对齐这一趟是**负结果**（02:05:36Z 现测）：五张表名加上「人话表」这个词，在 README 与 docs/ 的非归档页里各
+  0 处出现，`docs/views.md` 那句「同一份词表」管的是角色名不是这几张。没有一句人话写错，所以没有要改的句子，
+  也没给 README 新加一句——把实现细节抬成用户可依赖的承诺不是这一片该做的事。
