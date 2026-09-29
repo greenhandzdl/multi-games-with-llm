@@ -16,6 +16,11 @@
   （**两条尺对它都是透明的**：全名尺不认不带 `test_` 前缀的串，片段尺只问光秃秃的一个词）：改成正确
   那一形后它落回一条真用例，而写错时主人 0 条、改名时也不会有红——补的就是 `_elided_citation_defects`
   这一格（`#216`）。错的那一形在这里只描述、不写成代码串：这个文件的那三棵树扫描面会替它长出出处。
+* `iterations.md` 里 40 处拿行号互指 markdown 页（文件名后直接跟冒号和数字，外加省略掉文件名的那种续指），
+  而这一族**没有任何闸门读过**：40 处全在归档里，手册五本 0 处。27 处指得出一整行的能按内容比对，比对下来
+  只有 6 处还落在它声称的那一行上（11 处落空、10 处那一句没带可对照的引文）——被点的那一页每次插行，
+  它下面所有指它的号一起挪，而没有东西回头读旧号。所以补的不是
+  "号对不对"而是一条形状禁令（`#217`）：markdown 之间只许指节，指行号的两种写法都不许出现。
 * `metrics.md` 那句"`wolf run` 没有 `--set`"是**反向**主张，任何"扫有没有过期参数"的机制都看不见
   它（它扫不到不存在的东西），所以另用一张表钉；
 * `README.md` 给 `test_calibrate_rehearsal.py` 写的条数少一条（那个文件长了读侧对账，注释没跟着数）；
@@ -30,7 +35,7 @@
 范围钉在这里（`docs/*.md` + `README.md`，对照 `tests/*.py` 的 `def`、`cli.build_parser()` 的活参数、
 `tests/*.py` 的模块级 `def test_*` 计数、`src/**.py` 的 AST 字面量、README 能力清单的具数主张对照
 `docs/*.md` 里同一条 bullet 点到的那一节、`src`/`tests`/`scripts` 三棵树里的整段标识符——最后这一面是给
-用例名中段那条尺当出处用的）：
+用例名中段那条尺当出处用的；还有同一份 markdown 语料里"不许出现的形状"两枚，见 `_markdown_line_pointers`）：
 
 * 对照 **AST 里的函数名**而不是 `pytest --collect-only` 的输出。一是 subprocess 让测试不再离线
   自足；二是 addopts 已经带 `-q`，再叠一个 `-q` 会把 collect 输出压成每文件计数，一个"36 条全部
@@ -45,7 +50,7 @@
   跨 bullet 不算（读者照着有数的那一条查还是查不到）、裸的「N 具」不算（同一节里的裸数可能说的是
   另一批）、README 不给自己背书（拿手册查手册是自我背书）。这三条是声明的限界，各有一条合成用例钉着。
 
-写文档由此多了七条约束，都是这条扫描连 `README.md` 一起扫的直接后果（README 的"测试"一节把这话
+写文档由此多了八条约束，都是这条扫描连 `README.md` 一起扫的直接后果（README 的"测试"一节把这话
 也说给了人看）：
 
 * 讲历史时不能把**错名字**写成代码串。补这个闸门时抓到的第一条缺陷就是它自己那篇文档写漏了后半截，
@@ -66,6 +71,10 @@
 * 反引号里挂着省略号的那一个名字同样得**落得回去**：那一截在用例名里要恰好有一个主人，0 个是点不到、
   2 个以上是歧义（`#216`）。`[参数 id]` 后缀可以留着，它跟着基础名一起数主人；带花括号、逗号、空格的
   代码形状不算点名，接不住它们是设计。
+* markdown 页之间**不许按行号互指**，两种写法都算（带文件名的、只留冒号数字的续指）：指节写〈标题〉，
+  复述一个历史号就写 "`文件名.md` 的 NNN 行" 这种正则接不住的样子（`#217`）。这条禁的是形状而不是数字
+  对不对——它不是一条入口尺，所以开头那句"九类串"不跟着涨。同一条里指 `.py` 的省略写法要改成写全，
+  因为写全之后行号闸门才管得到它；端点那个 "地址:端口" 不在形状里，判据靠反引号把它整个包住才认。
 
 """
 
@@ -2263,6 +2272,61 @@ def test_the_pointer_scanner_is_not_reading_an_empty_corpus():
     assert total >= 50, f"只扫到 {total} 处〈标题〉指针（16:55:03Z 现测 67），多半是扫法坏了：{hits}"
     assert hits["README.md"] and hits["iterations.md"], \
         f"README 与归档是这一族的两个大户，任一方为 0 说明语料被收窄了：{hits}"
+
+
+# ------------------------------------------------------------ markdown 之间的行号互指
+# `.py` 的号有行号闸门盯着：它现推被点那一行上有没有这句话点过的名字。markdown 的号没有这种锚——
+# 手册页每插一行，它下面所有的号一起挪，而挪完之后没有任何东西回头读旧号。06:42:09Z 现测这一族：
+# 全长 27 处加裸续指 13 处，40 处全在归档里（手册五本 0 处），能按内容比对的 17 处只有 6 处还落在
+# 它声称的那一行上（另 10 处那一句没带可对照的引文）。所以判据不是"号对不对"，是一条形状禁令：markdown 之间只许指节（〈标题〉那一形已由
+# 上面那族管住），不许指行。裸续指一并禁掉——它是同一族的省略写法，留着等于给禁令留一条绕过去的腿；
+# 而指 `.py` 的省略写法要改成写全，因为写全之后行号闸门才管得到它。
+MD_LINE_POINTER = re.compile(r"[\w./-]*\.md:\d+")
+BARE_LINE_POINTER = re.compile(r"`:\d+`")
+
+
+def _markdown_line_pointers(pages: dict[str, str]) -> list[tuple[str, int, str]]:
+    """The check itself: which lines point at a markdown page by a line number.
+
+    返回的三元组是（页, 行, 命中的那一串），行号是给处置用的——这一族的修法是一句句改写法，不是改数字。
+    """
+    out: list[tuple[str, int, str]] = []
+    for page, text in pages.items():
+        for pattern in (MD_LINE_POINTER, BARE_LINE_POINTER):
+            for m in pattern.finditer(text):
+                out.append((page, text.count("\n", 0, m.start()) + 1, m.group()))
+    return out
+
+
+def test_no_markdown_page_is_pointed_at_by_a_line_number():
+    bad = _markdown_line_pointers({f.name: f.read_text(encoding="utf-8") for f in DOCS})
+    assert not bad, (
+        f"{len(bad)} 处按行号互指 markdown 页——这些号在被点的页面上每次插行都会挪，而没有任何闸门"
+        "回头读它们。指节写〈标题〉，复述历史号写成"
+        "「`文件名.md` 的 NNN 行」这种正则接不住的样子："
+        f"{bad}"
+    )
+
+
+def test_the_markdown_pointer_ban_covers_both_shapes_and_spares_the_five_legitimate_ones():
+    """判据两侧都有读者：两形都报，五种长得像的都不报。
+
+    只跑真实语料那条不足以证明它会报——把两个 pattern 改成永不匹配，`assert not bad` 照样绿。这一条不读
+    真实语料，所以文档改好不会削弱它。端口的 `地址:数字` 是最容易被误伤的一形（`CLOCK_MIN` 那一族就为它
+    留过 `Z`），`.py` 的写全号是**另一把尺子的领地**，这里必须放过。
+    """
+    pages = {"a.md": "\n".join([
+        "看 `docs/b.md:12` 那一行。",
+        "同一句里的省略写法 `:13` 也报。",
+        "端点 `100.87.65.60:13000` 不是指针。",
+        f"`{_fixture_cite('cli', 64)}` 由行号闸门管。",
+        "`docs/b.md` 的 12 行是历史复述。",
+        "见〈日志读不下去的时候〉那一节是指节。",
+    ])}
+    assert _markdown_line_pointers(pages) == [
+        ("a.md", 1, "docs/b.md:12"),
+        ("a.md", 2, "`:13`"),
+    ], "两形各只报一处；多报说明误伤了端口、`.py` 全号、去形状的复述或〈节〉指法"
 
 
 # ------------------------------------------------------------ 「HEAD 那一版」的读数锚
