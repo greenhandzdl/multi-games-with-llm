@@ -534,3 +534,120 @@ def test_the_audience_footer_owns_the_which_ones_shown_claim(pair):
     assert spectator.count("观众模式只含公开事件") == 1, spectator[-400:]
     assert "私有频道" in spectator and "不在本文件中" in spectator
     assert "观众模式只含公开事件" not in god, "上帝页上这句话是假话"
+
+
+# ---------------------------------------------- 类名词表：CSS、产物、断言三向对账
+# The three sets below have to agree in both directions, and each direction catches a
+# different kind of lie. A rule with no emission is dead CSS; a class with neither rule nor
+# assertion is decoration nobody can notice; and an assertion naming a class the renderer
+# never emits launders a dead name into "有读者" — which would silently weaken the second one.
+_QUOTE = chr(34)      # 两个都拼装：本文件的源码里因此没有连续的 class="<…>" 那一形
+_CLASS_PREFIX = "class" + chr(61)
+CLASS_ATTR = re.compile(_CLASS_PREFIX + _QUOTE + "([^" + _QUOTE + "]*)" + _QUOTE)
+_WORD = re.compile(r"[A-Za-z][\w-]*")
+_STYLE_BLOCK = re.compile(r"<style>(.*?)</style>", re.S)
+_RULE_HEAD = re.compile(r"([^{}]+)\{[^{}]*\}")
+_IN_SELECTOR = re.compile(r"\.([A-Za-z][\w-]*)")
+
+
+def _class_names(markup: str) -> set[str]:
+    """每一个类名。一个属性里两个名字算两个：`class="seat dead"` 的 dead 是单独一格。"""
+    return {tok for attr in CLASS_ATTR.findall(markup) for tok in _WORD.findall(attr)}
+
+
+def _rule_names(css_body: str) -> set[str]:
+    """CSS 点过名的每一个类。按 `{}` 配对取选择器，不按物理行切——真块里 `li.speech{…}` 和
+    `li.vote{…}` 挤在同一行上，按行切只会看见每行的前一半（普查第一版就是这么错的）。
+    """
+    return {m.group(1) for head in _RULE_HEAD.finditer(css_body)
+            for m in _IN_SELECTOR.finditer(head.group(1))}
+
+
+def _style_rule_names() -> set[str]:
+    src = Path(render_html.__file__).read_text(encoding="utf-8")
+    return _rule_names(_STYLE_BLOCK.search(src).group(1))
+
+
+def _markup_readers() -> set[str]:
+    """测试里写出来的每一个类名字面量——断言读过的类名才算有人读。"""
+    out: set[str] = set()
+    for f in sorted(Path(__file__).parent.glob("*.py")):
+        out |= _class_names(f.read_text(encoding="utf-8"))
+    return out
+
+
+@pytest.fixture(scope="module")
+def emitted(pair) -> set[str]:
+    """产物里真的出现过的类名。
+
+    样本是金样本的两个视图，不是 `data/` 下的日志——那些文件 gitignored，别的机器上一本都没有。
+    现测（04:08:18Z 按本文件的谓词重数）：金样本两视图给 19 个名字，本机 13 本局日志（`data/` 里 16 个
+    `.jsonl` 排除 3 本 `*.prompts.jsonl`，那不是局日志）重渲染后给同样 20 个，两边唯一对不上的是
+    `abstain`（那一局 0 张弃票，日志里的那几局有），所以手工喂一格 `_matrix` 补上它。
+    """
+    out: set[str] = set()
+    for doc in pair:
+        out |= _class_names(doc)
+    return out | _class_names(render_html._matrix(
+        3, 1, [_ballot(1, 2, 5), _ballot(2, 3, None), _ballot(3, 5, None)]))
+
+
+def test_no_css_rule_outlives_the_name_it_styles(emitted):
+    """CSS 里有一条规则、产物里从来没有那个名字 —— 删掉它一整套测试都不会红，这正是它需要闸门的理由。
+
+    现测唯一一处是 `.tag`：`src/` 和 `scripts/` 里没有一处把 tag 写进 class，所以那条灰字规则从
+    写下来那天起就没上色过任何东西。
+    """
+    dead = _style_rule_names() - emitted
+    assert dead == set(), f"这些规则在 CSS 里，产物里从来没出现过：{sorted(dead)}"
+
+
+def test_every_class_the_renderer_emits_is_styled_or_asserted_on(emitted):
+    """反方向：一个类名既没有 CSS 规则、也没有一条测试读它，那它就是纯装饰。
+
+    「留给以后的人上色」这个理由在**这个**产物上不成立：单文件 HTML，不带外部样式表，也没有第二个
+    消费者。现测两处这样的一格——两张表头行 `ballot-head`/`tally-head`，边框是 `table` 和 `th,td`
+    两条元素规则给的，那个类名本身没人读，所以属性一起删掉。第三处 `last_words` 处置**不同**：它不是
+    装饰，而是产物里唯一能说"这一行是临终遗言"的记号，所以留着它，由
+    `test_a_last_words_line_carries_a_hook_no_ordinary_speech_has` 当它的读者。
+    """
+    unobserved = emitted - _style_rule_names() - _markup_readers()
+    assert unobserved == set(), f"零读者的类名：{sorted(unobserved)}"
+
+
+def test_no_test_names_a_class_the_renderer_never_emits(emitted):
+    """第三条边：断言里写过的类名必须真的在产物里。上面那条把"被测试读过"记成一个读者，
+    所以一处过期断言就能给死类名发通行证——这一条把那条边的口径也关住。
+    """
+    stale = _markup_readers() - emitted
+    assert stale == set(), f"测试断言了产物里没有的类名：{sorted(stale)}"
+
+
+def test_a_last_words_line_carries_a_hook_no_ordinary_speech_has(pair):
+    """遗言那一格**没有** CSS 规则，那个 class 属性是产物里唯一能分辨"这一行是临终遗言、不是普通
+    发言"的记号——所以它不是装饰，删掉它这一桌的复盘页就把两种话说成同一种话。
+
+    这一条就是上面那条零读者闸门所需的"读者"：它数的是真产物上的行，不是源码里的名字。现测作者局有
+    两条 last_words 事件（39、74 号），两个视图里各两行。
+    """
+    spectator, god = pair
+    for doc in (spectator, god):
+        found = doc.count('class="last_words"')
+        assert found == 2, f"遗言行的记号数不对：{found}（作者局有两条 last_words 事件）"
+
+
+def test_the_class_scanners_are_not_blind(emitted):
+    """三条对账都靠这两个扫描器，所以单独钉它们的形状——这一条不读真实语料的新东西，
+    它不会被产物变好而削弱：它钉的是"检测能力在"。每一行都对应普查真栽过或真险过的一种形状。
+    """
+    # 一行两条规则是真块的排法（62、63 两行各挤着两条），所以夹具也得按真文件那样带换行：
+    # 只给一串不带换行的文本时，"按物理行锚定"那一类写法照样能过，电池第一版的 K4 就是这么落空的。
+    assert _rule_names("a{color:red}\nli.speech{color:red}li.vote{color:blue}\nb.death{x:y}\n") \
+        == {"speech", "vote", "death"}
+    assert _rule_names(".seat.dead{opacity:.45}") == {"seat", "dead"}
+    assert _class_names('<li class="seat dead">x</li>') == {"seat", "dead"}
+    # 这两格是**从源码 grep 换成读产物**的理由：mind 只从转义引号里出来，
+    # dead 是 f-string 拼在属性中间的（`class="seat{" dead...`），两种都会被文本扫描切成半个名字。
+    assert "mind" in emitted and "dead" in emitted, sorted(emitted)
+    assert len(emitted) >= 18 and len(_style_rule_names()) >= 11 and len(_markup_readers()) >= 6, \
+        (sorted(emitted), sorted(_style_rule_names()), sorted(_markup_readers()))

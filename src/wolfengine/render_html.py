@@ -61,7 +61,6 @@ ul.chron{list-style:none;margin:0;padding:0}
 ul.chron li{padding:1px 0 1px .5em;border-left:3px solid transparent}
 li.speech{border-left-color:#8aa6c1}li.vote{border-left-color:#c1b08a}
 li.death{background:#fdefef}li.flagged{background:#fdf3e6}
-.tag{color:#8b8578}
 .mind{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:.88em}
 .mind section{border:1px solid #ddd6c6;border-radius:6px;padding:6px 10px;background:#fff}
 .mind h3{font-size:1em;margin:.2em 0}
@@ -250,7 +249,7 @@ def _matrix(day: int, wave: int, votes: list[Event]) -> str:
             if k == target else "<td></td>" for k in keys)
         rows.append(f'<tr><th class="voter" data-seat="{e.actor}">{e.actor}号</th>{cells}</tr>')
     return (f'<table class="ballot-matrix" data-day="{day}" data-wave="{wave}">'
-            f'<tr class="ballot-head"><th>投票人＼被投</th>{head}</tr>'
+            f'<tr><th>投票人＼被投</th>{head}</tr>'
             f'{"".join(rows)}</table>')
 
 
@@ -267,7 +266,7 @@ def _tally(result: Event | None) -> str:
     heads = "".join(f"<th>{_esc(s)}号</th>" for s in sorted(tally, key=lambda k: -tally[k]))
     # `tally-row` marks the row carrying numbers, not the seat header, so counting the
     # class counts 票型 waves. Two rows sharing a class makes the marker say nothing.
-    return ('<table><tr class="tally-head"><th>座位</th>' + heads + '</tr>'
+    return ('<table><tr><th>座位</th>' + heads + '</tr>'
             '<tr class="tally-row"><th>票数</th>' + cells + '</tr></table>')
 
 
