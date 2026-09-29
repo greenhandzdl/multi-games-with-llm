@@ -13,6 +13,7 @@ test_rules and test_schema stayed green the whole time those seams were broken.
 from __future__ import annotations
 
 import ast
+import asyncio
 import dataclasses
 import json
 import random
@@ -22,7 +23,7 @@ from typing import get_args
 
 import pytest
 
-from wolfengine import (actors, assemble, belief, compress, events, info, legality, persona,
+from wolfengine import (actors, assemble, belief, compress, events, game, info, legality, persona,
                         render_html, render_live, roles, rules, schema, state)
 from wolfengine.config import INERT_FIELDS, INERT_LEAVES, Config, RegionBudget
 from wolfengine.events import Event, EventLog, Kind, seats
@@ -2927,3 +2928,78 @@ def test_every_declared_act_is_legal_somewhere_and_vice_versa():
     assert not never_legal, f"这些行动名没有任何一处 LegalSet 宣布过它合法：{never_legal}"
     undeclared = sorted(declared - roster)
     assert not undeclared, f"这些行动被宣布合法却不在 `ActName` 里，落盘会被 pydantic 拒：{undeclared}"
+
+
+def _phase_keys(table: dict) -> set[str]:
+    """两张相位表的下标不是一形：`assemble.py:27` 用 `Phase.NIGHT_WOLF` 成员，
+    `render_live.py:46` 用 `"night_wolf"` 字符串。不归一就会同时报出假的缺格和假的多余格。"""
+    return {k.value if isinstance(k, state.Phase) else str(k) for k in table}
+
+
+# 任务句表缺的那一格：处置要写明"是谁保证那一相位根本没人被问话"（`#207` 口径）。
+PHASE_TASK_TRIAGE: dict[str, str] = {
+    'over': '留：终局那一格没有人被问话。`phases.py` 的 `t.ask` 落点只到夜三相、发言、PK 发言、投票、'
+            '遗言、猎人那一枪，`rules.py` 的 `legal_actions` 对 over 走 fall-through 返回空 acts'
+            '（`no_actions_in_over`），而 `test_no_seat_is_asked_in_a_phase_without_a_task_sentence` '
+            '真打三局 mock 盯着有没有一席在没有任务句的相位上拿到 request',
+}
+
+
+def test_every_phase_has_a_task_sentence_and_a_viewer_label():
+    """每一枚 `Phase` 取值要么有任务句、要么有观众标签，缺的那格必须点名是谁不发的问。
+
+    两张表的下标处都带静默兜底，坏法不同：`render_live.py:126` 的 `_PHASE_ZH.get(last.phase, last.phase)`
+    把英文相位名原样印进直播与复盘视图（整页人话里冒出一行 `day_pk_speech`），
+    `assemble.py:214` 的 `PHASE_TASK_ZH.get(phase, "轮到你了。")` 更糟——它给那一席一张没有任务的卡片，
+    模型只能自己编一个动作。标签那一半不设豁免：视图对每一枚相位都得有词，缺的那一格当场印英文。
+    """
+    roster = {m.value for m in state.Phase}
+    assert len(roster) >= 9, f"Phase 只数到 {len(roster)} 枚取值，多半是收集坏了"
+    # 地板钉在今天格数**以下**一格：钉平了就等于谁删一格都先红在"多半是收集坏了"上，
+    # 把一次真的缺词说成尺子坏了。
+    tasks = _phase_keys(assemble.PHASE_TASK_ZH)
+    assert len(tasks) >= 7, f"任务句表只数到 {len(tasks)} 格，多半是收集坏了"
+    missing_task = sorted(roster - tasks)
+    assert set(missing_task) == set(PHASE_TASK_TRIAGE), (
+        f"没有任务句的相位={missing_task} 和名册 keys={sorted(PHASE_TASK_TRIAGE)} 不是同一份名单："
+        f"要么给它补一格真的任务句，要么在册里点名是谁保证那一相位没人被问")
+    for phase, why in PHASE_TASK_TRIAGE.items():
+        assert re.search(r"\w+\.py", why), f"{phase} 的处置没点到那本文件：{why}"
+    ghost_task = sorted(tasks - roster)
+    assert not ghost_task, f"任务句表里有这些相位名，`Phase` 却不承认：{ghost_task}"
+
+    labels = _phase_keys(render_live._PHASE_ZH)
+    assert len(labels) >= 8, f"视图标签表只数到 {len(labels)} 格，多半是收集坏了"
+    missing_label = sorted(roster - labels)
+    assert not missing_label, f"这些相位在给人看的视图里没有中文标签：{missing_label}"
+    ghost_label = sorted(labels - roster)
+    assert not ghost_label, f"标签表里有这些相位名，`Phase` 却不承认：{ghost_label}"
+
+
+def test_no_seat_is_asked_in_a_phase_without_a_task_sentence(tmp_path):
+    """`PHASE_TASK_TRIAGE` 的那一格由真跑出来的局背书，不由散文背书。
+
+    `data/` 是 gitignored 的（`#91`），所以"终局那 13 条事件里没有一条带 request"这种读数当不了闸门；
+    这里改成当场打三局 mock，从落盘的事件里收"哪些相位真的问到过人"。三局 0.08 秒。
+    """
+    for seed in (1, 2, 3):
+        seats = {s: actors.MockActor(s, synthesize=True, rng=random.Random(seed * 100 + s))
+                 for s in range(1, 10)}
+        asyncio.run(game.play(cfg=Config(), deal_seed=seed, out_dir=tmp_path, actors=seats))
+    asked: set[str] = set()
+    n_events = 0
+    for path in sorted(tmp_path.glob("*.jsonl")):
+        for line in path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            event = json.loads(line)
+            if not isinstance(event, dict) or event.get("phase") is None:
+                continue
+            n_events += 1
+            if isinstance(event.get("request"), dict) and event["request"]:
+                asked.add(event["phase"])
+    assert n_events > 100, f"三局 mock 只落出 {n_events} 条事件，多半是没跑起来"
+    assert asked, "三局里没有一席拿到过 request，那这条断言是空转的，先修它再来谈豁免"
+    silent = sorted(asked - _phase_keys(assemble.PHASE_TASK_ZH))
+    assert not silent, (f"这些相位上没有任务句却真的问了人，装配器会印那句兜底的「轮到你了。」：{silent}"
+                        "——要么补那一格，要么让 `phases.py` 的 `t.ask` 别再在那一相位发问")
