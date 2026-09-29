@@ -213,6 +213,9 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 **[docs/views.md](docs/views.md)**，延迟常数的唯一合法来源在
 [docs/calibration.md](docs/calibration.md)。
 
+代码与文档里那些 `plan §N` 的编号指向引擎之外的一份规划笔记，它不随仓库发布，所以在 GitHub 上点不开。
+它们回答的是"这一格的口径是谁定的"，要核对仍然得回到代码、测试与上面那几本页——那三样才是发布出去的东西。
+
 ## 测试
 
 ```bash
