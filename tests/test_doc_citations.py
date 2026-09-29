@@ -2,7 +2,8 @@
 
 `docs/*.md` 和 `README.md` 用 `` `test_名字` `` 的形式给每个断言指认"是哪条用例在钉它"，有时只写出
 名字中间的一段，又印了一批可以直接敲的 `wolf …` 命令，还写了"某个测试文件有几条用例"、"某个源码里的东西
-在第几行"、"某个配置键出厂是多少"和"细节在〈某一节〉"，能力清单里还按批写着"那一批跑了 N 具变异"。这九类串
+在第几行"、"某个配置键出厂是多少"和"细节在〈某一节〉"，能力清单里还按批写着"那一批跑了 N 具变异"，
+最后一族是拿 `git show <SHA>` 复量的读数写下的那枚锚。这些串
 都是读者复核时的入口：
 写完一轮重构、改个用例名、插一行代码、给某个参数换个叫法、把某个默认值调一格、把一节改了标题、
 把一批电池的具数复述错，文档不会报错，只会留下一个点不到的入口。
@@ -40,6 +41,11 @@
   带「N 处」的只有 1 枚，那句动词是过去时）。语料面停在 markdown：同一把尺扫 `src`/`tests`/`scripts` 三棵树
   现读 42 枚命中（08:59:06Z，76 本文件），那些绝大多数是闸门自己写在 docstring 里的地板读数、由同一条用例
   当场重数——不是没人管的过期，这一格的限界记在下面。
+* `#151` 那条规矩只管"写没写 SHA"，不管"写对没有"：这一片回头核它点名的每一枚锚，量出来是一条**负结果**
+  ——整份 markdown 现扫 100 枚出现、去重 48 枚，`git cat-file` 一趟问过去，0 枚落不回提交（09:47:22Z）。
+  真被抓到的是这把尺自己的报话形状：预注册那枚正控制（往 README 贴一枚假锚）红了该红的用例，可它印出来的
+  是一串哈希，不点名哪一本第几行，读者拿到红还得自己 grep 整棵 `docs/`。补的是 `_dead_anchor_cells`
+  那一格——这一族其余几把尺早就按「文件名 + 行号 + 原文」报。
 * `metrics.md` 那句"`wolf run` 没有 `--set`"是**反向**主张，任何"扫有没有过期参数"的机制都看不见
   它（它扫不到不存在的东西），所以另用一张表钉；
 * `README.md` 给 `test_calibrate_rehearsal.py` 写的条数少一条（那个文件长了读侧对账，注释没跟着数）；
@@ -56,7 +62,9 @@
 `docs/*.md` 里同一条 bullet 点到的那一节、`src`/`tests`/`scripts` 三棵树里的整段标识符——最后这一面是给
 用例名中段那条尺当出处用的；还有同一份 markdown 语料里"不许出现的形状"两枚，见 `_markdown_line_pointers`，
 外加手册五本里的两枚——"页名 + 行号短语"（`_prose_line_pointers`）与"现场口径 + N 处"
-（`_census_readings`）；这两枚的语料面都只有手册五本，不含归档）：
+（`_census_readings`）；这两枚的语料面都只有手册五本，不含归档。最后一枚问整份 markdown（含归档）里
+点名的**提交锚**真不真有其人——`_commit_anchors` 配 `_dead_anchors`，是 `#221`，它问的不是入口漂没漂，
+而是落笔那一刻有没有写对一位）：
 
 * 对照 **AST 里的函数名**而不是 `pytest --collect-only` 的输出。一是 subprocess 让测试不再离线
   自足；二是 addopts 已经带 `-q`，再叠一个 `-q` 会把 collect 输出压成每文件计数，一个"36 条全部
@@ -71,7 +79,7 @@
   跨 bullet 不算（读者照着有数的那一条查还是查不到）、裸的「N 具」不算（同一节里的裸数可能说的是
   另一批）、README 不给自己背书（拿手册查手册是自我背书）。这三条是声明的限界，各有一条合成用例钉着。
 
-写文档由此多了十条约束，都是这条扫描连 `README.md` 一起扫的直接后果（README 的"测试"一节把这话
+写文档由此多了十一条约束，都是这条扫描连 `README.md` 一起扫的直接后果（README 的"测试"一节把这话
 也说给了人看）：
 
 * 讲历史时不能把**错名字**写成代码串。补这个闸门时抓到的第一条缺陷就是它自己那篇文档写漏了后半截，
@@ -97,7 +105,7 @@
   代码形状不算点名，接不住它们是设计。
 * markdown 页之间**不许按行号互指**，两种写法都算（带文件名的、只留冒号数字的续指）：指节写〈标题〉，
   复述一个历史号就写 "`文件名.md` 的 NNN 行" 这种正则接不住的样子（`#217`）。这条禁的是形状而不是数字
-  对不对——它不是一条入口尺，所以开头那句"九类串"不跟着涨。同一条里指 `.py` 的省略写法要改成写全，
+  对不对——它不是一条入口尺，所以开头那句入口清单不跟着涨。同一条里指 `.py` 的省略写法要改成写全，
   因为写全之后行号闸门才管得到它；端点那个 "地址:端口" 不在形状里，判据靠反引号把它整个包住才认。
 * 那个"正则接不住的样子"**只住在归档里**：`docs/*.md` 那四本加 `README.md` 里不许出现"页名 + 行号短语"
   这一形（`#219`，`_prose_line_pointers`）。同一句规矩的两半由两本尺子分别管——冒号形由 `#217` 管整份
@@ -111,6 +119,12 @@
   重数。前两格由证人用例钉着（同口径换单位的那格、同单位换口径词的那格都不报），第三格只记在这把尺的
   注释头里——它没有第二个读者，也没有一条用例去证明"python 侧没被扫"，所以它的失效方向是漏判，写在
   这里而不是钉在那里。
+* 反引号紧接（或 `git show ` 紧接）的那一串 7–40 位十六进制从此是一句**落笔当时就得对**的主张：
+  `git cat-file` 问不到它的就是假出处，红话要点名是哪一本的第几行（`#221`，`_commit_anchors`
+  配 `_dead_anchors`）。12 位整串按宽度豁免，因为那是 sha256 前缀与 `config_hash` 的宽度，而今天语料里
+  那一类去重 31 枚、没有一枚是提交；后面那个字母数字守卫是日志文件名的前八位逼出来的（宽谓词那趟误报
+  过两枚）。豁免按宽度就意味着这枚尺的失效方向是**漏判**：真有 12 位前缀的提交会被放过，7 到 11 位、
+  13 位以上都要落地。
 
 """
 
@@ -2585,6 +2599,100 @@ def test_the_census_judge_reads_both_tokens_both_wraps_and_spares_the_past_tense
     ], "该报的三格少了、或多报了过去时那句 / 别的单位 / 跨过句号和空行的那两格"
     assert _census_readings("这一页上有 12 处指针，其中 3 处已经落空。") == [], \
         "没有现场口径的裸普查数不归这把尺（那是归档的账，由片号锚着）"
+
+
+# ------------------------------------------------------------ 提交锚：点名的 SHA 要真有其人
+# `#151` 那条规矩要求"拿某一版量的"读数在同一行写 SHA，它只管**写没写**，不管**写得对不对**：打错一位、
+# 或者把内容哈希（sha256 前缀与 `config_hash` 都取 12 位）当成提交锚抄进来，同一句话就是假出处，而没有
+# 任何东西回头读它。锚又和行号不同——它不会漂，只会在落笔那一刻就是错的，所以这一把尺量的是"写得对不对"。
+ANCHOR_CAND = re.compile(r"(?:`|git show )([0-9a-f]{7,40})(?![0-9A-Za-z])")
+HASH_WIDTH = 12   # sha256 前缀与 config_hash 的宽度：那一类是内容哈希，今天没有一枚是提交
+
+
+def _commit_anchors(text: str) -> list[tuple[int, str]]:
+    """(行号, 锚)——反引号紧接或 `git show` 紧接的一串十六进制，且后面不再跟字母数字。
+
+    那个 `(?![0-9A-Za-z])` 不是装饰：日志文件名 `20260922T043229Z_…` 的头八位是合法十六进制，
+    去掉守卫就把文件名当成了提交号。12 位整串按宽度豁免（`HASH_WIDTH`），它是哈希那一类。
+    """
+    return sorted({(text[:m.start()].count("\n") + 1, m.group(1))
+                   for m in ANCHOR_CAND.finditer(text) if len(m.group(1)) != HASH_WIDTH})
+
+
+def _dead_anchors(repo, hashes: list[str]) -> list[str]:
+    """问一次 `git cat-file --batch-check` 就把所有锚点判完：N 枚锚一趟，不开 N 个进程。"""
+    want = sorted(set(hashes))
+    if not want:
+        return []
+    r = subprocess.run(["git", "cat-file", "--batch-check"], cwd=repo,
+                       input="\n".join(f"{h}^{{commit}}" for h in want),
+                       capture_output=True, text=True)
+    assert r.returncode == 0, f"问不了 git，这一条判据就成了假绿：{r.stderr.strip()[:160]}"
+    lines = r.stdout.splitlines()
+    assert len(lines) == len(want), f"`--batch-check` 的回行数和问数不等，判据的形状变了：{lines[:3]}"
+    return [h for h, ln in zip(want, lines) if (ln.split()[1:] or ["missing"])[:1] != ["commit"]]
+
+
+def _dead_anchor_cells(anchors: list[tuple[str, int, str]],
+                       dead: list[str]) -> list[tuple[str, int, str]]:
+    """把「哪一枚锚是假的」换成「哪一本的第几行写的」：报告要点名能下笔改的那个格子。
+
+    这一族闸门其余几把都是 `(文件名, 行号, 原文)` 三元组（`#220` 那两把也一样），只报一串哈希的话，
+    读红的人还得自己 grep 整棵 `docs/` 才知道改哪一句。
+    """
+    want = set(dead)
+    return [c for c in anchors if c[2] in want]
+
+
+def test_every_commit_anchor_named_in_the_docs_resolves():
+    """文档点名的每一枚提交锚都真有其人：`#151` 要人写 SHA，这一条回头核它写对没有。"""
+    anchors = [(f.name, n, h) for f in DOCS
+               for n, h in _commit_anchors(f.read_text(encoding="utf-8"))]
+    assert len(anchors) >= 60, (
+        f"只扫到 {len(anchors)} 枚锚，多半是谓词或语料坏了（09:47:22Z 现量是 100 枚出现、去重 48 枚）："
+        f"{anchors[:5]}")
+    if git_history_is_shallow(ROOT):
+        pytest.skip("这份克隆的历史被截断了，老锚点不在对象库里——这一条要问的就是"
+                    "「文档点名的那一版存不存在」，在 `--depth 1` 上它没有对象可问，今天没有读数："
+                    "`git fetch --unshallow` 之后重跑才有。探针是 `tests/conftest.py` 那一枚，"
+                    "`#190` 已经两向判过，这里不抄第二份。")
+    cells = _dead_anchor_cells(anchors, _dead_anchors(ROOT, [h for _, _, h in anchors]))
+    assert not cells, (
+        f"{len(cells)} 处提交锚落不回任何一次提交——`#151` 逼着写锚，这一条就是它的下半场："
+        f"要么改回真号（`git log --format=%h --before=<句子里的时刻>` 能找到当时那一版），"
+        f"要么把那半句删掉：{cells}")
+
+
+def test_the_anchor_reader_spares_the_hash_class_and_catches_a_typo(full_and_shallow_clone):
+    """判据两侧都有读者：真锚放过、打错的报出来、12 位内容哈希与文件名前缀都不算锚。
+
+    末一格钉的是报话的形状：红的出口要带着「哪一本第几行」，只吐一串哈希就等于把"改哪一句"踢给读的人。
+    第一格那枚真锚**运行时拼装**：夹具那棵两提交的小仓库的 `--short=7` 才是这里可解析的号，硬编码一个
+    "看起来像"的七位串就是把判据换成自测（`#153` 那一课）。第四格钉 12 位那一类的界——今天语料里 42 枚
+    12 位 span 没有一枚是提交（09:47:22Z），它是 sha256 前缀和 `config_hash` 的宽度。第五格钉
+    `(?![0-9A-Za-z])` 那一半：日志文件名 `20260922T043229Z_…` 的前八位是合法十六进制，去掉那个守卫
+    就把文件名抄成了提交号（09:46:41Z 那趟宽谓词就是这样误报了两枚）。
+    """
+    full, _ = full_and_shallow_clone
+    real = subprocess.run(["git", "rev-parse", "--short=7", "HEAD"], cwd=full,
+                          capture_output=True, text=True).stdout.strip()
+    assert len(real) == 7 and all(c in "0123456789abcdef" for c in real), \
+        f"夹具仓库印不出 7 位短号，第一格就成了自测：{real!r}"
+    text = "\n".join([
+        f"那一版 `{real}` 里就是这个形状。",
+        "打错一位的 `0a0b0cd` 落不回提交。",
+        "`git show ffffffff` 也点不到东西。",
+        "出厂号 `fb3e99579b7e` 是内容哈希，不归这把尺。",
+        "`20260922T043229Z_g00000005.jsonl` 是一局日志的文件名。",
+    ])
+    found = _commit_anchors(text)
+    assert found == [(1, real), (2, "0a0b0cd"), (3, "ffffffff")], \
+        "该认的三枚少了、行号不对、或把 12 位哈希 / 文件名前缀也算进了锚"
+    assert _dead_anchors(full, [h for _, h in found]) == ["0a0b0cd", "ffffffff"], \
+        "两枚假锚没被点出来，或者真锚被误报——这把尺分不清真假就等于没有下半场"
+    cells = _dead_anchor_cells([("README.md", n, h) for n, h in found], ["0a0b0cd", "ffffffff"])
+    assert cells == [("README.md", 2, "0a0b0cd"), ("README.md", 3, "ffffffff")], \
+        f"报告只说「有假锚」不点名是哪一本的哪一行，读的人还得自己 grep 整棵 docs：{cells}"
 
 
 # ------------------------------------------------------------ 「HEAD 那一版」的读数锚
