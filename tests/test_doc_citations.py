@@ -21,6 +21,10 @@
   只有 6 处还落在它声称的那一行上（11 处落空、10 处那一句没带可对照的引文）——被点的那一页每次插行，
   它下面所有指它的号一起挪，而没有东西回头读旧号。所以补的不是
   "号对不对"而是一条形状禁令（`#217`）：markdown 之间只许指节，指行号的两种写法都不许出现。
+* 还是 `views.md`，同一页开头那句「下表 7 行 = 9 个函数名」是**已经落空的数**：表里现数 8 行、第一格
+  10 个名字，名册 `VIEWING_RULES` 也 10 个键——加的那一行是 `#183` 补 `provenance_line` 时落的，而这条
+  句子从「6 行 = 8 个」涨到「7 行 = 9 个」那一次是手跟着改的（`docs/iterations.md` 的 `#180` 那一节记着），
+  第二次没人改、零红通过。补的是三向对账（`_rule_table_defects`，`#218`）：句子写的两个数 ⇄ 表实测 ⇄ 名册的键。
 * `metrics.md` 那句"`wolf run` 没有 `--set`"是**反向**主张，任何"扫有没有过期参数"的机制都看不见
   它（它扫不到不存在的东西），所以另用一张表钉；
 * `README.md` 给 `test_calibrate_rehearsal.py` 写的条数少一条（那个文件长了读侧对账，注释没跟着数）；
@@ -58,6 +62,9 @@
 * 占位符不能写成 ASCII 形状（`test_xxx` 算一次点空），要写 `test_名字` 这种正则接不住的形式。
 * 条数必须**绑在测试模块名上**才算主张，而 `条` 后面不能再接词；同一行那句"套件共 N 条用例（…）"
   里，总数只和它自己括号里的枚举对账。参数化模块不在核对范围内（模块级 `def` 数不等于收集数）。
+  同一族的第三种数是**一张表自己的行数与名字数**：手册里那种「下表 N 行 = M 个函数名」的句子声明的
+  是"这张表与某个名册是一对"，所以它由 `views.md` 的表实测与名册的键现数双向对账（`_rule_table_defects`，
+  `#218`）——数写歪的那一次是隔壁那片加了一行而没人回头改这句。
 * 裸的 `` `key=数字` `` 从此是一句**出厂值**主张：键要在 `src/` 里存在、数要就是代码里那个字面量。
   实验臂压到的值不能用这个形状写，把键名和数字分开（"把 `A.regions.c_total` 压到 250"）；日志字段
   （`fallback` 这类只以字符串键存在、值不是字面量的名字）可以写，扫描器认它存在但不核数。
@@ -90,6 +97,7 @@ import pytest
 from pathlib import Path
 
 from conftest import git_history_is_shallow
+from test_wiring import VIEWING_RULES  # noqa: E402  (名册住在它的主人那一本，不抄第二份)
 from wolfengine import cli
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -864,6 +872,98 @@ def test_a_stated_total_has_to_add_up_to_its_own_enumeration():
     real = {f.name: f.read_text(encoding="utf-8") for f in DOCS}
     totals = _case_totals(real)
     assert totals == [], f"文档写的用例总数和它自己列的枚举加不起来：{totals}"
+
+
+# ------------------------------------------------- 手册里"下表 N 行 = M 个函数名"的三向对账（#218）
+# `docs/views.md` 拿一句「下表 N 行 = M 个函数名」声明那张〈规则 / 唯一所有者〉表和 `tests/test_wiring.py`
+# 的 `VIEWING_RULES` 是同一批东西，且"一名一条参数化用例钉一个"。`#183` 往表里加了 `provenance_line`
+# 那一行、往名册里加了那个键，两个数就此成为历史：写的是 7 行 / 9 个名字，实测 8 行 / 10 个，全绿通过。
+# 这一族从来只有散文在数它，而数错的那一句正是读者复核时的入口（他会以为参数化列表只有 9 条）。
+# 对账取三个方向：句子写的两个数 ⇄ 表里现数的行与名字 ⇄ 名册的键集合。
+RULE_TABLE_HEADER = "| 规则 | 唯一所有者 | 回答的问题 |"
+RULE_TABLE_CLAIM = re.compile(r"下表 (\d+) 行 = (\d+) 个函数名")
+RULE_TABLE_NAME = re.compile(r"`([a-z_]+)`")
+
+
+def _rule_table_measure(text: str) -> tuple[int, int, set[str]]:
+    """那张表的 (行数, 名字数, 名字集合)：只读每一行的**第一格**，一行两名的行按名数。
+
+    第一格以外不读是必须的：第二格是 `render_html.py` 这样的模块名，第三格里还写着
+    `` `visibility` `` 这类被点名的字段——都长得像规则名，读整行会把名字数 inflate 成假主张。
+    """
+    lines = text.splitlines()
+    if RULE_TABLE_HEADER not in lines:
+        return (0, 0, set())
+    rows, names = 0, []
+    for line in lines[lines.index(RULE_TABLE_HEADER) + 2:]:
+        if not line.startswith("|"):
+            break
+        found = RULE_TABLE_NAME.findall(line.strip().strip("|").split("|")[0])
+        if found:
+            rows += 1
+            names += found
+    return rows, len(names), set(names)
+
+
+def _rule_table_defects(text: str, roster: set[str]) -> list[str]:
+    """三向逐条查，报第一条不成立的：语料落空 / 计数句缺席 / 数不对 / 名单与名册不是一批。"""
+    rows, names, found = _rule_table_measure(text)
+    if not rows:
+        return [f"这一页上找不到「{RULE_TABLE_HEADER}」那张表：判据的语料落空了，无东西可对账"]
+    claims = RULE_TABLE_CLAIM.findall(text)
+    if len(claims) != 1:
+        return [f"「下表 N 行 = M 个函数名」在这一页上有 {len(claims)} 处，要恰好一处才有东西可对账"
+                f"（表实测 {rows} 行 / {names} 个名字）"]
+    if (int(claims[0][0]), int(claims[0][1])) != (rows, names):
+        return [f"句子写的是 {claims[0][0]} 行 / {claims[0][1]} 个名字，表里现数是 "
+                f"{rows} 行 / {names} 个"]
+    if found != roster:
+        return [f"表里点名的规则与 `VIEWING_RULES` 不是同一批：只在表里的 {sorted(found - roster)}，"
+                f"只在名册里的 {sorted(roster - found)}"]
+    return []
+
+
+def test_the_views_rule_table_claim_reconciles_with_its_table_and_the_roster():
+    """三样东西今天必须说得一样多：那一句、那张表、那条参数化用例的名册。"""
+    text = (ROOT / "docs" / "views.md").read_text(encoding="utf-8")
+    defects = _rule_table_defects(text, set(VIEWING_RULES))
+    assert not defects, f"`docs/views.md` 的表和它的名册对不上账：{defects}"
+
+
+def test_the_rule_table_reconciler_counts_rows_names_and_spares_the_neighbours():
+    """四种各钉一次：合法的那一形、加一行没改数、改了名册没改表、以及"读整行"会把谁算进来。
+
+    最后这一格是判据自己的防线：真实语料的第二格全是 `render_html.py`，正则接不住它，所以只测
+    真实语料看不出"只读第一格"这一层有没有读者——得造一行第三格里有个光秃秃的反引号词。
+    """
+    roster = {"shown_events", "event_flags", "markers"}
+    ok = ("代价是这些规则只能有一份定义（下表 2 行 = 3 个函数名，一名一条参数化用例钉住）：\n\n"
+          "| 规则 | 唯一所有者 | 回答的问题 |\n"
+          "|---|---|---|\n"
+          "| `shown_events` | `render_html.py` | 观众能看见哪些事件（`visibility` 不是规则名） |\n"
+          "| `event_flags` / `markers` | `render_html.py` | 一条 turn 带哪些闸门标记 |\n")
+    assert _rule_table_defects(ok, roster) == [], \
+        "两名同行要数成两个名字、第一格外的反引号词一个都不许进名单"
+    assert _rule_table_measure(ok)[:2] == (2, 3)
+
+    added_row = ok + "| `provenance` | `render_html.py` | 哪一版写的 |\n"
+    bad = _rule_table_defects(added_row, roster | {"provenance"})
+    assert bad and "现数是 3 行 / 4 个" in bad[0], f"加了一行而句子没跟着改：{bad}"
+
+    # 数改对了才轮得到名册那一向：前两查是逐条 exclusive 的，这里得先把句子拧对。
+    numbered = added_row.replace("下表 2 行 = 3 个函数名", "下表 3 行 = 4 个函数名")
+    stale_roster = _rule_table_defects(numbered, roster)
+    assert stale_roster and "只在表里的 ['provenance']" in stale_roster[0], \
+        f"表和名册分家时两个方向都要点名：{stale_roster}"
+    assert _rule_table_defects(numbered, roster | {"provenance"}) == []
+
+    reworded = ok.replace("下表 2 行 = 3 个函数名", "这张表有几行、几个名字")
+    assert len(_rule_table_defects(reworded, roster)) == 1, \
+        "计数句换成没有数的说法＝把入口擦了：判据不许在零主张时假装对账成功"
+
+    moved = ok.replace(RULE_TABLE_HEADER, "| 规则 | 只有一个主人 | 回答的问题 |")
+    assert "找不到" in _rule_table_defects(moved, roster)[0], \
+        "表头换了字就扫不到表，这条必须报出来而不是绿着——扫空了它照样绿是这族闸门的旧病"
 
 
 # --------------------------------------------------------------- 出厂值引用

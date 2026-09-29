@@ -10,8 +10,9 @@
 一份判定改一次就够；真流式和缓冲式只差观感不差功能——UI 的逻辑是"日志多了一条就重画"，那么
 M0 量出什么都不用改这块代码。**把风险变成非风险**。
 
-代价是这些规则只能有一份定义，于是 `tests/test_wiring.py` 直接扫源码钉住（下表 7 行 = 9 个函数名，
-`test_the_two_views_share_one_definition_of_each_viewing_rule` 一条参数化用例钉一个）：
+代价是这些规则只能有一份定义，于是 `tests/test_wiring.py` 直接扫源码钉住（下表 8 行 = 10 个函数名，
+`test_the_two_views_share_one_definition_of_each_viewing_rule` 一条参数化用例钉一个；那两个数与这张
+名册由 `tests/test_doc_citations.py` 逐条对账，往表里加一行就得把这句跟着改）：
 
 | 规则 | 唯一所有者 | 回答的问题 |
 |---|---|---|
