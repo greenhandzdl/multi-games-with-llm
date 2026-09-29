@@ -654,9 +654,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     r = sub.add_parser("run", help="打一局（--mock 不需要端点）")
-    r.add_argument("--seed", type=int, default=7)
-    r.add_argument("--games", type=int, default=1)
-    r.add_argument("--out", default="data")
+    r.add_argument("--seed", type=int, default=7, help="第一局的 deal_seed，连打时逐局往上加（默认 %(default)s）")
+    r.add_argument("--games", type=int, default=1, help="连打几局：第 i 局用 seed+i（默认 %(default)s）")
+    r.add_argument("--out", default="data", help="日志落到的目录，不存在会建（默认 %(default)s）")
     r.add_argument("--mock", action="store_true", help="用合成替身打牌，不碰端点")
     r.add_argument("--human", action="append", type=int, default=[], metavar="座位",
                    help="把这一席交给坐在终端前的人（只给一个；其余各席仍由替身或模型答）")
@@ -700,7 +700,7 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--set", action="append", default=[], metavar="臂.字段=值",
                    help="某臂的覆盖项，可重复，例如 --set B.temperature=0.6")
     b.add_argument("--games", type=int, default=20, help="每臂几局（两臂共用同一批 deal_seed）")
-    b.add_argument("--seed0", type=int, default=1000)
+    b.add_argument("--seed0", type=int, default=1000, help="批次第一局的 deal_seed，逐局往上加；两臂共用同一批（默认 %(default)s）")
     b.add_argument("--out", required=True, help="批次目录，每个臂一个子目录")
     b.add_argument("--mock", action="store_true", help="合成桌：只证明管线，永不进结论")
     b.set_defaults(func=cmd_batch)

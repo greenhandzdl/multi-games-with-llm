@@ -8117,7 +8117,7 @@ README——〈测试〉一节里如今不在手册中的每一行，都要能�
 
 说明：下面 13 段整行逐字摘自 `2b57a58` 那一版的 README〈测试〉一节。
 ```text
-重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（79 条、跑起来 79 个用例，
+重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（83 条、跑起来 83 个用例，
 两秒内，不发请求）。D1 不是凭空设计的——第一次写这个闸门时确实只走了 `ast.FunctionDef`，于是把
 `test_a_marker_is_public_but_never_becomes_chronicle`（`test_live_path.py` 里的协程）误报成了
 文档过期。**误报也是这个闸门的输出**，所以它的红用例名要留在账上（那张表 D1 那一格记着它误报了谁）。
@@ -10233,3 +10233,54 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 * 文档对齐这一趟是**负结果**（02:05:36Z 现测）：五张表名加上「人话表」这个词，在 README 与 docs/ 的非归档页里各
   0 处出现，`docs/views.md` 那句「同一份词表」管的是角色名不是这几张。没有一句人话写错，所以没有要改的句子，
   也没给 README 新加一句——把实现细节抬成用户可依赖的承诺不是这一片该做的事。
+
+### #210 CLI 旋钮的正向闸门：27 枚旋钮要么有话、要么在手册里被敲过，而名册收窄只有地板看得见
+
+* 入口是"人话"那三族收完之后的另一半：`#207`/`#208`/`#209` 钉的是取值→词表，这一族钉的是旋钮→话。
+  已有的那具 docs→CLI 旗标闸门只管一个方向——手册里写了的旗标，CLI 得给得出。反方向的两处洞它看不见：
+  CLI 给得出而手册从没敲过（读者不知道落点能改名、机器侧还有一份 JSON），以及 CLI 给得出而 `--help` 里
+  只剩一枚光杆的名字。
+* 现测（02:50:54Z 一趟只读普查）：名册按 `dest` 归并是 27 枚——run 十、batch 六、compare 三、watch 三、
+  export 二、replay 二、audit 一、gate 零；摊开成参数串是 29 串，加八本子命令各自的 `-h/--help` 共 16 串，
+  正好等于 `_cli_surface()` 的 45 串。多出来的两串是 `export` 与 `compare` 的落点旋钮 `-o/--out`，这就是
+  名册按 dest 建的理由：手册敲见 `-o` 就算教过，要求两形都出现过只会逼人往手册里再塞一句废话。
+* 下刀前的两份名单。光杆 help 四枚：run 的 `--seed`(`cli.py:657`)、`--games`(`cli.py:658`)、
+  `--out`(`cli.py:659`) 和 batch 的 `--seed0`(`cli.py:703`)。手册页从没敲过三枚：compare 的 `--json` 与
+  `--out`、export 的 `--out`。`--seed` 那枚原先只带 `type=int` 和 `default=7`——读者敲 `--help` 看得见它是
+  个数，看不见那是牌局的种子还是别的东西，照着敲就等于猜。
+* help 文案里用 `%(default)s` 而不是把数抄进句子：argparse 只在 help 串含这个占位时才打印默认值，写死数字
+  就多做一份会腐烂的抄本，而出厂值的账另有 `key=值` 那一族闸门管着文档。
+* 手册侧那条的语料不取 `docs/iterations.md`。归档里那条带 `-o` 的 `wolf export` 是给上一轮取证复述的，把它
+  当"已经教过了"，手册少一条命令而闸门照样绿；这一条的失效方向是漏判，所以语料宁可窄。help 那条读的是活
+  对象，归档进不进语料与它无关。
+* `-h` 那一格是**我的假设**红了，不是 CLI 有缺陷：地板第一版写死"名册漏掉的应当只有 `--help`"，红在
+  `('run', '-h')` 上——argparse 的 help action 是 `-h/--help` 两形。改成从活对象取 `_auto_help_opts()`，
+  判据不抄字面量，报的才是 CLI 的事。
+* 四具新增。两条正向判据 `test_every_knob_the_cli_offers_says_what_it_does` 与
+  `test_every_knob_the_cli_offers_is_shown_in_the_manual_under_its_subcommand`；两条给判据自身作证人的哨兵
+  `test_the_knob_scanner_tells_a_short_form_from_a_missing_one`（合成名册上：短写法算教过、长写法也算、在别的
+  子命令下敲过不算、空语料三条全报）和
+  `test_the_knob_roster_is_the_whole_surface_minus_the_auto_help`（名册 = 整个 surface 减自动 help 那一族，
+  另加一格"名册至少二十枚旋钮"的地板）。
+* 五具刀，名册先写死再跑。第二趟 02:47:53Z 干净基线 166 passed，逐把 17—19s，02:49:45Z 收尾仍 166 passed，
+  每把还原都按 sha256 前 12 位比过、逐字节相同：
+  K1 摘掉 `run --out` 的 help → 只红光杆那条；
+  K2 删掉 `docs/comparison.md` 新加的那条配方 → 只红手册那条，名单是 compare 两枚；
+  K3 把 `docs/views.md` 的 export 用法行退回原形 → 红同一个名字、名单换成 export 一枚，所以这两把不是重影；
+  K4 摘掉 `_HelpAction` 那格豁免 → 红手册那条与地板两具，光杆那条绿着——help action 自带文案，它进名册
+  不会让"每枚旋钮都有话"变红，只会让另一族变红；
+  K5 把名册收窄到两个子命令 → **只红地板，两条正向判据全绿**。这一把是本片最值钱的一格：否定式判据被收窄
+  时只会更绿，没有那格地板它就自证不了自己扫的是全表。
+* 电池自己两处 bug 得记，因为第一趟（02:39:41Z—02:42:27Z）的五份判定全是它造的假 CHECK。证人名册那条正则
+  写成 `^FAILED tests/\w+::`，`\w+` 在 `test_doc_citations.py` 第一个点处就断了——五具刀全部落盘、全部红出
+  可读的名字，脚本却对每把报 `点名到=[]`。K4 的替换串多带一个右括号，那具把闸门文件切成 SyntaxError，rc=2
+  停在收集期，什么都没量到。修法：正则改 `^FAILED \S+::`；落刀前先 `compile()` 验一遍刀后的源码，切坏就跳过
+  并报"这具没落到断言上"；锚点唯一性与刀后语法单独立一趟预检脚本，开跑前跑（五具锚点各命中一次才开）。
+* 文档对齐两处，其中一处行数中性：`docs/views.md` 的 export 用法行补 `[-o 路径]`；`docs/comparison.md`
+  〈两个命令〉那块配方加一条把 `--json` 与 `-o` 一起敲出来的行。后一处加的是**整块执行证人**里的一行
+  （`test_the_comparison_recipes_block_runs_verbatim`），所以它被原样跑过：整块退出码仍是最后那条 compare
+  故意给的 1，两臂各两局的落盘形状没动。README 一句没改——两处补的都在 docs/ 那两本页上，它〈命令一览〉里
+  那八条本来就在名册的报错名单之外。
+* 顶号一处，还是计数闸门替我记的账：本文件第 8120 行那句逐字摘录写着 `tests/test_doc_citations.py` 那格是
+  七十九，四具新增把它顶成了历史。按上面定的处置走**重数而不是改句子**——只换那两个数字，逐字的其余部分一字
+  未动，SHA 锚在第 8118 行接着背书。

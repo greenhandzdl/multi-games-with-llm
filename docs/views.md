@@ -37,7 +37,7 @@ M0 量出什么都不用改这块代码。**把风险变成非风险**。
 wolf replay  <file>              # 观众：只有公开事件
 wolf replay  <file> --seat 3     # 3号：公开事件 + 它自己看得见的
 wolf replay  <file> --god        # 上帝：全部
-wolf export  <file> [--god]      # 同样的两种模式，落一个能发出去的 HTML
+wolf export  <file> [-o 路径] [--god]   # 同样的两种模式，落一个能发出去的 HTML
 wolf watch   <file> [--god] [--seat N]   # 同一批判定，终端里 tail
 ```
 

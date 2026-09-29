@@ -267,6 +267,120 @@ def test_the_scanner_covers_every_subcommand_the_parser_offers():
         f"文档里只 {sorted(set(SUBCOMMANDS))} 会被扫，CLI 实际给的是 {sorted(surface)}")
 
 
+# --------------------------------------------------------------- 旋钮的正向两条
+# 上面那几条量的是"文档不许写 CLI 不认的参数"（文档→CLI）。这一族量反方向：CLI 交出去的每一个
+# 旋钮，要么在 `--help` 里说得出自己，要么在手册里被人敲过一次。两个方向各有各的洞，缺一不可。
+def _subparsers() -> dict[str, argparse.ArgumentParser]:
+    """`build_parser()` 里那一族子命令解析器；`_cli_surface` 和下面的名册都从这一处拿对象。
+
+    只共用"取到子命令"这一步，不共用取值那一层：`--help` 必须留在"文档不许写 CLI 不认的参数"里
+    （文档将来写 `wolf run --help` 不是错），又必须不在"每枚手写旋钮都该有 help"里（它是 argparse
+    自己加的，永远有 help，算进来等于白送一格）。并成一个返回值就让这两条判据互相顶。
+    """
+    ap = cli.build_parser()
+    subs = next(a for a in ap._actions if isinstance(a, argparse._SubParsersAction))  # noqa: SLF001
+    return subs.choices  # noqa: SLF001
+
+
+def _knob_roster() -> dict[str, dict[str, tuple[frozenset[str], str | None]]]:
+    """{子命令: {旋钮: (它的全部参数串, help 文案)}}，从活对象上读，不扫 `cli.py` 的源码文本。
+
+    按 `dest` 归并而不是按参数串各算一枚：`export` 和 `compare` 的落点旋钮写作 `-o/--out`，手册
+    敲见 `-o` 就是把这个旋钮教过了；要求两形都出现过，只会逼人往手册里再塞一句废话。
+    """
+    return {name: {act.dest: (frozenset(act.option_strings), act.help)  # noqa: SLF001
+                   for act in p._actions                                # noqa: SLF001
+                   if act.option_strings and not isinstance(act, argparse._HelpAction)}
+            for name, p in _subparsers().items()}
+
+
+def _knobs_without_help(roster: dict) -> list[tuple[str, str]]:
+    return sorted({(sub, dest) for sub, knobs in roster.items()
+                   for dest, (_, help_text) in knobs.items() if not help_text})
+
+
+def _knobs_the_manual_never_shows(roster: dict, cited: dict[str, set[str]]) -> list[tuple[str, str]]:
+    return sorted({(sub, dest) for sub, knobs in roster.items()
+                   for dest, (opts, _) in knobs.items() if not opts & cited.get(sub, set())})
+
+
+def test_every_knob_the_cli_offers_says_what_it_does():
+    """`--help` 是 CLI 唯一的自述出口，光杆的旋钮在那儿等于没写。
+
+    一枚 `--seed` 只带着 `type=int` 和 `default=7`：读者敲 `--help` 看得见它是个数，看不见那是
+    牌局的种子还是别的什么，于是照着敲就等于猜。这一条管的是"写代码时顺手少写一个参数"那种洞，
+    文档侧的闸门（上一条族）看不见它——手册里根本不会提那一枚旋钮。
+    """
+    bare = _knobs_without_help(_knob_roster())
+    assert not bare, f"这些旋钮没有 help，`--help` 里只剩一个名字（子命令, 旋钮）：{bare}"
+
+
+def test_every_knob_the_cli_offers_is_shown_in_the_manual_under_its_subcommand():
+    """手册（README + 四本参考文档）里得有人把每枚旋钮敲过一次，而且敲在该当的子命令下面。
+
+    语料不取 `docs/iterations.md`：那一本按日期记账，里面那条带 `-o` 的 `wolf export` 是给上一轮
+    取证用的，不是给今天的人照着敲的；把它当"已经教过了"，手册少一条命令而闸门照样绿。这一条的
+    失效方向是漏判（读者不知道落点能改名、机器侧还有一份 JSON），所以要求的是"出现过一次"，
+    不是"每本都有"。`--help` 不在名册里，靠的不是"它 obvious"，是下面那条钉子。
+    """
+    cited: dict[str, set[str]] = {}
+    for page in _manual_pages():
+        for sub, flag in _cited_flags(page.read_text(encoding="utf-8")):
+            cited.setdefault(sub, set()).add(flag)
+    missing = _knobs_the_manual_never_shows(_knob_roster(), cited)
+    assert not missing, (
+        f"这些旋钮在手册里从没被敲过，读者学不到（子命令, 旋钮）：{missing}")
+
+
+def test_the_knob_scanner_tells_a_short_form_from_a_missing_one():
+    """两条正向判据都得在合成名册上自证看得见：按 dest 归并、按子命令配对，两处都能漏。
+
+    真语料上这两条现在是绿的，绿的否定式判据和瞎的判据长一个样——所以这里把三种放过/三种报出
+    各摆一遍，短写法 `-o` 算教过、长写法 `--out` 也算，别的子命令下敲过不算。
+    """
+    roster = {"demo": {"out": (frozenset({"-o", "--out"}), "写哪儿"),
+                       "ghost": (frozenset({"--ghost"}), None)},
+              "other": {"out": (frozenset({"-o"}), "写哪儿")}}
+    assert _knobs_without_help(roster) == [("demo", "ghost")]
+    assert _knobs_the_manual_never_shows(
+        roster, {"demo": {"-o"}, "other": {"-o"}}) == [("demo", "ghost")]
+    assert _knobs_the_manual_never_shows(
+        roster, {"demo": {"--out"}, "other": {"-o"}}) == [("demo", "ghost")]
+    assert _knobs_the_manual_never_shows(roster, {"other": {"-o"}}) == [
+        ("demo", "ghost"), ("demo", "out")], "在别的子命令下敲过被算成了教过"
+    assert _knobs_the_manual_never_shows(roster, {}) == [
+        ("demo", "ghost"), ("demo", "out"), ("other", "out")], "名册空转：一条都没扫"
+
+
+def _auto_help_opts() -> dict[str, frozenset[str]]:
+    """{子命令: argparse 自动加的那一枚 help 的参数串}。
+
+    取法而不是抄字面量：它是 `-h/--help` 两形，第一条版本我按"只有 `--help`"写死了判据，红在
+    名册漏掉的那一格上——那一格红得对，但报的是我这句假设，不是 CLI 的缺陷。
+    """
+    return {name: frozenset(act.option_strings)
+            for name, p in _subparsers().items()
+            for act in p._actions                                    # noqa: SLF001
+            if isinstance(act, argparse._HelpAction)}                # noqa: SLF001
+
+
+def test_the_knob_roster_is_the_whole_surface_minus_the_auto_help():
+    """`_HelpAction` 那格豁免必须钉成"恰好是自动 help 那一族"，否则它就是一个没人看着的洞。
+
+    上面两条都是否定式，把名册收窄（少收一枚旋钮、多排除一种参数）不会让它们红，只会让它们更绿。
+    这条钉的是"CLI 交出的每个参数串要么属于名册里某一枚旋钮，要么就是那一枚自动 help"——
+    它同时是手册那条的地板：名册只剩个位数时，"每个旋钮都教过"就不可能是真的。
+    """
+    surface, roster = _cli_surface(), _knob_roster()
+    shown = {(sub, opt) for sub, knobs in roster.items()
+             for opts, _ in knobs.values() for opt in opts}
+    hidden = {(sub, opt) for sub, opts in surface.items() for opt in opts} - shown
+    assert hidden == {(sub, opt) for sub, opts in _auto_help_opts().items() for opt in opts}, (
+        f"名册漏掉的不止自动 help 那一族：{sorted(hidden)}")
+    assert sum(len(k) for k in roster.values()) >= 20, (
+        f"名册只剩 {sum(len(k) for k in roster.values())} 枚旋钮，多半是取法坏了：{roster}")
+
+
 # ------------------------------------------------------------- 用例计数引用
 # 两种写法都算"把条数绑在了模块名上"：`test_x.py`（14 条 …`、围栏里 `pytest tests/x.py # 14 条`，
 # 以及枚举 `（test_a.py 23 + test_b.py 29）` 里裸着的数。

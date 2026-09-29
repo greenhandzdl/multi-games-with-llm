@@ -15,6 +15,7 @@
 wolf batch --out data/plumbing --configs A,B --set B.temperature=0.6 \
            --games 2 --seed0 1000 --mock                            # 只验管线
 wolf compare data/plumbing --axis temperature                       # → comparison.md，退出码 1
+wolf compare data/plumbing --axis temperature --json -o data/plumbing/A-vs-B.md   # 落点可改名，机器侧另存一份
 # 真端点那一条留在可粘贴区外面，规矩和 README〈命令一览〉那条一样：它要 `100.87.65.60:13000`
 # 上那个判官，而照着这一块粘进终端的人不一定带着导出的 key——粘错了不是慢，是 401。
 # wolf batch --out data/temp09-vs-06 --configs A,B \
