@@ -46,10 +46,12 @@ wolf watch   <file> [--god] [--seat N]   # 同一批判定，终端里 tail
 上帝视角要显式 `--god`。HTML 自包含：无 JS、无外链、无字体、不含端点地址，只有
 `string.Template` 加 `html.escape`（复盘文件会被打开在第三方的机器上，发言文本是不可信输入）。
 
-`--seat` 与 `--god` 同时给时，坐进某一位优先，`--god` 不再往上抬。在同一份日志上敲了四种
-给法（一轮临时探针，脚本和输出都不入库）：只给 `--god` 的是 104 行、sha 前 12 位 `8918d0e775a1`；只要句子里
-出现了 `--seat 3`——放在 `--god` 前、放在后面、或者根本不给 `--god`——输出都是同一份 81 行
-`dd111ac69f24`。这一格只能这样量：判定点只有一处，`cli.py:254` 那句 `if as_seat is not None` 排在
+`--seat` 与 `--god` 同时给时，坐进某一位优先，`--god` 不再往上抬。在同一份日志上敲了四种给法
+（一轮临时探针，脚本和输出都不入库；它量出的行数与哈希会跟着渲染版本挪——`#183` 给实录加的那一格
+就把两份各顶了一行，所以那一账连同后来的复量搬进 `docs/iterations.md` 的 `#219` 那一节，
+这一页只留钉得住的那半句）：只要句子里出现了 `--seat 3`——放在 `--god` 前、放在后面、或者
+根本不给 `--god`——三份输出逐字相同，只给 `--god` 的那一份比它们长。这一格只能这样量：判定点
+只有一处，`cli.py:254` 那句 `if as_seat is not None` 排在
 `god` 那一支前面——给了座位就按那位玩家的可感知集合渲染，`god` 无从往上加。这句话钉在用例
 `test_sitting_at_a_seat_wins_over_the_god_view_on_the_same_file`（`tests/test_cli.py`）上：把两支换序
 只有它红（P1）。在那之前这一支没有任何读者——仓库里 `god=True` 的十几处
@@ -105,7 +107,7 @@ engine belief（`build_belief(seat, [e for e in events if e.visible_to(seat)])`�
   `httpx.AsyncClient` 的 socket 绑在打开它的那个 loop 上，于是收尾抛 `RuntimeError: Event loop is
   closed`，而它站在 `finally` 里，把 `return rc` 顶掉：实测一局**打完了**的局（60 个事件、
   `draw_day_limit`）返回 1，一个跑完了的批次连 `批次 ->` 那一行都没印出来。按
-  [comparison.md](comparison.md) 第 38 行那句契约，1 是"拒绝出结论"——脚本读到的是一句判决，实际发生的
+  [comparison.md](comparison.md) 那句契约，1 是"拒绝出结论"——脚本读到的是一句判决，实际发生的
   是一次崩溃。现在请求和关闭共用同一个 loop（`cli._run_and_close`，两个读者 `cli.py:191` / `cli.py:569`），
   退出码重新只来自判据。证人不能是进程内调用：`rc` 被 `SystemExit` 接住就看不出形状了，所以那条用例
   在子进程里跑真 `cli.main`、连的是 127.0.0.1 上的桩

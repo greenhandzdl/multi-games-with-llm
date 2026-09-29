@@ -25,6 +25,11 @@
   10 个名字，名册 `VIEWING_RULES` 也 10 个键——加的那一行是 `#183` 补 `provenance_line` 时落的，而这条
   句子从「6 行 = 8 个」涨到「7 行 = 9 个」那一次是手跟着改的（`docs/iterations.md` 的 `#180` 那一节记着），
   第二次没人改、零红通过。补的是三向对账（`_rule_table_defects`，`#218`）：句子写的两个数 ⇄ 表实测 ⇄ 名册的键。
+* 还是 `views.md`，`#217` 那条禁令留下的那条缝里躺着一句**活指针**：「按 `comparison.md` 第 38 行那句契约」
+  ——落笔时真是第 38 行（归档 `#57` 那一节记着），而 `comparison.md` 后来插了 47 行，那句契约今天在第 85 行，
+  第 38 行是温度字段那一段。同一族里还有一处更隐蔽的：`--seat`/`--god` 那四种给法在手册里留了行数与 sha
+  两个数，`#183` 给实录加的那一格把它们各顶了一行，而没有任何尺子读过这一形（现测：归档 56 处、手册五本 1 处）。
+  补的是 `_prose_line_pointers`（`#219`），口径沿用 `#162` 那一族的"手册为零"，历史复述请住进归档。
 * `metrics.md` 那句"`wolf run` 没有 `--set`"是**反向**主张，任何"扫有没有过期参数"的机制都看不见
   它（它扫不到不存在的东西），所以另用一张表钉；
 * `README.md` 给 `test_calibrate_rehearsal.py` 写的条数少一条（那个文件长了读侧对账，注释没跟着数）；
@@ -39,7 +44,8 @@
 范围钉在这里（`docs/*.md` + `README.md`，对照 `tests/*.py` 的 `def`、`cli.build_parser()` 的活参数、
 `tests/*.py` 的模块级 `def test_*` 计数、`src/**.py` 的 AST 字面量、README 能力清单的具数主张对照
 `docs/*.md` 里同一条 bullet 点到的那一节、`src`/`tests`/`scripts` 三棵树里的整段标识符——最后这一面是给
-用例名中段那条尺当出处用的；还有同一份 markdown 语料里"不许出现的形状"两枚，见 `_markdown_line_pointers`）：
+用例名中段那条尺当出处用的；还有同一份 markdown 语料里"不许出现的形状"两枚，见 `_markdown_line_pointers`，
+外加手册五本里"页名 + 行号短语"那一枚——它那一本的语料面只有手册，不含归档，见 `_prose_line_pointers`）：
 
 * 对照 **AST 里的函数名**而不是 `pytest --collect-only` 的输出。一是 subprocess 让测试不再离线
   自足；二是 addopts 已经带 `-q`，再叠一个 `-q` 会把 collect 输出压成每文件计数，一个"36 条全部
@@ -54,7 +60,7 @@
   跨 bullet 不算（读者照着有数的那一条查还是查不到）、裸的「N 具」不算（同一节里的裸数可能说的是
   另一批）、README 不给自己背书（拿手册查手册是自我背书）。这三条是声明的限界，各有一条合成用例钉着。
 
-写文档由此多了八条约束，都是这条扫描连 `README.md` 一起扫的直接后果（README 的"测试"一节把这话
+写文档由此多了九条约束，都是这条扫描连 `README.md` 一起扫的直接后果（README 的"测试"一节把这话
 也说给了人看）：
 
 * 讲历史时不能把**错名字**写成代码串。补这个闸门时抓到的第一条缺陷就是它自己那篇文档写漏了后半截，
@@ -82,6 +88,10 @@
   复述一个历史号就写 "`文件名.md` 的 NNN 行" 这种正则接不住的样子（`#217`）。这条禁的是形状而不是数字
   对不对——它不是一条入口尺，所以开头那句"九类串"不跟着涨。同一条里指 `.py` 的省略写法要改成写全，
   因为写全之后行号闸门才管得到它；端点那个 "地址:端口" 不在形状里，判据靠反引号把它整个包住才认。
+* 那个"正则接不住的样子"**只住在归档里**：`docs/*.md` 那四本加 `README.md` 里不许出现"页名 + 行号短语"
+  这一形（`#219`，`_prose_line_pointers`）。同一句规矩的两半由两本尺子分别管——冒号形由 `#217` 管整份
+  markdown 语料，散文形只对手册五本要求为零，因为归档那 56 处几乎全是"搬运前那一版，`SHA`"式的历史账，
+  管住它们不是清理。
 
 """
 
@@ -2427,6 +2437,70 @@ def test_the_markdown_pointer_ban_covers_both_shapes_and_spares_the_five_legitim
         ("a.md", 1, "docs/b.md:12"),
         ("a.md", 2, "`:13`"),
     ], "两形各只报一处；多报说明误伤了端口、`.py` 全号、去形状的复述或〈节〉指法"
+
+
+# ---------------------------------------------------- 手册里"页名 + 第 N 行"这一形（#219）
+# `#217` 禁的是冒号形（`名.md:NNN` 与裸 `` `:NNN` ``），并把「`文件名.md` 的 NNN 行」留给"复述一个历史号"——
+# 那一形正则接不住，是有意的。代价是**同一形也装得下一句活指针**：`docs/views.md` 里那句「按
+# [comparison.md](comparison.md) 第 38 行那句契约」落笔时真的是第 38 行（归档里 `#57` 那一节记着当时的契约
+# 就写在 38 行），而 comparison.md 后来插了行，那句契约今天在第 85 行，第 38 行是温度字段那一段。号会跟着
+# 页面挪，而这一个形状没有任何尺子读过——正是 `#217` 命名的那种病，只是走了一条它自己留的缝。
+# 归档里这一形 56 处几乎全是"搬运前那一版，`SHA`"式的历史账，管住它们不是清理；手册五本量出来是 1 处，
+# 所以口径用 `#162` 那一族的"手册为零"：**历史复述不住在手册页里**，要复述就住进归档。
+# 窗口取 60 字符而不是句界——这一族的正文是硬折行的，"页名"和"行号"常常分在两行上。
+PROSE_LINE_NUM = re.compile(r"第\s*\d{1,5}\s*行|的\s*\d{1,5}\s*行")
+MD_PAGE_TOKEN = re.compile(r"[\w./-]*\.md")
+PROSE_POINTER_WINDOW = 60
+
+
+def _prose_line_pointers(pages: dict[str, str]) -> list[tuple[str, int, str]]:
+    """手册页里"页名 + 行号短语"的活指针：返回（页, 行, 命中的那一串）。"""
+    out: list[tuple[str, int, str]] = []
+    for page, text in pages.items():
+        for m in PROSE_LINE_NUM.finditer(text):
+            window = text[max(0, m.start() - PROSE_POINTER_WINDOW): m.end() + PROSE_POINTER_WINDOW]
+            if MD_PAGE_TOKEN.search(window):
+                out.append((page, text.count("\n", 0, m.start()) + 1, m.group()))
+    return out
+
+
+def test_no_manual_page_points_at_another_page_with_a_prose_line_number():
+    """手册五本这一形必须为零：读者会照着敲的页面上，不许留一个只会挪的号。"""
+    bad = _prose_line_pointers({f.name: f.read_text(encoding="utf-8") for f in _manual_pages()})
+    assert not bad, (
+        f"{len(bad)} 处拿行号指 markdown 页——`#217` 禁了冒号形，这一形是它留给历史复述的缝，"
+        "而手册页里的这一条是活指针：被点的页面每插一行它就歪。指节写〈标题〉，"
+        f"历史复述搬进归档：{bad}"
+    )
+
+
+def test_the_prose_pointer_check_reports_both_shapes_and_spares_the_lookalikes():
+    """判据两侧都有读者：三格报得出（两形 + 页名只在后面的那一格），四种长得像的都不报。
+
+    只跑真实语料那一条不足以证明它会报——把 `PROSE_LINE_NUM` 改成永不匹配，`assert not bad` 照样绿。
+    这一条不读真实语料，所以文档改好不会削弱它。**窗口是判据的一半**：08:24:22Z 现测归档那 56 处里
+    页名在号前面的有 50 处、只在后面的 4 处、两侧都有的 2 处——只认左边就放过那 4 处，第三格钉的就是这一腿。
+    反过来代价是一句离页名不远的数量说法也会被报（`docs/x.md` 那一份 500 行的转录）；这一族的修法从来是
+    改写法不是改数字，所以宁可宽，而"窗口以外放过"那一腿由 `far.md` 那一格钉着（放宽成整页就算，它会红）。
+    """
+    far = "docs/b.md" + " 这一句离得足够远所以接不上" + "x" * 60
+    pages = {
+        "fires.md": "\n".join([
+            "按 [comparison.md](comparison.md) 第 38 行那句契约。",
+            "同一份 `docs/views.md` 的 12 行讲座位优先。",
+            "这一句的前面六十个字符里不放页名，所以它只能靠后面那一个落回判据：" + "补" * 30
+            + "第 41 行那句契约，出处是 `docs/x.md`。",
+        ]),
+        "quote.md": "报的是「第 1 行没有 seq/kind/day/visibility」那句错误行，页名不在这一页上。",
+        "python.md": f"`{_fixture_cite('cli', 64)}` 那一格归行号闸门管，这里没有 markdown 页的号。",
+        "section.md": "见〈两个命令〉那一节——指节，没有号。",
+        "far.md": f"`{far}` 的第 99 行在窗口之外。",
+    }
+    assert _prose_line_pointers(pages) == [
+        ("fires.md", 1, "第 38 行"),
+        ("fires.md", 2, "的 12 行"),
+        ("fires.md", 3, "第 41 行"),
+    ], "该报的三格少了、或多报了错误行引文 / `.py` 全号 / 〈节〉指法 / 窗口外那一格"
 
 
 # ------------------------------------------------------------ 「HEAD 那一版」的读数锚

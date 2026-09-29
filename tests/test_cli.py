@@ -326,8 +326,8 @@ def test_sitting_at_a_seat_wins_over_the_god_view_on_the_same_file(played):
 
     `render_chronicle` 的那一支 `if as_seat is not None: ... elif god:` 从来没被任何用例同时给过两个
     参数——仓库里 `god=True` 的那几处都在别的文件、且只给一个参数，所以把两支换序也不会有人红。
-    07:55:40Z 在同一份日志上量过四种给法（`/tmp/seat_precedence.out`）：只给 `--god` 的是 104 行
-    `8918d0e775a1`，凡是句子里出现 `--seat 3` 的三份都是同一份 81 行 `dd111ac69f24`。
+    07:55:40Z 在同一份日志上量过四种给法（行数和哈希在 `docs/iterations.md` 的 `#219` 那一节——它们跟着
+    渲染版本挪，`#183` 给实录加的那一格就把两份各顶了一行）：这里只钉住得住的那半句。
     """
     seat = _replay(played, ["--seat", "3"])
     both = _replay(played, ["--god", "--seat", "3"])
