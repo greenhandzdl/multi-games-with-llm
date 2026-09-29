@@ -381,6 +381,43 @@ def test_the_knob_roster_is_the_whole_surface_minus_the_auto_help():
         f"名册只剩 {sum(len(k) for k in roster.values())} 枚旋钮，多半是取法坏了：{roster}")
 
 
+# ------------------------------------------------------------- --help 这一出口
+# `#210` 把每一枚旋钮都接进了 `--help`，而 help 那一族被**有意**留在名册之外——它不需要"手册里敲过
+# 一次"才成立，地板那条钉子管的是它别被当成旋钮。留下的空档是另一件事：读者凭什么知道可以敲它。
+# 判据复用 `_cited_flags`，所以"教读者敲"的形状与旋钮那条一致：散文里出现 help 不算，得有
+# `wolf <子命令> --help` 那种能原样敲进终端的形状。
+HELP_EXITS = {"--help", "-h"}
+
+
+def _manual_help_exits(pages: dict[str, str]) -> set[str]:
+    """{手册里被敲过 `--help`/`-h` 的那个子命令}。空集就是这一个出口对读者不存在。"""
+    return {sub for body in pages.values() for sub, flag in _cited_flags(body)
+            if flag in HELP_EXITS}
+
+
+def test_the_manual_shows_a_reader_how_to_ask_the_cli():
+    """每枚旋钮的自述只住在 `--help` 里，而手册从没教过这一句，等于覆盖交付不出去。"""
+    shown = _manual_help_exits({f.name: f.read_text(encoding="utf-8") for f in _manual_pages()})
+    assert shown, (
+        "五本手册页里没有一处把 `wolf <子命令> --help` 敲给读者看——`#210` 补的那些 help 文案"
+        "只有会自己试的人拿得到")
+
+
+def test_the_help_pointer_counts_a_typed_form_and_not_a_prose_word():
+    """放过与报出各钉一格：短写法算、没跟子命令的整句不算、散文里的词不算、敲过别的旋钮不算。"""
+    pages = {"a.md": "`wolf run --help` 里写着每一枚旋钮的默认值\n"
+                     "\n"
+                     "`wolf export -h` 也能问\n"
+                     "\n"
+                     "光敲 `wolf --help` 只知道有哪些子命令，问不出一枚旋钮\n"
+                     "\n"
+                     "这一页还敲过 `wolf audit data/g7.jsonl`，它没有去问自述\n"
+                     "\n"
+                     "这一页还提到过 help 这个字，但没有任何可敲的形状\n"}
+    assert _manual_help_exits(pages) == {"run", "export"}
+    assert _manual_help_exits({"b.md": "`wolf --help` 与散文里的 help 都不算"}) == set()
+
+
 # ------------------------------------------------------------- 用例计数引用
 # 两种写法都算"把条数绑在了模块名上"：`test_x.py`（14 条 …`、围栏里 `pytest tests/x.py # 14 条`，
 # 以及枚举 `（test_a.py 23 + test_b.py 29）` 里裸着的数。

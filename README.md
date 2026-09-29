@@ -53,6 +53,10 @@ git log -p | rg -n 'sk-[A-Za-z0-9]{20,}'    # 值本身（测试里的形状更�
 | `wolf compare <dir>` | 两臂配对检验：要么出结论，要么写明为什么不出 | 否 |
 | `wolf gate <dir>` | 对一目录**已经存在**的日志出 M3 闸门判定 | 否 |
 
+表里只列了子命令。想知道某一个到底还有哪些旋钮、分别管什么，敲它的自述：
+`wolf run --help`（把 `run` 换成表里任何一个都一样，`-h` 同义）——八个子命令各有一份，
+有出厂默认值的那几枚连默认值一起印着，这些细节表格里放不下。
+
 ```bash
 wolf run --mock --seed 7 --out data --quiet     # 合成替身打牌，纯压状态机
 wolf run --dry-run --games 3 --seed 21 --out data    # 装配全部 prompt 并落盘 + 每局成本清单，零 API 调用
