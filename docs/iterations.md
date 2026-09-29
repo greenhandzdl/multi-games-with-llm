@@ -638,7 +638,7 @@ manifest"——那是凭空假设，方向也错了（抽掉 guard 之后通知�
 
 W2 那格 set1/set2 的 SURVIVED 是**看过断言**声明的（上一轮 V2 在这里凭空猜错，改的是声明不是测试）：
 `grep "⚠|lines\[-1\]|not in page"` 在这两套里只命中 `tests/test_cli.py` 的上面那条，而
-`test_render_live.py:128/141`（`#155` 把 `frame_text` 的 import 搬进来后各 +2）数的是夹具行数与自报文本条数、214/218 按 `正在：` 过滤，多印一行动不了
+`test_render_live.py:123/136` 数的是夹具行数与自报文本条数、`test_render_live.py:209/213` 按 `正在：` 过滤，多印一行动不了
 它们。同一轮也要记下没做的：**这一轮没有一具去打"单一只"那条结构断言**
 （`test_the_recorded_nothing_sentence_has_one_owner` 在本表里五具全绿），它的形状与 `#52` 的 V3 相同、
 由那一具代过，但它自己这一轮没有靶子，别把它的强度算进上表。
@@ -8516,7 +8516,7 @@ E           KeyError: 'contract_version'
 * `board`（`game.py:100` 写）：**接线了**——`cli.py:369` 那串键名多了它，`tests/test_cli.py:470` 两条下标读钉住它。
 * `reproducibility_note`（当时写在 `game.py` 的第 115 行，`#181` 把这一格删掉了）：扫面里除写它自己那一次，**零出现**。
 * `created_utc`（`batch.py:210`）、`pair_keys`（`batch.py:211`）、`n_logs`（`batch.py:222`）：同上，只剩写它们的那一行。
-* `rows`（`batch.py:222`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:288` 读清单里那一格；`tests/test_wiring.py:2039` 读的是另一份文档的 `rows`）——不是缺陷。
+* `rows`（`batch.py:222`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:288` 读清单里那一格；`tests/test_wiring.py:2044` 读的是另一份文档的 `rows`）——不是缺陷。
 
 两层豁免各自当场拦下一次误判：`render_html.py:208` 那个 `class="board"` 和 `tests/test_calibrate_guard.py:51` 那个 `"rows": […]` 都是**另一个命名空间里的同名**，若算成读者，`board` 和 `rows` 会被各自销案成假阴性；反方向上，`pair_keys` 与 `n_logs` 被第二层从"零读者"降级成"只被发布"——同一对名字在 `cli.py:577` 有属性级读者（`res.n_logs`、`res.pair_keys[0]`），零的只是清单里那两格。
 
@@ -10132,7 +10132,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 * 为什么这一片值得立尺子而不是登记成负结果：两张表的下标处**都带兜底，而两支兜底都是静默的、坏法还不一样**——
   `compress.py:140` 的 `NIGHT_ZH.get(act, act or "未知行动")` 会把没登记的行动名原样印进给人看的产物，
   `actors.py:268` 的 `LINES.get(act, LINES["listen"])` 更糟，它替那一席编出一句「先听听还有谁没说话」。
-  闸门钉的不是覆盖率，是"这两支兜底永远不该被走到"。输入侧那条同胞早就在 `test_human_seat.py:253` 的 `test_every_act_the_engine_can_ask_for_has_a_word_the_player_can_type`，
+  闸门钉的不是覆盖率，是"这两支兜底永远不该被走到"。输入侧那条同胞早就在 `test_human_seat.py:251` 的 `test_every_act_the_engine_can_ask_for_has_a_word_the_player_can_type`，
   两边各管一侧，所以先 grep 再动手这一步（`#200` 的教训）答案是"没有重复，缺一侧"。
 * 先红后绿：RED 按"一枚都不许缺"写，00:52:03Z→00:52:04Z `rc=1`、`1 failed`，报的就是
   `['vote']`——红得对才允许我把名册加上去。加完两条各自绿（00:52:59Z、00:53:32Z 各 `1 passed`）。
@@ -10213,10 +10213,10 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   「既不是模块级的 Literal 别名，也不是某字段注解里嵌的 Literal」，改成走整棵树之后 01:53:03Z 两具都绿。
   这一笔要分清：那次红是**尺子红**，不是缺陷红。
 * 两具闸门。前一具 `test_every_stored_fact_value_has_a_word_in_the_table_that_renders_it`
-  (`tests/test_wiring.py:3017`) 对账三张表：名册从源码的 Literal 里读，词表从渲染它那一行所用的那张字典里读，
+  (`tests/test_wiring.py:3022`) 对账三张表：名册从源码的 Literal 里读，词表从渲染它那一行所用的那张字典里读，
   两个方向都空才算过；另加一格地板（每张名册至少两枚），它只防「收集坏了」，两张表同时缩是合法改动。
   后一具 `test_the_copied_role_words_and_default_style_are_still_members_of_their_owners`
-  (`tests/test_wiring.py:3054`) 钉的是两份**抄本**：`ROLE_WORDS`(`belief.py:141`) 的中文键必须等于同一个 id 在出厂板上的名字，
+  (`tests/test_wiring.py:3059`) 钉的是两份**抄本**：`ROLE_WORDS`(`belief.py:141`) 的中文键必须等于同一个 id 在出厂板上的名字，
   它的值必须是 `BOARD_9`(`roles.py:103`) 发得出来的角色（没覆盖的那两枚按名字点名，不是放过），
   以及 `persona.py:47` 那格 `style` 的出厂默认必须仍在表里。
 * 五把刀各有一个只属于它的红法（干净基线 01:53:03Z 量过「2 passed」，逐把 01:54:30Z 起、末次落盘 02:01:11Z）：
@@ -10461,7 +10461,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 * 处置＝两格都写回点得到的样子：`views.md` 的 294 行补上基础名（和上一行是同一条参数化用例的另一格，
   `tests/test_wiring.py:267` 的 `test_the_two_views_share_one_definition_of_each_viewing_rule`），
   `views.md` 的 298 行换成单数那一形（主人是
-  `tests/test_render_html.py:303` 的 `test_the_over_long_marker_needs_its_own_flag_and_prints_no_length`）。
+  `tests/test_render_html.py:302` 的 `test_the_over_long_marker_needs_its_own_flag_and_prints_no_length`）。
   两处都是行内改，那一页一行没增没减——`views.md` 被按行号点过，插行会顶号。
 * 新闸门 `test_an_elided_case_citation_in_a_manual_page_lands_on_exactly_one_case`，配一条合成对照
   `test_the_elided_rule_needs_a_name_and_exactly_one_case_to_own_it`（六格各自只踩一条腿，名字全部现造）。
@@ -10793,3 +10793,81 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   红的是 `#171` 那把在册尺：我第一版把 README 那句规矩**改写**了既有的整行，而这一条判据按整行相等比对——
   锚点那一版 README 的整行从此不在手册里，就得在归档逐字在册。改法是**追加**：把那几行原样放回，新加的话另起行
   接在段落尾巴上，既有整行的字节一个没动，于是这一片对 README 的净改动只有两行新增。
+
+### #222 无声通过的那一族：400 副牌永不落进的那格 skip、三份手抄端点名单里没人守的两个动词
+
+* 两腿共用一个前提：一批用例的承诺是"某件事没发生"，而"没发生"在 pytest 里天然绿——跳开算绿，名单少
+  一格也算绿。第一腿在 `tests/test_human_seat.py`：白天发言的名单一旦不含 `accuse`，那条用例就
+  `pytest.skip` 交白卷，而它交白卷这件事不进任何读数。第二腿是同一族的另一头：守"这条命令不许碰端点"
+  的替身名单有三份手抄本，各自写死自己认得的动词。
+* 死没死先量再判：400 副牌（seed 固定，`rules.legal_actions(state, 3)` 在 `Phase.DAY_SPEECH` 上现推）
+  没有一副让 `accuse` 落到"这一轮答不了"那一侧，所以那一格是零读者的分支，不是"暂时没撞上"。处置是换成
+  会红的断言而不是留 skip：`assert "accuse" in legal.acts` 把 seed 与本轮可答名单一起印进红话，说清是
+  名单变了、这条用例的前提要跟着改。配对测量（刀 `K1` 把 `rules.py:90` 那一行的白天名单去掉 `accuse`，
+  **10:35:42Z**）：`7e3125b` 那一版 `rc=0 / 29 passed, 1 skipped`，换断言之后 `rc=1 / 1 failed,
+  29 passed`，红的正是
+  `tests/test_human_seat.py::test_the_players_sentence_lands_in_the_same_cell_the_models_do`。skip
+  那一版对同一具刀一声不响——这一格的全部价值就在那一响里。
+* 第二腿抓到的是真缺陷，而且它一直静默通过。判据不是"名单里写了几个名字"，而是"客户端真能把字节发
+  出去的方法"：从现装 httpx 的 `_client.py` 走 AST 推调用闭包，看每个公开方法走不走得到
+  `handle_async_request`，量出来 **10** 枚——`delete/get/head/options/patch/post/put/request/send/stream`。
+  三份抄本（`7e3125b` 上）分别是 `conftest.py` 的 `post`+`request`、`test_render_live.py` 的
+  `post`+`request`、`test_render_html.py` 的只有 `post`。按字面比，旧名单漏 8 枚；按闭包算，
+  `get/put/patch/delete/head/options` 六枚都在 `request` 里，被那一格顺带守住，所以真漏的是
+  **2** 枚：`send` 和 `stream` 走 `_send_handling_auth`/`_send_single_request`，**不经过** `request`。
+  一次把 `client.post` 改成 `client.stream` 的重构（流式回答正是这类端点会走的形状）会让这批用例
+  全部保持绿色，而它们承诺的是"这条链不发请求"。
+* 收成一处：名单 `HTTP_SEND_METHODS` 与装配函数 `block_the_endpoint` 只住 `tests/conftest.py`，三本各自
+  改成一次调用。`src` 侧唯一的发字节点是 `transport.py:128` 的 `self.client.post`（同文件另一处
+  `self.client` 调用只有 `aclose`，不上网）；非 httpx 的网络入口逐条翻过是零处，登记为负结果。
+* 三格新证人都在 `tests/test_wiring.py`：
+  - `test_the_endpoint_blocklist_covers_every_way_the_client_can_send`——期望值来自 `_httpx_send_verbs()`
+    现推的那十枚，不是这里抄的名单（`#153` 那一课：抄来的期望值只能证自己）。反方向不设断言：名单里多一个
+    httpx 没有的名字，`monkeypatch.setattr` 当场 `AttributeError`，那批用例全红，藏不住。
+  - `test_only_conftest_installs_the_httpx_send_traps`——AST 扫 `tests/*.py`，任何往 `httpx.AsyncClient`
+    或 `httpx.Client` 上装替身的 `setattr` 只许住在 `conftest.py`。
+  - `test_the_endpoint_substitutes_actually_explode_before_the_socket`——前两条只量名单，量不到装上去的
+    手（循环遍历空集合、把 `boom` 改成 `return None`，本仓库那一串 `assert no_network == []` 一条都不会红）。
+    所以这一条在替身底下垫 `httpx.MockTransport`，逐个动词真敲一次，要求每一敲都以替身那句 `AssertionError`
+    失败；桩 transport 一旦被走到就抛，所以最坏结果也不是有套接字出去。
+* 刀 **10:54:46Z**–**10:55:55Z** 三具，全是对当场工作树内容下刀（上一版脚本从 `git show 7e3125b:` 取原文，
+  锚点在那棵树里根本不存在，于是 `ValueError` 在半路 abort、一具刀都没落下——这一轮的教训是"刀面必须取自
+  将要被 pytest 读的那棵树"）。每具都过锚点 `count == 1`、整份字节先算后写再逐字节回读、`ast.parse`、
+  还原后 sha256 与下刀前相同：
+  - `K2`（`block_the_endpoint` 里那句 `raise AssertionError` 换成 `return None`）：`2 failed / 332 passed`，
+    两具都该红——正控制，外加 `#86` 那把参数尺（`scene` 从此没人读）。
+  - `K3`（往 `tests/test_render_html.py` 尾上塞一条 `if False:` 包住的 `httpx.AsyncClient` 替身，形状与旧
+    抄本相同、永不执行）：`1 failed / 332+1 passed`，红的正是"只住一处"那一格。包 `if False:` 是让这一具
+    只测判据、不给别的用例添噪声。
+  - `K5`（名单里摘掉 `stream`）：`2 failed / 332 passed` = 完整性那一格 + 正控制，两条腿都开火。
+* 顺带抓到扫描器自己的形状 bug：`_names_read` 取调用位的名字时假设可调用对象必是 `ast.Name` 或
+  `ast.Attribute`，而 `getattr(client, verb)(*args)` 这一形的外层 `func` 本身是个 `ast.Call`。真语料上先以
+  我自家的 `TypeError`（`_classify` 的签名与调用点不一致——那条正控制从写下来就没绿过，**10:50:17Z** 才现形）
+  露头，改完又以 `AttributeError: 'Call' object has no attribute 'id'` 露头（**10:53:11Z**），两次都是整条
+  判据罢工而不是红给用户看。按先写红再写码：把 `#166` 夹具语料里那具顶层 `test_` 用例改成含这一形（多出来的只有参
+  数名，六具名册与四具死名单都不动）→ **10:53:11Z** 红在 `AttributeError` → 加一层 `isinstance` 守卫 →
+  **10:53:49Z** 六本 `334 passed`。装饰器位同形但语料里没有，不预先加宽（今天它能把 `tests`/`scripts` 整棵
+  树解析过去就是证据），登记为限界。
+* 这一片挪了四本测试的行，所以点进它们的行号当场重钉：本归档里六行共七枚号。其中两处不是闸门报出来的、
+  是我按 `git diff --numstat` 自己找的，于是补一具刀把这条区别量清楚：`K4`（**11:03:40Z**，把 `conftest`
+  之外那本测试里手工找回的第一枚号改回它漂移之前写下的那一对）→ `1 failed / 98 passed`，红话点名本归档
+  里那一句、并给出"它在第几行、差几行"。结论：漂掉的**号**这把尺看得见，我手工找出来的那两处若不改也
+  一定被红抓住；`K4` 落盘证明与 sha256 还原都过。
+* 但是同一趟量出一条新的不对称，留给 `#223`：「一个 python 文件名 + 冒号 + 号 + 斜杠 + 号」这一形里
+  `LINE_CITE` 只吃斜杠前那一枚，后面那一枚根本不进闸门。全语料成对形三处（**11:04:05Z** 现推），把这三枚
+  第二号拿同一条句子的标识符池复算一遍：一处真对得上（`phases.py` 那枚 `pending_pk`，声明与参数两处本来
+  同名）、一处靠 `splitlines` 里含 `lines` 这个词撞上（`#108` 那一族的弱 token 背书）、一处在今天就是
+  MISS（这一片自己在 `test_render_live.py` 里新钉的那一对，`len(lines)` 与 `len(whys)` 两枚号共用一个标识符
+  池，谁也没法同时点名）。修法是把那种句子拆成每枚号各自点名；本轮不改形状，只登记代价 1 处。
+* 收尾对照（先写预期再跑）：`#221` 最后一趟全量离线 `1101 passed`，这一片新增三枚 `def test_`、一枚没删，
+  所以**预期 1104 collected、1104 passed**。第一趟 **10:58:13Z** 量到 `1103 passed / 1 failed`——收住数与
+  预期一致，红的是行号闸门点着自己（上面那张七处连带账里的 `test_wiring.py` 三处，因为这一片往
+  `tests/test_wiring.py` 里加了行）。重钉之后第二趟见下。
+* 预期兑现：**11:07:49Z** 文档闸门整本 `99 passed`（与 `#221` 最后一趟同口径同数——这一片没往
+  `test_doc_citations.py` 里加用例）、**11:09:32Z** 全量离线 `1104 passed`，两格都与上面那句预期逐字相同。
+  这一片的全部散文落盘之后又复跑一趟收口（**11:15:35Z** 全量离线 `1104 passed`、**11:15:55Z**
+  `1104 tests collected`），两格仍与预期逐字相同——收住数那一趟是单独跑的，因为 `-q` 的全量日志里没有它。
+  重钉之前先红过一趟（**11:05:49Z**，`4 failed / 95 passed`），四条全是这一片自己写进归档的那几句触发的：
+  把形状的原形贴进了散文（于是一个并不存在的 python 文件名被当成活指针去找）、夹具里那具 `test_` 开头的
+  名字要求落回一条真用例、冒号紧跟号的那种裸写被当成 markdown 页互指、把读数锚在当前提交上而同一行没点
+  SHA。四条都改句子、不改闸门；`95 passed` 那一趟里行号闸门报的三处漂移就是上面那张连带账。

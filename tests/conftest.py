@@ -30,6 +30,9 @@ from wolfengine.transport import HttpTransport
 
 PLACEHOLDER = "PLACEHOLDER-NOT-A-KEY"
 
+HTTP_SEND_METHODS = ("delete", "get", "head", "options", "patch", "post",
+                     "put", "request", "send", "stream")
+
 
 def git_history_is_shallow(repo: Path | str) -> bool:
     """这份克隆的 git 历史是被截断的吗（`git clone --depth 1`、CI 的默认深度）。"""
@@ -73,6 +76,27 @@ def key(monkeypatch):
     return PLACEHOLDER
 
 
+def block_the_endpoint(monkeypatch, scene: str) -> list[int]:
+    """把"这一桌不许碰端点"装好：两层，动词名单只住这一个函数。
+
+    第二层逐个换掉 `httpx.AsyncClient` 上**所有**能把字节发出去的方法，一个都不挑：名单窄了不会让
+    任何用例变红，它只会让那批"零请求"的用例变成静默通过（`#222` 量出来旧名单只有 `post` 和
+    `request`，而 `send`、`stream` 这两个真能触网的动词没人守）。名单应当由谁给，由
+    `test_wiring.py` 里那条从现装 httpx 源码推的尺子盯着。
+    """
+    calls: list[int] = []
+
+    async def boom(self, *a, **kw):
+        calls.append(1)
+        raise AssertionError(f"{scene}：发出了 HTTP 请求（第 {len(calls)} 次）")
+
+    monkeypatch.setattr(HttpTransport, "chat", boom)
+    for verb in HTTP_SEND_METHODS:
+        monkeypatch.setattr(httpx.AsyncClient, verb, boom)
+    monkeypatch.delenv(Config().api_key_env, raising=False)
+    return calls
+
+
 @pytest.fixture
 def no_network(monkeypatch):
     """Any attempt to reach the endpoint fails the test, loudly, with a count to assert on.
@@ -81,18 +105,4 @@ def no_network(monkeypatch):
     refactor ever posted through `client` directly, and the claim under test is the absence of a
     request, not the absence of one particular function call.
     """
-    calls: list[int] = []
-
-    async def boom(self, messages, **kw):
-        calls.append(1)
-        raise AssertionError(f"这条命令不得调用端点（第 {len(calls)} 次）")
-
-    async def post_boom(self, *a, **kw):
-        calls.append(1)
-        raise AssertionError(f"这条命令发出了 HTTP 请求（第 {len(calls)} 次）")
-
-    monkeypatch.setattr(HttpTransport, "chat", boom)
-    monkeypatch.setattr(httpx.AsyncClient, "post", post_boom)
-    monkeypatch.setattr(httpx.AsyncClient, "request", post_boom)
-    monkeypatch.delenv(Config().api_key_env, raising=False)
-    return calls
+    return block_the_endpoint(monkeypatch, "这条命令不许碰端点")

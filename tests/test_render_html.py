@@ -33,7 +33,6 @@ from pathlib import Path
 import pytest
 
 from wolfengine import belief, render_html
-from wolfengine.config import Config
 from wolfengine.events import PUBLIC, Event, EventLog, Kind
 
 sys.path.insert(0, str(Path(__file__).parent))
@@ -402,17 +401,14 @@ def test_rendering_the_same_file_twice_gives_the_same_bytes(gold, pair):
 
 def test_write_report_lands_one_file_without_touching_the_network(gold, tmp_path, monkeypatch):
     """M6's criterion is that the demo survives the endpoint being down (plan §10). Asserted by
-    making any call fatal, not by observing none."""
-    import httpx
+    making any call fatal, not by observing none.
 
-    from wolfengine.transport import HttpTransport
+    替身名单从 `conftest` 那一个循环装：这里以前只写了 `post` 一个动词，是那三份抄本里最窄的一
+    份（`#222`）。
+    """
+    from conftest import block_the_endpoint
 
-    async def boom(self, *a, **kw):
-        raise AssertionError("复盘渲染调用了端点")
-
-    monkeypatch.setattr(HttpTransport, "chat", boom)
-    monkeypatch.setattr(httpx.AsyncClient, "post", boom)
-    monkeypatch.delenv(Config().api_key_env, raising=False)
+    block_the_endpoint(monkeypatch, "复盘渲染")
     res, _, _ = gold
     out = tmp_path / "review.html"
     assert render_html.write_report(res.path, out) == out and out.exists()

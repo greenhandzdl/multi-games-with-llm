@@ -31,7 +31,6 @@ from pathlib import Path
 import pytest
 
 from wolfengine import render_live
-from wolfengine.config import Config
 from wolfengine.compress import render_line
 from wolfengine.events import EventLog, Kind, LogDamage
 
@@ -102,18 +101,14 @@ def test_watching_does_not_modify_the_log(tmp_path, gold):
 
 def test_no_live_path_touches_the_endpoint(gold, monkeypatch):
     """M6's gate is that the demo survives the endpoint being offline (plan §10) — asserted by
-    making any call fatal rather than by observing none."""
-    import httpx
+    making any call fatal rather than by observing none.
 
-    from wolfengine.transport import HttpTransport
+    名单不住在这里：这一条以前自己写着 `post` 和 `request` 两个动词，而 httpx 的客户端有十个能把
+    字节发出去的方法，`send` 和 `stream` 那两个恰好不在 `request` 的调用闭包里（`#222`）。
+    """
+    from conftest import block_the_endpoint
 
-    async def boom(self, *a, **kw):
-        raise AssertionError("直播调用了端点")
-
-    monkeypatch.setattr(HttpTransport, "chat", boom)
-    monkeypatch.setattr(httpx.AsyncClient, "post", boom)
-    monkeypatch.setattr(httpx.AsyncClient, "request", boom)
-    monkeypatch.delenv(Config().api_key_env, raising=False)
+    block_the_endpoint(monkeypatch, "直播")
     _, events, meta = gold
     frame_text(events, meta, god=True)
     render_live.watch(gold[0].path, one_shot=True, god=True)

@@ -914,7 +914,8 @@ def _names_read(node: ast.AST) -> set[str]:
     for sub in ast.walk(node):
         if isinstance(sub, ast.Call):
             fn = sub.func
-            out.add(fn.attr if isinstance(fn, ast.Attribute) else fn.id)
+            if isinstance(fn, (ast.Name, ast.Attribute)):
+                out.add(fn.attr if isinstance(fn, ast.Attribute) else fn.id)
             for arg in list(sub.args) + [k.value for k in sub.keywords]:
                 if isinstance(arg, ast.Name):
                     out.add(arg.id)
@@ -937,13 +938,17 @@ def test_the_reachability_probe_names_a_cluster_the_name_probe_forgives():
     把它们连根报掉。`s/tool.py` 那一档证明的是**顶层语句算入口**这一维：`entry_from_main` 只被
     `if __name__ == "__main__"` 那块调到，而那块就是文件自己的顶层代码——撤掉 `<module>` 入口的那具刀
     （K1）会让这两具和真语料上那四处假死一起回到名单里。
+    `test_real` 那一档是 `#222` 补的形状：调用位上的可调用对象可以是算出来的
+    （`getattr(client, name)(x)`），扫描器把它当成名字结点去取 `.id` 就会在真语料上抛
+    `AttributeError`，整条判据静默罢工。这里的期望是"不许崩，且实参那一格的读取照算"。
     """
     corpus = {
         "t/live.py": "@pytest.fixture\ndef only_by_dead():\n    return 1\n"
                      "\ndef helper_a(x):\n    return helper_b(x)\n"
                      "\ndef helper_b(only_by_dead, x):\n    return only_by_dead + x\n"
                      "\ndef lonely():\n    return 3\n"
-                     "\ndef test_real():\n    return 1\n",
+                     "\ndef test_real(client, name, x):\n"
+                     "    return getattr(client, name)(x)\n",
         "t/entry.py": "from live import helper_a\n\nMODULE_LEVEL = 5\n"
                       "\ndef test_reads_module_level():\n    return MODULE_LEVEL\n",
         "s/tool.py": "def entry_from_main():\n    return unused_tool()\n"
@@ -3078,3 +3083,147 @@ def test_the_copied_role_words_and_default_style_are_still_members_of_their_owne
     assert default_style in persona.STYLE_ZH, (
         f"`PersonaParams` 的出厂风格 {default_style!r} 不在表里，卡片会回退成打印英文："
         f"{sorted(persona.STYLE_ZH)}")
+
+
+# ------------------------------------------------- the endpoint blocklist's own completeness
+def _httpx_send_verbs() -> set[str]:
+    """装好的那份 httpx 里，`AsyncClient` 上**真能把字节发出去**的公开方法名。
+
+    判据不是方法名，而是调用闭包走不走得到 `handle_async_request`——那是 httpx 动手的地方。
+    所以 `aclose`、`build_request` 和那一排 property 都不在名单里：它们到不了网；而 `stream` 虽然在
+    `@asynccontextmanager` 后面，闭包里到底还是 `send` → `_send_handling_auth` → `handle_async_request`。
+    名单由库给，不由这里抄：这一格的价值就在"我没有预设 httpx 有几个动词"。
+    """
+    import httpx
+
+    tree = ast.parse((Path(httpx.__file__).with_name("_client.py")).read_text(encoding="utf-8"))
+    bodies: dict[str, ast.AST] = {}
+    for cname in ("AsyncClient", "BaseClient"):
+        cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == cname)
+        for m in cls.body:
+            if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                bodies.setdefault(m.name, m)
+
+    def reaches_wire(name: str, seen: frozenset[str]) -> bool:
+        node = bodies.get(name)
+        if node is None:
+            return False
+        for n in ast.walk(node):
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute):
+                callee = n.func.attr
+                if callee == "handle_async_request" or (
+                        callee not in seen and reaches_wire(callee, seen | {name})):
+                    return True
+        return False
+
+    return {n for n in bodies if not n.startswith("_") and reaches_wire(n, frozenset({n}))}
+
+
+def test_the_endpoint_blocklist_covers_every_way_the_client_can_send():
+    """`no_network` 那张桌的名单不许漏掉一个触网动词，`#222` 量出来它当时漏了俩。
+
+    坏法是**静默通过**而不是报错：那些"这条命令不许碰端点"的用例把端点不当成断言对象，而是把
+    `HttpTransport.chat` 和 `httpx.AsyncClient.post`/`request` 换成会抛的替身，然后让整条链真跑一遍——
+    链上没人调用替身，所以用例绿。名单少一个动词，等于那个动词没人守：一次把 `client.post` 改成
+    `client.stream`（流式回答正是这类端点会走的形状）的重构，会让这批用例全部保持绿色，而它们承诺的
+    是"这条链不发请求"。
+
+    期望值来自 `_httpx_send_verbs()`，也就是现装的 httpx 源码，不是这里抄的一份名单——所以 httpx
+    添一个动词、或者本仓库把名单改窄，这一条都会红。反方向不需要断言：名单里多一个 httpx 没有的名字,
+    `monkeypatch.setattr` 会当场 `AttributeError`，那批用例全红，藏不住。
+    """
+    from conftest import HTTP_SEND_METHODS
+
+    holes = sorted(_httpx_send_verbs() - set(HTTP_SEND_METHODS))
+    assert not holes, (
+        f"这些 httpx 客户端方法能把字节发出去，而 `conftest.HTTP_SEND_METHODS` 没把它们换成替身：{holes}"
+        f"（名单现在装的是 {sorted(HTTP_SEND_METHODS)}）——漏一个就是守'不许碰端点'那批用例里的一条静默腿")
+
+
+def test_only_conftest_installs_the_httpx_send_traps():
+    """端点替身只在 `conftest.py` 装一处，别处再抄一份名单这一条就红。
+
+    `#222` 之前有三份：`conftest.py` 的 `no_network`、`test_render_live.py` 的那条、
+    `test_render_html.py` 的那条，各自写死自己认得的动词。三份的坏法不是不一致（它们今天恰好一致），
+    是**加动词的人只改得到手边那一份**——于是某一桌的承诺悄悄缩水，而它的用例还是绿的。
+    名单进 `conftest.block_the_endpoint` 之后，"只住一处"要有尺子盯着，不然下一次为了方便又内联一条,
+    这套仓库的账已经付过一次（`#153`、`#201`）。
+    """
+    sites = []
+    for f in sorted(Path("tests").glob("*.py")):
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        for n in ast.walk(tree):
+            if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "setattr"
+                    and len(n.args) >= 2 and isinstance(n.args[0], ast.Attribute)
+                    and getattr(n.args[0].value, "id", None) == "httpx"
+                    and n.args[0].attr in ("AsyncClient", "Client")):
+                sites.append(f"{f.name}:{n.lineno}")
+    offenders = [s for s in sites if not s.startswith("conftest.py:")]
+    assert not offenders, (
+        f"这些行自己往 `httpx` 客户端上装替身，绕开了 `conftest.block_the_endpoint` 那份名单：{offenders}"
+        f"（内联的那几处只守得住它自己抄的那几个动词）")
+
+
+def test_the_endpoint_substitutes_actually_explode_before_the_socket(no_network):
+    """正控制：那些替身真会炸。上面两条只量"名单里有没有这个名字"，量不到装上去的手。
+
+    这一族的坏法是把循环写成遍历空集合、或者把 `boom` 改成 return None——本仓库那一串
+    `assert no_network == []` 一条都不会红，因为那条链本来就不发请求，它们对替身本身一言不发。
+    所以这里在替身底下垫一个 `MockTransport`：它一旦被走到就抛 `RuntimeError`，替身没拦住的最坏结果
+    也是这一层的异常，不会有套接字出去。
+
+    两层的判据各自成立：动词那一层漏了，`handle_async_request` 落到桩 transport 抛 `RuntimeError`；
+    引擎那张口 `chat` 漏了，`transport.py:123` 的 `require_key()` 会在 posting 之前抛 `ConfigError`
+    （名单刚把那个环境变量删掉）。两种都不是这里要的 `AssertionError`。
+    """
+    import asyncio
+
+    import httpx
+
+    from wolfengine.transport import HttpTransport
+
+    reached: list[int] = []
+
+    def _stub(request):
+        reached.append(1)
+        raise RuntimeError("走到了 transport：那一层替身没拦住")
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(_stub), base_url="http://127.0.0.1:1")
+    outcomes: dict[str, str] = {}
+
+    def _classify(exc: BaseException) -> str:
+        return "替身拦住了" if isinstance(exc, AssertionError) else f"没拦住：{type(exc).__name__}"
+
+    async def _probe() -> None:
+        for verb in sorted(_httpx_send_verbs()):
+            if verb == "send":
+                args: tuple = (client.build_request("GET", "/v1/chat/completions"),)
+            elif verb in ("request", "stream"):
+                args = ("GET", "/v1/chat/completions")
+            else:
+                args = ("/v1/chat/completions",)
+            outcome = getattr(client, verb)(*args)
+            if not hasattr(outcome, "__await__"):
+                outcomes[verb] = "没换成替身（敲下去拿到的是个上下文管理器）"
+                continue
+            try:
+                await outcome
+            except BaseException as e:  # noqa: BLE001 - 这里要的正是"以什么姿态失败"
+                outcomes[verb] = _classify(e)
+            else:
+                outcomes[verb] = "居然发成功了"
+        try:
+            await HttpTransport(Config(), client=client).chat(
+                [{"role": "user", "content": "x"}], model="m", temperature=0.2,
+                max_tokens=8, timeout_s=1.0)
+        except BaseException as e:  # noqa: BLE001
+            outcomes["chat"] = _classify(e)
+        else:
+            outcomes["chat"] = "居然发成功了"
+
+    asyncio.run(_probe())
+    silent = {k: v for k, v in outcomes.items() if v != "替身拦住了"}
+    assert not silent, (
+        f"这些该被换成替身的调用没有抛出替身那句 `AssertionError`：{silent}"
+        "——`conftest.block_the_endpoint` 的手没落到，全仓库那些 `assert no_network == []` 守的就是空气")
+    assert reached == [], f"桩 transport 被走到了 {len(reached)} 次，替身一层都没拦住"

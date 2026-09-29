@@ -25,8 +25,6 @@ import time
 from pathlib import Path
 from typing import get_args
 
-import pytest
-
 from test_actor_contract import SEED, _table  # 同一副牌、同一张桌，不重造现场
 from wolfengine import compress, human, phases, rules
 from wolfengine.actors import HumanActor, Proposal
@@ -307,13 +305,17 @@ async def test_the_players_sentence_lands_in_the_same_cell_the_models_do(tmp_pat
     """发言进的是 `payload.text`，和模型那条路同一格；渲染也只由 `render_line` 那一只手负责。
 
     这一条要在发牌之后判一次"这一轮到底答得了 `accuse` 吗"：`legal_actions` 的 act 名单是阶段×
-    身份的函数，写死一个座位号等于拿一副牌替全部牌说话。
+    身份的函数，写死一个座位号等于拿一副牌替全部牌说话。判出来答不了就**红**，不是跳开——
+    原来那一格写的是 `pytest.skip`，量过 400 副牌它一次没落进（这一支的名单与牌局无关，
+    永远是那六枚），所以它唯一会开火的场合正是"`accuse` 从白天发言里被拿掉"那次：那次这条
+    用例的整个前提就没了，跳开等于把这件事咽下去（`#153`、`#171` 那一课的两个方向之一）。
     """
     cfg, state, _, _, _, _ = _table(_desk(tmp_path, "deal"))
     state.phase = Phase.DAY_SPEECH
     legal = rules.legal_actions(state, 3)
-    if "accuse" not in legal.acts:
-        pytest.skip(f"这一副牌（seed={SEED}）3 号本轮答不了 accuse，可答 {sorted(legal.acts)}")
+    assert "accuse" in legal.acts, (
+        f"这一条拿 `accuse` 当例子，而 3 号本轮答不了它（seed={SEED}，可答 {sorted(legal.acts)}）——"
+        "白天发言的动作名单变了，这条用例的前提要跟着改，不许跳开了当没事")
 
     agent, log, console, outcome = await _turn(
         tmp_path, ["指控 8 他那句话前后对不上"], phase=Phase.DAY_SPEECH, kind=Kind.SPEECH)
