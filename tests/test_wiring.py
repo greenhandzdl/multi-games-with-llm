@@ -18,10 +18,11 @@ import json
 import random
 import re
 from pathlib import Path
+from typing import get_args
 
 import pytest
 
-from wolfengine import (assemble, belief, compress, events, info, legality, persona,
+from wolfengine import (actors, assemble, belief, compress, events, info, legality, persona,
                         render_html, render_live, roles, rules, schema, state)
 from wolfengine.config import INERT_FIELDS, INERT_LEAVES, Config, RegionBudget
 from wolfengine.events import Event, EventLog, Kind, seats
@@ -2846,3 +2847,83 @@ def test_every_declared_ability_is_asked_about_by_name_or_named_in_the_register(
         f"要么接一个真正的执行处，要么在册里点名它由哪一路执行，两者都不是就把这条删掉")
     for value, why in ABILITY_TRIAGE.items():
         assert re.search(r"\w+\.py", why), f"{value} 的处置没点到那本文件：{why}"
+
+
+# 人话表覆盖不到、但句子另有作者的 act：处置要写明"那一句话由哪本文件的哪一路写出来"（`#206` 口径）。
+ACT_WORD_TRIAGE: dict[str, str] = {
+    'vote': '留：投票不走 act→动词 表。单票由 compress.py 的 Kind.VOTE 分支印「投票：X号→Y号」，'
+            '结算句由 compress.py `_vote_summary` 从 tally/abstained/exiled 三格算出来'
+            '（#113 把笔从 phases 收了回来），两处都不需要一枚 act 的动词格',
+}
+
+
+def test_every_act_has_a_human_word_in_the_renderer_or_is_named_in_the_register():
+    """每一枚 `ActName` 取值要么在人话表里有一格，要么在册里点名它是谁写的句子。
+
+    两张表的下标处都带兜底，而两支兜底都是**静默**的，且坏法不同：
+    `compress.py:140` 的 `NIGHT_ZH.get(act, act or "未知行动")` 会把没登记的行动名原样印进给人看的
+    产物（一行英文混在整页人话里），`actors.py:268` 的 `LINES.get(act, LINES["listen"])` 更糟——
+    它替那一席编出一句「先听听还有谁没说话」，那是引擎凭空造的一句发言。所以这一条钉的不是"覆盖率"，
+    而是"这两支兜底永远不该被走到"。
+
+    名单取 `get_args(schema.ActName)` 而不是抄一份：`schema.py` 加 act 时抄的那一份不会跟着长
+    （同 `test_human_seat.py` 里钉"玩家打得出的词"那一条，两边各管一侧：那边管输入卡片，这边管产物句子）。
+    """
+    roster = set(get_args(schema.ActName))
+    words = set(compress.NIGHT_ZH) | set(actors.LINES)
+    # 地板钉在今天以下：少一枚取值或者少一格词，红的就是这一格，要人看一眼是不是真把尺子拆了。
+    assert len(roster) >= 15, f"ActName 只数到 {len(roster)} 枚取值，多半是收集坏了"
+    assert len(words) >= 13, f"两张人话表合起来只数到 {len(words)} 格，多半是收集坏了"
+    missing = sorted(roster - words)
+    assert set(missing) == set(ACT_WORD_TRIAGE), (
+        f"落到产物上没有人话的 act={missing} 和名册 keys={sorted(ACT_WORD_TRIAGE)} 不是同一份名单："
+        f"要么给它补一格真的人话，要么在册里点名那句是谁写的，两者都不是就把这条删掉")
+    for act, why in ACT_WORD_TRIAGE.items():
+        assert re.search(r"\w+\.py", why), f"{act} 的处置没点到那本文件：{why}"
+    ghost = sorted(words - roster)
+    assert not ghost, f"人话表里有这些行动名，`ActName` 却不承认：{ghost}——要么补别名，要么删掉那格死词"
+
+
+def _acts_declared_legal_by_a_phase() -> set[str]:
+    """src 里每一处 `LegalSet(acts=...)` 写下的行动名，含三元表达式两个分支那种写法。
+
+    只认 `ast.Tuple` 会漏掉女巫那一格：`rules.py:71` 写的是
+    `acts=("save", "poison", "pass") if consumables else ("pass",)`，包在 `ast.IfExp` 里。
+    """
+    out: set[str] = set()
+
+    def collect(node) -> None:
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            out.add(node.value)
+        elif isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+            for elt in node.elts:
+                collect(elt)
+        elif isinstance(node, ast.IfExp):
+            collect(node.body)
+            collect(node.orelse)
+
+    for path in sorted(Path("src/wolfengine").glob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "LegalSet":
+                for kw in node.keywords:
+                    if kw.arg == "acts":
+                        collect(kw.value)
+    return out
+
+
+def test_every_declared_act_is_legal_somewhere_and_vice_versa():
+    """`ActName` 的取值名单与 `rules.py` 宣布过合法的行动名单，两形对账。
+
+    对不上的两个方向坏法不同，所以两个都要问：
+    - schema 有、规则从不宣布：模型可以答这一枚、玩家也可以打这一枚（`ACT_SYNONYMS` 那张词表
+      对着 `get_args(ActName)` 钉，见 `test_human_seat.py`），但没有任何阶段会放行它，
+      于是它只会以"违规被拒"的形式出现——`#12` 那一族的反面。
+    - 规则宣布、schema 不认：落盘那一格 `act: ActName` 会被 pydantic 当场拒掉，整局炸桌。
+    """
+    roster = set(get_args(schema.ActName))
+    declared = _acts_declared_legal_by_a_phase()
+    assert len(declared) >= 14, f"只数到 {len(declared)} 枚宣布合法的行动，多半是收集坏了"
+    never_legal = sorted(roster - declared)
+    assert not never_legal, f"这些行动名没有任何一处 LegalSet 宣布过它合法：{never_legal}"
+    undeclared = sorted(declared - roster)
+    assert not undeclared, f"这些行动被宣布合法却不在 `ActName` 里，落盘会被 pydantic 拒：{undeclared}"

@@ -8516,7 +8516,7 @@ E           KeyError: 'contract_version'
 * `board`（`game.py:100` 写）：**接线了**——`cli.py:369` 那串键名多了它，`tests/test_cli.py:470` 两条下标读钉住它。
 * `reproducibility_note`（当时写在 `game.py` 的第 115 行，`#181` 把这一格删掉了）：扫面里除写它自己那一次，**零出现**。
 * `created_utc`（`batch.py:210`）、`pair_keys`（`batch.py:211`）、`n_logs`（`batch.py:222`）：同上，只剩写它们的那一行。
-* `rows`（`batch.py:222`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:288` 读清单里那一格；`tests/test_wiring.py:2028` 读的是另一份文档的 `rows`）——不是缺陷。
+* `rows`（`batch.py:222`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:288` 读清单里那一格；`tests/test_wiring.py:2029` 读的是另一份文档的 `rows`）——不是缺陷。
 
 两层豁免各自当场拦下一次误判：`render_html.py:209` 那个 `class="board"` 和 `tests/test_calibrate_guard.py:51` 那个 `"rows": […]` 都是**另一个命名空间里的同名**，若算成读者，`board` 和 `rows` 会被各自销案成假阴性；反方向上，`pair_keys` 与 `n_logs` 被第二层从"零读者"降级成"只被发布"——同一对名字在 `cli.py:577` 有属性级读者（`res.n_logs`、`res.pair_keys[0]`），零的只是清单里那两格。
 
@@ -10104,3 +10104,50 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 
 本条正文在那一趟之前已落盘：21:24:12Z→21:25:19Z 全量 **1096 passed in 66.24s**、退出码单独回显 `rc=0`，而这一句之后没有再跑。
 21:27:29Z→21:28:36Z 那一趟（**1096 passed in 66.24s**、`rc=0`）跑的时候正文还带着上面那一句旧话，所以它只背书旧话；本行是这一节最后一次正文改动，提交骑的是它之后那一趟，那一趟的读数写进本次提交说明而不写在这里——写这一行的时候它还没跑完，把没量到的数落在正文里就是抄一份将来的假话。上面各行各自只背书自己报的那一次。
+
+### #207 渲染侧的人话闸门：`ActName` 十五枚取值要么有一格词，要么点名它是谁写的句子
+
+* 入口是 `#206` 收完之后剩下的那一半。取值层还有一具 `ActName`（`schema.py:23`，15 枚），它身边挂着三张表：
+  `ACT_SYNONYMS`（玩家能打的词）、`NIGHT_ZH`（夜里那一句的动词）、`LINES`（替身编的发言）。第一趟我照 `#206`
+  的思路问"每张表覆盖全枚举没有"，报出 9、7、9 处缺格——**那是错的口径**：一具 Literal 的名字空间不等于一张表的
+  取值域。`NIGHT_ZH` 只在 `compress.py:103` 那一支（`Kind.NIGHT_ACTION`）里才轮到被读，而产物里 `night_action` 的 `act`
+  现数正好是它那六格（00:46:14Z 扫 13 本日志共 1149 条事件：`kill` 45／`check` 28／`pass` 16／`save` 11／
+  `poison` 6／`shoot` 2，一格不多一格不少）。同理 `LINES` 的八格＝白天六枚 + `discuss` + `last_words`，
+  那七枚"缺"的（夜间行动、`vote`、`pass`）没有一个会带着发言过来——`last_words` 那 6 条 `act=pass` 落的是
+  **空 text**，句子归 `_said()` 那句「（沉默）」管，`_line()` 根本没被叫到。
+* 扫描器在这趟里错了四次，全是我自己手上的形状假设：① 模块级 `X = {...}` 是 `ast.Assign` 不是 `AnnAssign`
+  （`#206` 躲过一遍，这趟第一版又踩，于是整张表读成"不是普通 dict"）；② 表键有两种写法——字符串常量，
+  或者 `Phase.NIGHT_WOLF` 这种成员表达式；只认前一把 `assemble.py:26` 那张 `PHASE_TASK_ZH` 的八格会**同时**报成假的缺格和假的多余格
+  （00:44:47Z 那一趟就是这样），解回枚举值之后它缺的只有 `over` 一枚；③ `rules.py:71` 的 `acts=` 写的是三元
+  表达式 `("save","poison","pass") if consumables else ("pass",)`，只认 `ast.Tuple` 会整支漏掉女巫那三枚；
+  ④ 收 `LegalSet(...)` 的字符串不筛关键字名，会把 `reason='not_wolf'` 那类吸进来，第一次数出 21 枚"行动"。
+  ②那一处是 `assert not any(UNRESOLVED)` 逼出来的：没有那条断言，第二版会安静地印出八个错名字。
+* 换成能判的那一问，是两形对账而不是逐表全覆盖：`get_args(schema.ActName)`（schema 侧承认的）
+  对 从 src 全部 `LegalSet(acts=...)` 字面量派生的"宣布过合法"全集（规则侧）——今天 15 对 15，双向零差。
+  对不上的两个方向坏法不同，所以两个都要问：schema 有而规则不宣布，模型可以答、玩家可以打，但永远只会以
+  "违规被拒"出现（`#12` 那一族的反面）；规则宣布而 schema 不认，落盘那一格 `act: ActName` 当场被 pydantic 拒掉。
+* 渲染侧只缺一枚 `vote`，而它有作者：单票由 `compress.py` 的 `Kind.VOTE` 分支印「投票：X号→Y号」，结算句由
+  `_vote_summary` 从 `tally`/`abstained`/`exiled` 三格算（`#113` 把笔从 `phases` 收了回来）。这一枚登进
+  `ACT_WORD_TRIAGE`，处置按 `#206` 的口径要求点到那本文件。
+* 为什么这一片值得立尺子而不是登记成负结果：两张表的下标处**都带兜底，而两支兜底都是静默的、坏法还不一样**——
+  `compress.py:140` 的 `NIGHT_ZH.get(act, act or "未知行动")` 会把没登记的行动名原样印进给人看的产物，
+  `actors.py:268` 的 `LINES.get(act, LINES["listen"])` 更糟，它替那一席编出一句「先听听还有谁没说话」。
+  闸门钉的不是覆盖率，是"这两支兜底永远不该被走到"。输入侧那条同胞早就在 `test_human_seat.py:253` 的 `test_every_act_the_engine_can_ask_for_has_a_word_the_player_can_type`，
+  两边各管一侧，所以先 grep 再动手这一步（`#200` 的教训）答案是"没有重复，缺一侧"。
+* 先红后绿：RED 按"一枚都不许缺"写，00:52:03Z→00:52:04Z `rc=1`、`1 failed`，报的就是
+  `['vote']`——红得对才允许我把名册加上去。加完两条各自绿（00:52:59Z、00:53:32Z 各 `1 passed`）。
+* 两把刀分开下，证明这两条不是同一条判据：K1 往 `ActName` 加一枚 `rally` → 三把全红（新闸门两条 + 同胞那条
+  词表闸门），红字分别点名 `['rally', 'vote']` vs 名册 `['vote']`、以及「没有任何一处 LegalSet 宣布过它合法：
+  ['rally']」；K2 只往 `LINES` 加 `rally` → `1 failed, 1 passed`，红的正是"表里有死词"那一支。两把刀的还原键
+  都不匹配就打印不了 `restored_clean=True`，跑完 `git status` 只剩我自己那两处改动。
+* 一趟假 CAUGHT 当场作废：第一次复核那两把刀我用 `python3`（homebrew 3.14）去 `sys.executable -m pytest`，
+  stdout 全空而 `rc=1`——那是 `No module named pytest`，不是刀起作用。那两行 `--- K1 rc=1` 不引用，
+  换回 `.venv/bin/python` 重跑才拿到上面那些红字（「零 FAILED 须先证明 pytest 真跑了用例」这轮的现场版）。
+* 顶号一处，由闸门替我记的账：`from typing import get_args` 落在 `tests/test_wiring.py` 头部，把本文件第 2028 行
+  顶成 2029，于是 00:55:58Z→00:57:14Z 那趟 `1 failed, 1097 passed` 红在行号闸门——`docs/iterations.md:8519`
+  那处指着 `rows = doc["rows"]` 那一格的号（写在归档第 8519 行）被顶后了一行。修法是让号跟着代码走（行内改号、行数不变），
+  而不是为了躲顶号把那行 import 挪到文件末尾：号错着比多一处编辑贵。
+* `Phase` 那一问的最后一格顺手量了：产物里 `phase=over` 的事件 13 条（13 本各一条）、其中带 `request` 的 0 条
+  （00:59:52Z），所以 `PHASE_TASK_ZH` 少 `over` 那一格不是缺词——没有人会在结束之后被问到话；
+  同一趟里 `SYNTHETIC_CLAUSE` 只有 `mock`/`human` 两格也照旧是有意的，读它的那一行
+  （`metrics.py:1594`）本来就只迭代这两枚。这两格都不立新尺子。
