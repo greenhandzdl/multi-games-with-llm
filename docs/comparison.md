@@ -230,8 +230,8 @@ wolf compare data/plumbing --axis temperature --json -o data/plumbing/A-vs-B.md 
   > 不是 0"，一臂有一臂没有时 `—` 只盖在缺的那一臂上（`test_only_one_arm_having_the_knife_count_is_named_rather_than_summed`）。
   > 这一片的逐具账——减法语五处、渲染与接线四处、跨臂汇总那五处，加上搬家后原地重跑的
   > `metrics.region_budget_check` 那一族——在 `docs/iterations.md`〈另外三本手册页里的逐片电池账搬进这一份〉一节。
-  > **三条用例是补在分支之后的**（`no_witness_at_all`、`one_disagreement_prints`、以及
-  > `nobody_cross_checked` 的 null 那一半）：写它们的时候分支已经在树上了，没有 RED 可看。
+  > **三条用例是补在分支之后的**（`test_two_arms_with_no_witness_at_all_say_so_rather_than_agreeing`、
+  > `test_one_disagreement_prints_one_game_not_a_prompt_count`、以及 `test_an_arm_nobody_cross_checked_prints_no_rather_than_zero` 的 null 那一半）：写它们的时候分支已经在树上了，没有 RED 可看。
   > 强度由 A10/A12/A13/A14/A5 五具顶回来——各自点名的红用例就是上面那行输出，不是"跑过了"。
 * **逐条率**（`uncited_speech` / `refused_turn` / `passive_turn`）：按**局**做 cluster
   bootstrap，B=2000、种子固定并写进输出，用 ratio-of-sums 而不是"率的均值"。同局 90 条发言

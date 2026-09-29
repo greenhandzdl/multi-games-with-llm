@@ -1,13 +1,17 @@
 """文档里"读者会照抄的东西"必须还能用——用例名、命令行、条数、行号、出厂值、收集数、节标题指针、具数落点都在扫描范围内。
 
-`docs/*.md` 和 `README.md` 用 `` `test_名字` `` 的形式给每个断言指认"是哪条用例在钉它"，又印了一
-批可以直接敲的 `wolf …` 命令，还写了"某个测试文件有几条用例"、"某个源码里的东西在第几行"、"某个配置键
-出厂是多少"和"细节在〈某一节〉"，能力清单里还按批写着"那一批跑了 N 具变异"。这八类串都是读者复核时的入口：
+`docs/*.md` 和 `README.md` 用 `` `test_名字` `` 的形式给每个断言指认"是哪条用例在钉它"，有时只写出
+名字中间的一段，又印了一批可以直接敲的 `wolf …` 命令，还写了"某个测试文件有几条用例"、"某个源码里的东西
+在第几行"、"某个配置键出厂是多少"和"细节在〈某一节〉"，能力清单里还按批写着"那一批跑了 N 具变异"。这九类串
+都是读者复核时的入口：
 写完一轮重构、改个用例名、插一行代码、给某个参数换个叫法、把某个默认值调一格、把一节改了标题、
 把一批电池的具数复述错，文档不会报错，只会留下一个点不到的入口。
 这一片的缺陷是实测抓到的几条——
 
 * `comparison.md` 点名 `test_each_arm_gets_its_own_gate_verdict` 时漏了后半截；
+* `comparison.md` 还有三处把用例名**切成中段**来引用：全名那把尺只认 `test_` 开头的整串，对中段是透明的，
+  而那些中段在 `src`/`tests`/`scripts` 里也没有出处，读者两头都点不到——补的就是 `_case_name_fragments`
+  这一格（`#215`）；
 * `metrics.md` 那句"`wolf run` 没有 `--set`"是**反向**主张，任何"扫有没有过期参数"的机制都看不见
   它（它扫不到不存在的东西），所以另用一张表钉；
 * `README.md` 给 `test_calibrate_rehearsal.py` 写的条数少一条（那个文件长了读侧对账，注释没跟着数）；
@@ -21,7 +25,8 @@
 
 范围钉在这里（`docs/*.md` + `README.md`，对照 `tests/*.py` 的 `def`、`cli.build_parser()` 的活参数、
 `tests/*.py` 的模块级 `def test_*` 计数、`src/**.py` 的 AST 字面量、README 能力清单的具数主张对照
-`docs/*.md` 里同一条 bullet 点到的那一节）：
+`docs/*.md` 里同一条 bullet 点到的那一节、`src`/`tests`/`scripts` 三棵树里的整段标识符——最后这一面是给
+用例名中段那条尺当出处用的）：
 
 * 对照 **AST 里的函数名**而不是 `pytest --collect-only` 的输出。一是 subprocess 让测试不再离线
   自足；二是 addopts 已经带 `-q`，再叠一个 `-q` 会把 collect 输出压成每文件计数，一个"36 条全部
@@ -34,7 +39,7 @@
   跨 bullet 不算（读者照着有数的那一条查还是查不到）、裸的「N 具」不算（同一节里的裸数可能说的是
   另一批）、README 不给自己背书（拿手册查手册是自我背书）。这三条是声明的限界，各有一条合成用例钉着。
 
-写文档由此多了五条约束，都是这条扫描连 `README.md` 一起扫的直接后果（README 的"测试"一节把这话
+写文档由此多了六条约束，都是这条扫描连 `README.md` 一起扫的直接后果（README 的"测试"一节把这话
 也说给了人看）：
 
 * 讲历史时不能把**错名字**写成代码串。补这个闸门时抓到的第一条缺陷就是它自己那篇文档写漏了后半截，
@@ -49,6 +54,9 @@
   分不出"引用"和"复述一个已经漂走的旧号"（它只认形状，不认语境），所以复述不许用这个形状——写成
   "`cli.py` 的 616 行"这种正则接不住的样子。本轮补这一族时自己撞上过一次：把两个历史号照形状写进了
   README，报红的是那段历史叙述、不是代码，改写法即可。
+* 反引号里光秃秃的一个名字**不许是用例名的中段**：要么写全名，要么这个名字得在 `src`/`tests`/`scripts`
+  的 `.py` 里真出现过（`#215`）。这一条不禁止省略——它只要求"读者点得到"：带 `文件名.py::` 前缀的、
+  反引号里还写了别的话的，都不在它的问题里；它只问孤零零那一个词能不能落回一条用例。
 
 """
 
@@ -125,6 +133,115 @@ def test_a_renamed_case_is_reported_rather_than_waved_through():
     # 反向：同一份文本换成真名字，必须干净——否则上一行的红只是"什么都报"。
     assert _stale({"probe.md": f"这条由 `{sorted(n for n in defined if n.startswith('test_'))[0]}` 钉住\n"},
                   defined) == {}
+
+
+NAME_SPAN = re.compile(r"`([^`\n]+)`")
+FRAGMENT = re.compile(r"[a-z][a-z0-9_]{3,}")
+CODE_ROOTS = ("src", "tests", "scripts")
+
+
+def _code_residence() -> set[str]:
+    """代码（`CODE_ROOTS` 三棵树里的 `.py`）里**自成一名**的每一个标识符。
+
+    整段取词（复用 `ASCII_TOK`，它的四字符下限与 `FRAGMENT` 正好对齐）而不是子串匹配是承重的那一格：
+    一条用例全名的中段同时是它的一个子串和一个"文档里的名字"，按子串算出处的话那条真缺陷永远报不出来。
+    同一理由决定了这份正文不许把被点的片段原样写成一个独立 token——这一腿扫的面包括 `tests/` 自己，
+    抄一遍就等于把缺陷改成假绿。
+    """
+    out: set[str] = set()
+    for root in CODE_ROOTS:
+        for f in sorted((ROOT / root).rglob("*.py")):
+            if "__pycache__" in f.parts:
+                continue
+            out.update(ASCII_TOK.findall(f.read_text(encoding="utf-8")))
+    return out
+
+
+def _case_name_fragments(corpus: dict[str, str], names: set[str],
+                         residence: set[str]) -> list[tuple[str, int, str, str]]:
+    """手册页反引号里的裸名：代码里没有出处，却恰好是某条用例名按词边界切出来的一段。
+
+    三条放过各自挡一类邻居，少一条就把真话判成假话：
+    * `residence` —— 字段名、函数名、局部变量本来就叫这个，只是顺手被抄进了用例名；
+    * `text in names` —— 全名归 `test_every_test_named_in_the_docs_resolves` 管；
+    * `tok not in segments` —— 零出处又不是任何用例名一段的那些不在这个问题范围内：
+      反事实名（改坏之后会叫什么）、外部属性名（argparse 自己的 `option_strings`）。
+    `FRAGMENT` 要求整段只有一个 token，是为了放过 `test_wiring.py::test_…` 那种带路径与分隔符的引用，
+    它同时也就放过了带省略号的引用（`...` 加后半截）——`#215` 的 K5 量过：再写一条"带省略号放过"的腿
+    是零读者的分支，摘掉它整本 0 红，所以那条腿不在代码里；省略形本身问的是另一件事，登记在归档。
+    词段集合里也含着用例全名自己那一格：构造侧本来另有一条腿把它排除掉，`#215` 的 K6/K7 量出两条腿
+    互为冗余（都在场时各自摘掉都 0 红），于是删掉构造那一条、留下上面点名"全名归另一把尺"的这一条——
+    第三趟再摘它（同一把刀记作 K7）就红在合成用例的"全名放过"那一格，那一格是这条腿唯一的证人。
+    """
+    segments: dict[str, list[str]] = {}
+    for name in names:
+        words = name.split("_")
+        for i in range(len(words)):
+            for j in range(i + 1, len(words) + 1):
+                segments.setdefault("_".join(words[i:j]), []).append(name)
+
+    out: list[tuple[str, int, str, str]] = []
+    for page, body in sorted(corpus.items()):
+        for no, line in enumerate(body.splitlines(), 1):
+            for span in NAME_SPAN.finditer(line):
+                text = span.group(1).strip()
+                if text in names:
+                    continue
+                for tok in FRAGMENT.findall(text):
+                    if text != tok or tok not in segments or tok in residence:
+                        continue
+                    out.append((page, no, tok, " / ".join(sorted(set(segments[tok])))))
+    return out
+
+
+def test_a_manual_page_never_cites_a_case_by_a_fragment_of_its_name():
+    """手册页不许把用例名切成片段来引用——片段点不到用例，改名时也没有任何红。
+
+    全名那把尺只认 `test_` 开头的整串，所以切出来的片段对它完全透明：`comparison.md` 讲"三条用例补在
+    分支之后"时，引用写的是三条全名各自中间的一段，读者按它既点不到用例、也点不到代码里的任何东西，
+    而那三条用例改名时手册页不会变红。这一条问的就是那一句：
+    **反引号里那个裸名，读者能不能照着点到一个真存在的东西**。
+    限界：词段只从用例**函数名**派生，不含测试模块名（模块名片段归文件层那两条闸门管），
+    所以只活在文件名里的那些词不在范围内。
+    """
+    bad = _case_name_fragments(
+        {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()},
+        _defined_names() - {f.stem for f in TEST_FILES},
+        _code_residence(),
+    )
+    assert not bad, (
+        "手册页把用例名切成片段引用，代码里也没有这个名字，读者点不到、用例改名也不会红："
+        f"{bad}"
+    )
+
+
+def test_the_fragment_rule_names_a_case_and_spares_its_four_neighbours():
+    """判据的合成对照：六格各自只踩一条腿，摘掉任何一腿都会在这里现形。
+
+    这一条不读 `docs/`，所以它不会被文档修好而削弱，它钉的是"检测能力在"。名字全部现造，理由写在
+    `_code_residence` 那段里：真片段抄进这份正文会让它自己长出出处。这一条的牙由 `#215` 的刀还账——
+    K1 把 `comparison.md` 的一条全名退回片段（只有真语料那条用例红）、K2 摘掉出处那一腿（手册页里
+    一大批片段全成缺陷）、K3 摘掉"必须是用例名一段"那一腿（红在反事实名与外部名上）、K4 摘掉
+    "整段只有一个 token"那一腿（带路径的引用被卷进来）。
+    """
+    full = "test_two_arms_with_zz_probe_word_say_so_rather_than_agreeing"
+    names = {full}
+    cite = "这条由 `zz_probe_word` 钉住\n"
+
+    hit = _case_name_fragments({"probe.md": cite}, names, set())
+    assert hit == [("probe.md", 1, "zz_probe_word", full)], hit
+    # 有出处 → 放过：手册页里绝大多数片段是这个形状。
+    assert _case_name_fragments({"probe.md": cite}, names, {"zz_probe_word"}) == []
+    # 不是任何用例名的一段 → 放过：反事实名与外部属性名不归这一条问。
+    assert _case_name_fragments({"probe.md": cite}, {"test_whatever_else"}, set()) == []
+    # 全名 → 另一把尺管。
+    assert _case_name_fragments({"probe.md": f"这条由 `{full}` 钉住\n"}, names, set()) == []
+    # 反引号里不止一个 token（路径::用例 那一形）→ 不是纯点名；省略形靠的是同一格。
+    assert _case_name_fragments({"probe.md": "见 `probe.py::zz_probe_word`\n"}, names, set()) == []
+    assert _case_name_fragments({"probe.md": "见 `...zz_probe_word` 那一格\n"}, names, set()) == []
+    # 中段起点不必在名字开头：词段收成"任一段"而不是"至少两个词"，这一格是那一格的证人。
+    assert _case_name_fragments({"probe.md": "见 `arms_with_zz_probe_word`\n"}, names, set()) == [
+        ("probe.md", 1, "arms_with_zz_probe_word", full)]
 
 
 def test_the_guard_itself_can_fail():
