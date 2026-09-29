@@ -1147,7 +1147,8 @@ def test_the_value_scanner_reads_claims_and_not_every_equal_sign():
     assert all(no < 9 for _, no, _, _ in claims), claims
 
 
-LINE_CITE = re.compile(r"([\w.-]+\.py):(\d+)")
+# 第二枚号是可选的：`#223` 之前正则只吃斜杠前那一枚，成对写的第二枚根本不进扫描。
+LINE_CITE = re.compile(r"([\w.-]+\.py):(\d+)(?:/(\d+))?")
 # 只有 ≥4 个字符的 ASCII 标识符才算"这句话点到了某个名字"；文件自身的词干（`cli`、`test_cli`）
 # 和路径片段拿去比对永远会命中，那不是证据。
 STOP = {"src", "docs", "tests", "scripts", "python", "readme", "wolfengine", "self", "args",
@@ -1233,6 +1234,10 @@ def _line_citations(bodies: dict[str, str]) -> list[tuple[str, int, str, int, se
     `cli.py` 的 623 写在同一句里时，`events` 这个词会给两个号同时背书，而它对其中一个才是真名字。
     代价实测为零——13:51:02Z 数整份语料 50 处引用，去掉这一格会多放行 1 处（`assemble.py` 的 201 行
     靠 `persona` 站着，`persona` 不是这一段点名的文件），去掉后它仍然绿。
+
+    斜杠后那一枚也进闸门（`#223`）：这一族循环以前只产斜杠前那一枚，所以一句话里成对写两枚号时
+    第二枚过期不会让任何东西变红——**它不是被判成对，而是根本没判**。加宽后两枚各判一次、共用
+    同一句的标识符池，所以那种句子要两样东西都点名。
     """
     out = []
     for doc, body in bodies.items():
@@ -1243,8 +1248,11 @@ def _line_citations(bodies: dict[str, str]) -> list[tuple[str, int, str, int, se
                 sentence = _cited_sentence(block, no - 1 - max(0, no - 3), m.start())
                 stems = {Path(p).stem for p in PY_CITED.findall(sentence)}
                 drop = stems | {Path(m.group(1)).stem, m.group(1)} | STOP
-                out.append((doc, no, m.group(1), int(m.group(2)),
-                            _evidence(sentence) - drop, _strong_names(sentence) - drop))
+                ev, strong = _evidence(sentence) - drop, _strong_names(sentence) - drop
+                out.append((doc, no, m.group(1), int(m.group(2)), ev, strong))
+                # 成对写的那两枚号共用同一句的标识符池：句子要两样都点名，否则第二枚领不到证据。
+                if m.group(3):
+                    out.append((doc, no, m.group(1), int(m.group(3)), ev, strong))
     return out
 
 
@@ -1499,6 +1507,33 @@ def test_a_moved_number_names_the_line_it_wanted_and_a_missing_name_says_so():
     gone = probe(n + 1, "_no_such_predicate_anywhere_in_cli")
     assert len(gone) == 1, gone
     assert "找不到" in gone[0][3] and "差" not in gone[0][3], gone[0][3]
+
+
+def test_the_second_number_of_a_pair_citation_is_checked_too():
+    """`#223`：成对写的那两枚号里，第二枚以前整枚不进扫描。
+
+    形状是「一个 .py 名 + 冒号 + 号 + 斜杠 + 号」，正则只吃斜杠前那一枚，所以后面那一枚写着什么
+    都不会让任何用例变红——`#222` 收尾拿同一句的标识符池复算全语料三处成对形，登记的代价是 1 处 MISS。
+    那一处的号本身没指错，缺的是名字：两枚号共用一个池，句子没法同时点名两样东西，第二枚就领不到证据。
+    加宽之后每枚号各自领一次"那一行有没有这句话写出的名字"，仍共用同一句的标识符池——所以真要写
+    两枚号，句子就得把两样东西都点名，否则红的是这一条。
+    """
+    rows = (ROOT / "src/wolfengine/cli.py").read_text(encoding="utf-8").splitlines()
+    n = next(i for i, r in enumerate(rows, 1) if "_games_error" in r)
+    assert len(rows) > n + 40, "这一格要的是一枚在文件内、但那行没写这个名字的号"
+
+    def probe(first: int, second: int) -> tuple[list, list]:
+        cites = _line_citations(
+            {"probe.md": f"地板谓词 `cli._games_error` 在 `cli.py:{first}/{second}`。\n\n\n"})
+        return cites, _bad_line_cites(cites)
+
+    cites, bad = probe(n, n)
+    assert len(cites) == 2, f"成对形只扫到 {len(cites)} 枚，斜杠后那一枚没进闸门：{cites}"
+    assert bad == [], f"两枚都对却被报红：{bad}"
+
+    cites, bad = probe(n, n + 40)
+    assert len(bad) == 1, f"第二枚过期号还绿着（它那一行没有 `cli._games_error`）：{bad}"
+    assert bad[0][2].endswith(str(n + 40)), f"红的不是第二枚：{bad[0]}"
 
 
 def _line_cite_files() -> list[Path]:
