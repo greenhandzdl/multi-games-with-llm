@@ -291,11 +291,11 @@ rich 有两条坑，都各有一条测试钉着：
 | 空格填进占位符 / 每格都打点 | 前者 1 条、后者 4 条（整局 + 行列 + 两条单位用例） |
 | 直播旁边再写一份 `role_zh`（两份观众口径） | W1 → `...share_one_definition_of_each_viewing_rule[role_zh]`（数 `def` 那一侧抓住） |
 | `render_live.py` 不再 import `role_zh`，改成旁边一个 lambda，词留在注释里 | W2 → 同一条 `[role_zh]`。**这一具是改断言方式的理由**：旧的子串判断对它照样绿 |
-| `metrics.py` 不用 `events.voting_waves`，自己切一份波 | W3 → `...[voting_waves]`（消费者那一侧，owner 是 `events.py` 不是 `render_html.py`） |
+| `metrics.py` 不用 `events.voting_waves`，自己切一份波 | W3 → `...share_one_definition_of_each_viewing_rule[voting_waves]`（消费者那一侧，owner 是 `events.py` 不是 `render_html.py`） |
 | `speech_too_long:{len}` 改名成 `speech_long` | T2 → `test_wiring.py::test_the_over_long_flag_the_gate_writes_is_the_one_the_renderer_reads`（改 `legality` 一侧） |
 | 超长不记 flag / 渲染分支删掉 | T3、T5 → 同上那条 + `test_render_html.py::test_the_over_long_marker_needs_its_own_flag_and_prints_no_length` |
 | `>` 写成 `>=`（到线即超长）/ 只留前缀不留长度 | T1、T4 → 接缝那条（边界断言读 `legality.SPEECH_SOFT_LIMIT` 现算，不写死 141） |
-| 前缀放宽成 `speech`（弃票也说成超长）/ 把字符数印进标记 / 两处来源不去重 | T6、T7、T8 → `...markers_needs_its_own_flag...`（T8 另抓 `test_the_gate_is_visible_not_silently_applied`） |
+| 前缀放宽成 `speech`（弃票也说成超长）/ 把字符数印进标记 / 两处来源不去重 | T6、T7、T8 → `...marker_needs_its_own_flag...`（T8 另抓 `test_the_gate_is_visible_not_silently_applied`） |
 
 W 那三行是 2026-09-21 把守卫从 4 个名字扩到 8 个、并把"确实在用那一份"从子串改成 AST 导入名
 之后跑的（电池脚本一次性、不入库；只跑 `tests/test_wiring.py -k share_one_definition` 这一条参数化

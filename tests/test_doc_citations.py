@@ -12,6 +12,10 @@
 * `comparison.md` 还有三处把用例名**切成中段**来引用：全名那把尺只认 `test_` 开头的整串，对中段是透明的，
   而那些中段在 `src`/`tests`/`scripts` 里也没有出处，读者两头都点不到——补的就是 `_case_name_fragments`
   这一格（`#215`）；
+* `views.md` 有一处点名只写了名字中间一段还挂着省略号，而那一段里把一个词的单复数写错了一个字母
+  （**两条尺对它都是透明的**：全名尺不认不带 `test_` 前缀的串，片段尺只问光秃秃的一个词）：改成正确
+  那一形后它落回一条真用例，而写错时主人 0 条、改名时也不会有红——补的就是 `_elided_citation_defects`
+  这一格（`#216`）。错的那一形在这里只描述、不写成代码串：这个文件的那三棵树扫描面会替它长出出处。
 * `metrics.md` 那句"`wolf run` 没有 `--set`"是**反向**主张，任何"扫有没有过期参数"的机制都看不见
   它（它扫不到不存在的东西），所以另用一张表钉；
 * `README.md` 给 `test_calibrate_rehearsal.py` 写的条数少一条（那个文件长了读侧对账，注释没跟着数）；
@@ -31,15 +35,17 @@
 * 对照 **AST 里的函数名**而不是 `pytest --collect-only` 的输出。一是 subprocess 让测试不再离线
   自足；二是 addopts 已经带 `-q`，再叠一个 `-q` 会把 collect 输出压成每文件计数，一个"36 条全部
   MISSING"的假警报就是这么来的（见 views.md 里那条 harness 教训）。
-* 只收 `def test_*` / `async def test_*` 和测试模块名，不往名字集里灌字符串。文档现在不点名带
-  `[参数]` 后缀的用例，而正则也停在 `[` 之前，所以基础函数名足够。
+* 全名那把尺只收 `def test_*` / `async def test_*`，不往名字集里灌字符串，而正则停在 `[` 之前——
+  参数化 id 那一截不比，所以基础函数名足够。带 `[参数 id]` 后缀的**省略形**点名是 `#216` 那条尺的领地。
+* 两把"点不到用例"的尺子数主人时都只看 `_case_names()`（用例函数名，不含测试模块名）：模块名那一边
+  归文件层那两条闸门管。
 * 只认 `test_` 形状，不认一般标识符。文档里的 `` `region_budget_check` `` 这类引用有真价值，但
   "明确不做"清单里也写着将来才有的函数名，那类引用现在必然报红，报红三次就会被整体关掉。
 * 具数落点只认**同一条 bullet 里点到的那一节**，背书只认「N 具+名词」和「N 行的具名表」两种形状；
   跨 bullet 不算（读者照着有数的那一条查还是查不到）、裸的「N 具」不算（同一节里的裸数可能说的是
   另一批）、README 不给自己背书（拿手册查手册是自我背书）。这三条是声明的限界，各有一条合成用例钉着。
 
-写文档由此多了六条约束，都是这条扫描连 `README.md` 一起扫的直接后果（README 的"测试"一节把这话
+写文档由此多了七条约束，都是这条扫描连 `README.md` 一起扫的直接后果（README 的"测试"一节把这话
 也说给了人看）：
 
 * 讲历史时不能把**错名字**写成代码串。补这个闸门时抓到的第一条缺陷就是它自己那篇文档写漏了后半截，
@@ -57,6 +63,9 @@
 * 反引号里光秃秃的一个名字**不许是用例名的中段**：要么写全名，要么这个名字得在 `src`/`tests`/`scripts`
   的 `.py` 里真出现过（`#215`）。这一条不禁止省略——它只要求"读者点得到"：带 `文件名.py::` 前缀的、
   反引号里还写了别的话的，都不在它的问题里；它只问孤零零那一个词能不能落回一条用例。
+* 反引号里挂着省略号的那一个名字同样得**落得回去**：那一截在用例名里要恰好有一个主人，0 个是点不到、
+  2 个以上是歧义（`#216`）。`[参数 id]` 后缀可以留着，它跟着基础名一起数主人；带花括号、逗号、空格的
+  代码形状不算点名，接不住它们是设计。
 
 """
 
@@ -94,6 +103,15 @@ def _defined_names() -> set[str]:
                 if node.name.startswith("test_"):
                     names.add(node.name)
     return names
+
+
+def _case_names() -> set[str]:
+    """只有用例函数名，不含测试模块名。
+
+    两把"点不到用例"的尺子（`#215` 的片段、`#216` 的省略形）共用这一份名单：模块名那一边归文件层
+    那两条闸门管，混进来会让 `...render_html...` 这类只落在文件名上的引用被当成点到了用例。
+    """
+    return _defined_names() - {f.stem for f in TEST_FILES}
 
 
 def _stale(bodies: dict[str, str], defined: set[str]) -> dict[str, list[str]]:
@@ -206,7 +224,7 @@ def test_a_manual_page_never_cites_a_case_by_a_fragment_of_its_name():
     """
     bad = _case_name_fragments(
         {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()},
-        _defined_names() - {f.stem for f in TEST_FILES},
+        _case_names(),
         _code_residence(),
     )
     assert not bad, (
@@ -242,6 +260,79 @@ def test_the_fragment_rule_names_a_case_and_spares_its_four_neighbours():
     # 中段起点不必在名字开头：词段收成"任一段"而不是"至少两个词"，这一格是那一格的证人。
     assert _case_name_fragments({"probe.md": "见 `arms_with_zz_probe_word`\n"}, names, set()) == [
         ("probe.md", 1, "arms_with_zz_probe_word", full)]
+
+
+ELIDED_CITE = re.compile(r"^\.*\s*([A-Za-z_][A-Za-z0-9_]*)(?:\[[^\]\n]+\])?\s*\.*$")
+
+
+def _elided_citation_defects(corpus: dict[str, str], names: set[str]) -> list[tuple[str, int, str, int]]:
+    """手册页里落不回一条用例的省略形引用：反引号内是 `…名字`、`名字…`、`名字[参数 id]` 那种截断式点名。
+
+    形状只接得住一种东西：**除了省略号和一个标识符（可带一个方括号后缀）之外什么都没有**。那一批带
+    空格、花括号、圆点的代码形状（`{"A": "a_hard", ...}`、`log.append(x=...)`）不是点名，接不住是
+    设计而不是漏。判据是"主人恰好一条"：0 个是点不到，2 个以上是歧义，两边都算缺陷。
+    主人只数 `_case_names()`（与 `#215` 同一份名单）：现测（05:10:25Z）手册页里匹配形状的 3 处引用，
+    数不数模块名两形一字不变，留着这一手是因为它和 `#215` 共用名单、而不是为这一形新加的限定条件。
+    省略号按 ASCII 那一形取——`…` 那一形现测（05:00:14Z）在手册页里一处都没有，加进来是一条没有读者的分支。
+    """
+    out: list[tuple[str, int, str, int]] = []
+    for page, body in sorted(corpus.items()):
+        for no, line in enumerate(body.splitlines(), 1):
+            for span in NAME_SPAN.finditer(line):
+                text = span.group(1).strip()
+                if "..." not in text:
+                    continue
+                hit = ELIDED_CITE.match(text)
+                if not hit:
+                    continue
+                owners = sum(1 for n in names if hit.group(1) in n)
+                if owners != 1:
+                    out.append((page, no, text, owners))
+    return out
+
+
+def test_an_elided_case_citation_in_a_manual_page_lands_on_exactly_one_case():
+    """省略形引用必须落得回一条用例：落不回（0 个主人）和落得歧义（2 个以上）都算点不到。
+
+    全名尺看不见这一形——它只认 `test_` 开头的整串，而这些格子既不带前缀、又挂着省略号，
+    改名或写错一个字母都不会有红。这一条问的还是"读者能不能照着点到一个真存在的东西"。
+    """
+    bad = _elided_citation_defects(
+        {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()},
+        _case_names(),
+    )
+    assert not bad, (
+        "手册页里的省略形引用落不回一条用例（括号里是主人条数，0=点不到，≥2=歧义）：" f"{bad}"
+    )
+
+
+def test_the_elided_rule_needs_a_name_and_exactly_one_case_to_own_it():
+    """判据的合成对照：五格各自只踩一条腿，摘掉任何一腿都会在这里现形。
+
+    这一条不读 `docs/`，它钉的是"检测能力在"。名字全部现造，理由与 #215 那条同一本文件里写着：
+    真片段抄进扫描面会让引用自己长出主人。
+    """
+    one = {"test_alpha_zz_elided_probe_word_omega"}
+    two = one | {"test_beta_zz_elided_probe_word_omega"}
+
+    # 主人恰好一条 → 放过。
+    assert _elided_citation_defects({"probe.md": "见 `...zz_elided_probe_word...`\n"}, one) == []
+    # 一个主人都没有 → 报，且带着 0。
+    assert _elided_citation_defects({"probe.md": "见 `...zz_elided_probe_word...`\n"},
+                                    {"test_nothing_like_it"}) == [
+        ("probe.md", 1, "...zz_elided_probe_word...", 0)]
+    # 两个主人 → 歧义也报（这一格是 `owners != 1` 那一支唯一的证人）。
+    assert _elided_citation_defects({"probe.md": "见 `...zz_elided_probe_word...`\n"}, two) == [
+        ("probe.md", 1, "...zz_elided_probe_word...", 2)]
+    # 方括号后缀不影响形状。
+    assert _elided_citation_defects({"probe.md": "见 `...zz_elided_probe_word[role_zh]`\n"}, two) == [
+        ("probe.md", 1, "...zz_elided_probe_word[role_zh]", 2)]
+    # 代码形状（带花括号与逗号）不是点名，接不住是设计。
+    assert _elided_citation_defects({"probe.md": '见 `{"A": "zz_elided_probe_word", ...}`\n'},
+                                    {"test_nothing_like_it"}) == []
+    # 不带省略号的裸名归 #215 那把尺管，这一条不重复扫。
+    assert _elided_citation_defects({"probe.md": "见 `zz_elided_probe_word`\n"},
+                                    {"test_nothing_like_it"}) == []
 
 
 def test_the_guard_itself_can_fail():
