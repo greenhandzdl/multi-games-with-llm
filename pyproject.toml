@@ -26,6 +26,3 @@ packages = ["src/wolfengine"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-q --strict-markers"
-markers = [
-    "network: hits the real inference endpoint (deselect with -m 'not network')",
-]

@@ -17,18 +17,25 @@
    所以写错一个字母并不会让所有人都撞见：照着错版本重装出来的那本 `.venv` 里 README 那三条执行证人
    会红，而本机那本早就装好的 venv 里它们照旧绿（现测：错入口 + 旧 venv → 3 passed）。
    这一格读的是 pyproject 自己，不靠谁重装。
+5. `[tool.pytest.ini_options].markers` 里注册的每一枚 marker，要在 `tests/` 里真被挂过一次
+   （`#228`）。注册句会印进 `pytest --markers`，所以一句"拿 -m 可以 deselect 掉它"而没有任何用例
+   戴着的注册，是递给每一个敲的人一条不动任何东西的命令。`network` 就是被这一格抓住之后删掉的。
 
 判定住在 `_undeclared_imports()` / `_unread_dependencies()` / `_missing_from_lock()` /
-`_broken_entry_points()` 四个纯函数里，
-真仓库和夹具共用同一份（`#153` 那条规矩：判据不许在守卫和夹具里各抄一遍）。名字比对一律先过
+`_broken_entry_points()` / `_markers_without_users()` 五个纯函数里，
+真仓库和夹具共用同一份（`#153` 那条规矩：判据不许在守卫和夹具里各抄一遍）。前四条的包名比对一律先过
 `_canonical()` 走 PEP 503 口径——`pydantic-core` 和 `import pydantic_core` 是同一只包，换个分隔符
-或大小写不算缺陷，`uv` 自己也不这么认；报出来的仍是文件里写着的原样。
+或大小写不算缺陷，`uv` 自己也不这么认；报出来的仍是文件里写着的原样。第五条不走这张桌子：
+marker 名是 Python 标识符，`Network` 与 `network` 在 `--strict-markers` 下是两枚。
 
-限界四条，写的都是这一本明知会放过什么：只看顶层名，所以 `import a.b.c` 里住着的三方子模块
+限界五条，写的都是这一本明知会放过什么：只看顶层名，所以 `import a.b.c` 里住着的三方子模块
 不会被拆开对账；`optional-dependencies` 的每一组都算进"在册"，所以一个只有文档里提到、
 从来没人装的第二组 extra 不会被这本报出来；锁那一格只问"有没有同名包"，不问版本区间是否还对得上
 ——`uv lock --check` 那一步仍然归人（或 CI）跑，本包不假设那把命令在机器上存在；第四条只认冒号后
-那一个顶层属性名，所以 `pkg:Class.method` 那一形会被它报成缺陷，真要改成那种写法得先改这一本。
+那一个顶层属性名，所以 `pkg:Class.method` 那一形会被它报成缺陷，真要改成那种写法得先改这一本；
+第五条的"挂过"只认 `pytest.mark.x` 那个属性访问，所以 `from pytest import mark` 之后写 `@mark.x`
+不算使用者（报错方向是多事那一边），而它读的注册表整段允许为空——空语料那一格开不开火不由它自己
+证明，住在夹具那一格加一具还原刀里。
 """
 from __future__ import annotations
 
@@ -164,6 +171,42 @@ def _broken_entry_points(scripts: dict[str, str], tracked: set[str],
     return broken
 
 
+def _declared_markers(marker_specs: list[str]) -> set[str]:
+    """`markers = ["network: 说明……", "slow: 说明"]`，每一条形如 `name: description`，取冒号左边。
+
+    说明里也可以有冒号（`-m 'not network'` 那句就有），所以只切第一刀。
+    """
+    return {s.split(":", 1)[0].strip() for s in marker_specs if s.split(":", 1)[0].strip()}
+
+
+def _markers_without_users(declared: set[str], used: set[str]) -> list[str]:
+    """第五条判据：注册过的每一枚 marker，至少要在 `tests/` 里被挂过一次。
+
+    这里**不**走 `_canonical()`：marker 名是 Python 标识符，大小写敏感，`Network` 和 `network`
+    在 `--strict-markers` 下就是两枚。
+    """
+    return sorted(declared - used)
+
+
+def _marker_uses(bodies: dict[str, str]) -> set[str]:
+    """`tests/` 里真挂上去的 marker 名：`@pytest.mark.x` 与 `pytestmark = [pytest.mark.x]` 两种形。
+
+    走 AST 而不是扫文本，理由是这一本的语料包含它自己这一本：文本扫描会让一条夹具字符串替它
+    声称的那枚 marker 充当使用者（`#153` 那一形）。代价是只认点分那一形，所以
+    `pytest.mark` 别名（`from pytest import mark` 之后写 `@mark.x`）不算使用者——报的仍是多事那一边。
+    """
+    used: set[str] = set()
+    for path, text in bodies.items():
+        if not path.startswith("tests/") or not path.endswith(".py"):
+            continue
+        for node in ast.walk(ast.parse(text)):
+            if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Attribute)
+                    and node.value.attr == "mark" and isinstance(node.value.value, ast.Name)
+                    and node.value.value.id == "pytest"):
+                used.add(node.attr)
+    return used
+
+
 def _tracked_py_files() -> set[str]:
     out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True)
     assert out.returncode == 0, out.stderr.strip()[:120]
@@ -204,6 +247,16 @@ def _real_inputs() -> tuple[set[str], set[str], set[str], set[str], list[str], s
     tops = _imported_tops(bodies)
     test_texts = [t for f, t in bodies.items() if f.startswith("tests/")]
     return deps, tops, _own_roots(files), cfg_keys, test_texts, lock_names
+
+
+def _real_marker_inputs() -> tuple[set[str], set[str]]:
+    """第五条判据的两半：pyproject 里注册的那几张名，和 tests/ 里真挂上去的那几张名。"""
+    ini = _pyproject().get("tool", {}).get("pytest", {}).get("ini_options", {})
+    declared = _declared_markers(ini.get("markers", []))
+    files = _tracked_py_files()
+    bodies = {f: (ROOT / f).read_text(encoding="utf-8", errors="replace")
+              for f in files if f.startswith("tests/")}
+    return declared, _marker_uses(bodies)
 
 
 def test_no_third_party_import_lives_outside_the_manifest():
@@ -324,3 +377,53 @@ def test_a_console_script_is_only_fine_when_both_halves_of_the_target_exist():
         "wolf -> wolfengine.cli:run"]
     assert _broken_entry_points({"wolf": "wolfengine.cli"}, tracked, bodies) == ["wolf -> wolfengine.cli"]
     assert _broken_entry_points({}, tracked, bodies) == []
+
+
+def test_every_declared_pytest_marker_has_a_test_wearing_it():
+    """`#228` 第五条：注册过的每一枚 marker，至少要在 `tests/` 里被挂过一次。
+
+    开火时读数 1 枚：`network`。那句注册自己写着"拿 -m 'not network' 可以 deselect"，而这条 deselect
+    今天一条都不掉（反过来 `-m network` 会把整本都 deselect 掉）——`pytest --markers` 把这条没有对象的
+    命令印给每一个敲它看的人。真正挡端点的是
+    `tests/conftest.py` 里那具 `block_the_endpoint`：它先把 `Config().api_key_env` 指着的那个
+    环境变量删掉，再按名字 patch 掉 transport 与 socket 两层的动词，所以这套用例里挂不出一条
+    该挂 `network` 的用例——那些真发字节的用例发的是 127.0.0.1 上自己起的桩。
+
+    这一格的语料允许为空（注册删干净之后它就是空的），这跟第四条不一样：那一条读的是安装时才
+    解析的入口，不可能没有对象。所以它开不开火不由自己证明，证明住在
+    `test_a_marker_declaration_needs_a_wearer_and_a_string_is_not_one` 与一具"把那句注册原样塞回去"
+    的还原刀里。
+    """
+    declared, used = _real_marker_inputs()
+    dead = _markers_without_users(declared, used)
+    assert not dead, f"这些 marker 注册了而 tests/ 里一次都没挂过：{dead}"
+
+
+def test_a_marker_declaration_needs_a_wearer_and_a_string_is_not_one():
+    """夹具：第五条判据的形状，外加"提到 ≠ 挂上"那一格。
+
+    `pytestmark` 那一形必须算使用者，否则整文件级的 marker 会被成片误报。最后一格钉的是这本守卫
+    自己的生存方式：它的语料包含 tests/ 也包含它自己，所以一句写在字符串里的 marker 不能替那枚
+    marker 充当使用者——要算，得是代码里那个属性访问。别名 `from pytest import mark` 之后写
+    `@mark.x` 不在放行面里，那是这一本明知会放过的一形（放过＝多事的方向反了，先记着）。
+    """
+    assert _declared_markers(
+        ["network: hits the real endpoint (deselect with -m 'not network')", "slow: 慢的那几条"]
+    ) == {"network", "slow"}
+    assert _declared_markers(["", "   "]) == set()
+
+    bodies = {
+        "tests/test_worn.py": "@pytest.mark.decoy_one\ndef test_a():\n    assert 1\n",
+        "tests/test_marked.py": ("import pytest\n\npytestmark = [pytest.mark.decoy_two]\n"
+                                 "\ndef test_b():\n    assert 1\n"),
+        "tests/test_prose.py": ('"""we do not wear pytest.mark.decoy_three here"""\n'
+                                "import pytest\n\n\ndef test_c():\n"
+                                "    assert pytest.mark.decoy_four is not None\n"),
+        "src/mypkg/not_a_test.py": "@pytest.mark.decoy_five\ndef f():\n    return 1\n",
+    }
+    used = _marker_uses(bodies)
+    assert used == {"decoy_one", "decoy_two", "decoy_four"}, sorted(used)
+    assert _markers_without_users({"decoy_three", "decoy_five"}, used) == ["decoy_five", "decoy_three"]
+    assert _markers_without_users({"decoy_one"}, used) == []
+    assert _markers_without_users(set(), used) == []
+    assert _markers_without_users({"Decoy_One"}, used) == ["Decoy_One"]

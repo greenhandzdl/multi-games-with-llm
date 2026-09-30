@@ -19,7 +19,7 @@
 同一台桩有两个朝向：正面桩兑现 `stop`/`logprobs`/确定性，反面桩三样都收单不兑现。报告里每个判定
 都被两头钉过一次，写死任何一个结论都会红。
 
-这些用例只碰 loopback，不碰 `network` 标记的那台共享机器，也不需要真 key。
+这些用例只碰 loopback，不碰那台共享的端点机器，也不需要真 key。
 """
 
 from __future__ import annotations
