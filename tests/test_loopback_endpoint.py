@@ -186,3 +186,23 @@ def test_the_client_is_closed_even_when_the_run_raises():
     with pytest.raises(RuntimeError, match="崩了"):
         cli._run_and_close(boom, _T())
     assert closed == [1], "异常把 client 留成不关：close 必须在 finally 里，不是在它后面"
+
+
+@pytest.mark.parametrize("stub", ["refuse"], indirect=True)
+def test_a_refused_canary_aborts_the_batch_with_one_line_and_exit_1(stub, tmp_path):
+    """端点在 canary 那一跳就不答应时，批次**一局都不该开**，而给读者的必须是 `cmd_batch`
+    自己那句中止报告：一行、rc 1、点名是哪一跳（开局）以及是哪一类故障（端点不可用）。
+
+    这一格不是装饰：`批次中止：…` 那句话在 CLI 里只写了一遍，而它上游唯一的成因是
+    `batch.py` 里 canary 那一枚处理器抛的 `BatchAborted`。批次层抛出的形状有它自己的证人
+    （`tests/test_batch_paired.py` 里那条 `pytest.raises`），所以"会抛"一直是被钉住的；
+    没人钉的是**抛出来之后给人看的那一句**。普查量到这一格从未被执行（`#236`，
+    19:17:33Z，46 格处理器体语句里 3 格从未执行，这是其中两格）。
+    """
+    r = _wolf(stub, tmp_path, "batch", "--configs", "A,B", "--set", "B.temperature=0.6",
+              "--games", "1", "--seed0", "11", "--out", str(tmp_path))
+    assert "Traceback" not in r.stderr, r.stderr
+    assert r.returncode == 1, f"rc={r.returncode} out={r.stdout!r} err={r.stderr!r}"
+    assert "批次中止" in r.stderr, r.stderr
+    assert "canary" in r.stderr and "EndpointUnavailable" in r.stderr, r.stderr
+    assert "批次 ->" not in r.stdout, r.stdout

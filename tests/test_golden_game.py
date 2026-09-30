@@ -1175,3 +1175,28 @@ def test_m8_scores_the_witch_on_the_night_the_seer_was_knifed():
     assert out2["witch_saves"] == 0 and out2["seer_nights_knifed"] == 1
     assert out2["witch_save_rate_on_seer"] == 0.0
 
+
+
+def test_a_torn_bracket_in_a_refusal_is_skipped_instead_of_taking_the_report_down():
+    """`attempts[]` 里的句子是从盘上的日志读来的，而日志可能由**上一版引擎**写下：括号那一格
+    被截断成 `invented_event_ids:['e9999', 'e8` 时 `ast.literal_eval` 抛 SyntaxError。M4 的读法
+    必须把这轮当成"没点名"跳过，而不是让整份报告跟着一起崩。普查量到这一枚处理器的 `continue`
+    在整套离线测试里从未被执行（`#236`，19:17:33Z，46 格处理器体语句里 3 格从未执行），
+    所以这条容忍此前只有代码、没有证人。
+    """
+    def _say(seq: int, seat: int, violation: str) -> Event:
+        stats = {"cited": [], "valid": [], "not_visible": [], "invented": [],
+                 "malformed": [], "uncited": False}
+        return Event(seq=seq, kind=Kind.SPEECH, day=1, phase="day_speech", visibility="all",
+                     actor=seat,
+                     payload={"text": f"{seat}号：我不重复那句话。", "act": "defend",
+                              "meta": {"citation_stats": stats, "violations": [], "flags": []}},
+                      attempts=({"violations": [violation]},))
+
+    out = metrics.m4_hallucination_rates([
+        _say(1, 5, "invented_event_ids:['e9999', 'e8"),     # torn: unreadable bracket
+        _say(2, 6, "invented_event_ids:['e7777']"),         # intact: one real objection
+    ])
+    assert out["n_speech"] == 2, out
+    assert out["wrong_cite_rate"] == pytest.approx(1 / 2, abs=1e-9), \
+        "断裂那一轮不许进分子，也不许把整份报告带走"
