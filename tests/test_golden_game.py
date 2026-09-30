@@ -852,6 +852,34 @@ def test_a_citation_copied_out_of_the_prompt_example_is_named_separately(golden)
         "the headline must not shrink because a diagnosis was added"
 
 
+def test_a_refusal_naming_a_seat_number_is_not_read_as_a_citation():
+    """`attempts[]` carries the gate's own sentences, and not all of them list event ids:
+    `legality.py` writes `target_not_legal:5 (只能 [2, 3, 4, 7, 8, 9])` for a seat number, so the
+    thing after the colon parses as the integer 5 — and `set(5)` raises TypeError, which M4's
+    reader never caught, taking the whole report down instead of reporting one turn. This engine
+    only puts it on the phases listed in `HARD_PHASES`, and M4 reads speeches, so what is pinned
+    here is the reader's real domain: whatever `attempts[]` in a log on disk happens to say.
+    """
+    def _raw(seq: int, seat: int, violation: str) -> Event:
+        stats = {"cited": [], "valid": [], "not_visible": [], "invented": [],
+                 "malformed": [], "uncited": False}
+        return Event(seq=seq, kind=Kind.SPEECH, day=1, phase="day_speech", visibility="all",
+                     actor=seat,
+                     payload={"text": f"{seat}号：这一轮我不点名。", "act": "defend",
+                              "meta": {"citation_stats": stats, "violations": [], "flags": []}},
+                     attempts=({"violations": [violation]},))
+
+    out = metrics.m4_hallucination_rates(
+        [_cited(1, 5, attempts=("e9999",)),
+         _raw(2, 6, "target_not_legal:5 (只能 [2, 3, 4, 7, 8, 9])"),
+         _raw(3, 7, "no_action_parsed"),
+         _raw(4, 8, "act_not_as_assigned:speech (法官指派 defend)")])
+    assert out["n_speech"] == 4, out
+    assert out["wrong_cite_rate"] == pytest.approx(1 / 4, abs=1e-9), \
+        "the seat number and the two id-less messages must not enter the numerator"
+    assert out["example_copy_turns"] == 0, out
+
+
 def test_m5_treats_a_pk_round_as_its_own_round(golden):
     """A PK is a second speaking wave in the same day. Merging it into the day would compare
     6 short replies against each other and report a collapse the table did not have."""

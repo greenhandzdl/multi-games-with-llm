@@ -844,7 +844,7 @@ def _objected_ids(e: Event) -> set[str]:
             head = str(v).split(" (")[0]
             _, _, listed = head.partition(":")
             try:
-                ids |= set(ast.literal_eval(listed))
+                ids |= set(ast.literal_eval(listed)) if listed.startswith("[") else set()
             except (ValueError, SyntaxError):
                 continue
     return ids
