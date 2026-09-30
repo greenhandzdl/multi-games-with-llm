@@ -3522,6 +3522,210 @@ def test_the_count_mask_blind_spots_only_the_digits_a_rerun_forgets():
         "`tests/test_a.py` 里有 98 条自报文本"
 
 
+# ------------------------------------------------------- 自称逐字的摘录块（#224）
+VERBATIM_WINDOW = 8        # 声明离围栏的实测最大距离（03:19:59Z 逐块量到 1..8 之间，最远那一枚在 `#194`
+                           # 那一块的交代行）：再远一行的声明这一支不认领——放宽一寸，邻居的「逐字」就能
+                           # 替一块从没自称逐字的围栏背书，那正是 K3 那把刀教过的借法。
+MD_NAMED = re.compile(r"`((?:docs/|src/|tests/|scripts/)?[\w.-]+\.md)`")
+
+
+def _mask_all_digits(ln: str) -> str:
+    """把每一串连续数字抹成 `N`——问的是"除数字外一字未动吗"。
+
+    这支和 `_mask_counts` 不能合并：那一支的形状是**借** `#44`/`#61` 三条判据的，问的是"这一行的
+    计数主张是不是只重数过"，它只肯抹被认出来的那几个数；这一支抹所有数字。把 `_registered` 换成
+    这一支，名册里任何一行改任何数字都不再报——`#171` 那道松口会悄悄变大。
+    """
+    return re.sub(r"\d+", "N", ln)
+
+
+def _verbatim_blocks(bodies: dict[str, str]) -> list[tuple[str, int, str, list[str]]]:
+    """(文档, 围栏起行行号, 起行往上 `VERBATIM_WINDOW` 行的窗口, 块内非空行)。
+
+    认领的形状只有一条：```text 围栏，且起行往上那一段散文里写着「逐字」。归档声明摘录的说法有
+    好几种（整行逐字／逐字照抄／一字未改），共同的是这两个字。空行不进块——和 `#171` 的名册同口径。
+    """
+    out = []
+    for doc, body in bodies.items():
+        lines = body.splitlines()
+        i = 0
+        while i < len(lines):
+            if lines[i].strip() != "```text":
+                i += 1
+                continue
+            end = next((j for j in range(i + 1, len(lines)) if lines[j].strip() == "```"), None)
+            if end is None:
+                i += 1
+                continue
+            window = "\n".join(lines[max(0, i - VERBATIM_WINDOW):i])
+            if "逐字" in window:
+                out.append((doc, i + 1, window, [ln for ln in lines[i + 1:end] if ln.strip()]))
+            i = end + 1
+    return out
+
+
+def _line_anchors(ln: str) -> list[str]:
+    """本行内**按书写顺序**的锚——同一行写了两枚时，后头那一枚才是出处声明的主人。
+
+    不能拿 `_commit_anchors` 的结果当次序：它返回的是 `(行号, SHA)` 集合的排序，同一行内按字典序排，
+    "写在后头的那枚"和"字典序大的那枚"只是常常恰好同一枚。第九格红过一趟才分开这两者（**03:05:26Z**，
+    报的是 `读不到 bbbbbbb:docs/pinned.md`，而 b 那一枚是复述、不是出处）。宽度豁免同一条：十二位那一类
+    是内容哈希，今天没有一枚是提交。
+    """
+    return [m.group(1) for m in ANCHOR_CAND.finditer(ln) if len(m.group(1)) != HASH_WIDTH]
+
+
+def _pinned_excerpt_target(window: str) -> tuple[str, str] | None:
+    """(锚, 仓库内路径)——出处必须写成**一行**：同一行既点着锚又点着文件，取最贴近围栏的那一行。
+
+    取最贴近的那一行而不是"恰好那一行"：一段交代里常先复述搬运前的锚、再点名摘录来自的那一版，同一行
+    里也是这个次序（`_line_anchors` 管的就是那一格）。
+    锚必须写成 `#221` 认的那种形状（反引号紧接或 `git show ` 紧接）——裸写的一串十六进制既进不了锚闸门，
+    也让这一块答不出"来自哪一版"。
+
+    为什么收紧到同一行（02:40:38Z 那把没落下的刀教的）：宽窗版只问"窗口里有没有锚、窗口里有没有
+    文件"，于是把某块出处里的文件名摘掉后它仍判绿——往上第七行一句讲别的规矩的闲话里也有同一个
+    文件，邻居替它背了书。一句「摘自 X 那一版的 Y」拆成两格独立询问就不成句了：另一把刀 K4 在紧尺下
+    02:53:13Z 红在那一块自己的格子上（报的是"没点名"），宽窗那一版报的是绿。
+    只问锚还有第二种借法：`#194` 那几块的窗口里坐着的锚本来是给名册点名的，不是出处声明——第七格
+    钉的就是"有锚没文件"这一形（02:56:37Z 拿 HEAD 那一版的散文量过两形：宽窗与紧尺报的是同一批四处，
+    其中那一块八行的摘录两形都答不出出处，不是配不上）。
+    已知的让步：若贴近围栏那一行的锚没配文件、而更上面有一行配了，这里认更上面那一句。这一形今天的
+    语料里一处也没有——02:49:38Z 逐块量过每一块自称逐字的摘录，锚与文件全坐在同一行，"只有锚没有文件"
+    的行一格也没落进；量出来的代价是零，所以这条尺子收紧而不必改任何一句散文。
+    """
+    if not _commit_anchors(window):
+        return None
+    for ln in reversed(window.split("\n")):
+        hits = _line_anchors(ln)
+        if not hits:
+            continue
+        md = MD_NAMED.findall(ln)
+        if md:
+            return hits[-1], md[-1]
+        if "README" in ln or "手册" in ln:
+            return hits[-1], "README.md"
+    return None
+
+
+def _excerpt_defects(blocks: list[tuple[str, int, str, list[str]]],
+                    source) -> list[str]:
+    """三种红，每种都点名能下笔改的那个格子：定位不到出处、有一行配不上、重数过却没声明。
+
+    中间那一格是这条判据的全部牙：摘来的行里带着计数主张，那几个数在搬运那一刻就过期了，
+    归档按今天的树重数——那是 `#171` 定过的合法处置，可它同时让"整行逐字"这句声明变成假话。
+    合法的做法是**把声明改成与实物一致**（窗口里写下"重数"），而不是让标题继续自称一字未动。
+    """
+    out = []
+    for doc, no, window, rows in blocks:
+        target = _pinned_excerpt_target(window)
+        if target is None:
+            out.append(f"{doc}:{no} 自称逐字却没点名摘来那一版的锚或文件")
+            continue
+        sha, path = target
+        src = source(sha, path)
+        if src is None:
+            out.append(f"{doc}:{no} 读不到 {sha}:{path}")
+            continue
+        lines = src.splitlines()
+        masked = {_mask_all_digits(ln) for ln in lines}
+        digit_only = 0
+        for ln in rows:
+            if ln in lines:
+                continue
+            if _mask_all_digits(ln) in masked:
+                digit_only += 1
+            else:
+                out.append(f"{doc}:{no} 摘录里这一行在 {sha}:{path} 配不上：{ln[:40]!r}")
+        if digit_only and "重数" not in window:
+            out.append(f"{doc}:{no} 有 {digit_only} 行只有数字相同，声明却没写重数这件事")
+    return out
+
+
+def test_the_verbatim_scanner_splits_the_nine_kinds_of_claim():
+    """九格各钉一次：逐字对上的、只数字不同且声明过的、只数字不同却没声明的、改了字的、没点名的、窗口里没认领词的、只有锚没点文件的、锚和文件分坐在两行的、一行里写了两枚锚的。
+
+    第二、三格是这一族唯一的松口：归档里摘来的行带着计数主张，那几个数在搬运的那一刻就过期了，
+    数用例的那两族闸门只肯对今天的树——所以那些数字按今天重数、其余一字不动。松口只在这一格有效，
+    它必须由声明换来：第四格证明了**不是数字**的改动一样红。
+    第六、七格管的是认领的两只脚：围栏自己不算摘录——全语料的 text 围栏里只有一部分被人写过来源说明，
+    把围栏本身当认领就会替其余那些输出编造主张；而只点号不点文件的窗口不许拿那枚锚当出处——
+    第七格钉的就是这条默认值。
+    第八格钉的是同一条判据的另一半，它的动因是一次没落下的刀（02:40:38Z）：把归档里那句出处点名的
+    文件摘掉，这一条却仍判绿——往上第七行另有一句讲别的规矩的闲话里也提过同一个文件，邻居替它背了书。
+    出处必须是**一句**话（「摘自 X 那一版的 Y」），锚与文件分坐两行时那句主张没有主人。
+    第九格钉的是同一行内的取法：一段交代里先复述搬运前的锚、再点名摘录来自的那一版，主人是**写在上头
+    那一枚之后**的那一枚——按字典序取就不认书写的次序了（这一格的两个名字是故意反着排的）。
+    """
+    src = ("先一行。\n"
+           "这一行逐字搬过来了。\n"
+           "`tests/test_demo.py`（现 70 条）只数字不同。\n"
+           "这一行的一个字被改过。\n")
+    source = {("aaaaaaa", "docs/pinned.md"): src}
+
+    def probe(window: str, body: str) -> list:
+        text = window + "\n```text\n" + body + "```\n\n后面还有别的东西。\n"
+        return _excerpt_defects(_verbatim_blocks({"a.md": text}),
+                                lambda sha, path: source.get((sha, path)))
+
+    ok = "#### 摘自 `docs/pinned.md` 那一版（`aaaaaaa`），整行逐字\n\n说明：数字重数、其余逐字。\n"
+    assert probe(ok, "这一行逐字搬过来了。\n") == []
+    assert probe(ok, "`tests/test_demo.py`（现 71 条）只数字不同。\n") == []
+    no_decl = "#### 摘自 `docs/pinned.md` 那一版（`aaaaaaa`），整行逐字\n"
+    bad = probe(no_decl, "`tests/test_demo.py`（现 71 条）只数字不同。\n")
+    assert len(bad) == 1 and "重数" in bad[0], bad
+
+    touched = probe(ok, "这一行的一个字被动过。\n")
+    assert len(touched) == 1 and "配不上" in touched[0], touched
+
+    orphan = "#### 摘来的这一版，整行逐字\n\n说明：数字重数、其余逐字。\n"
+    lone = probe(orphan, "这一行逐字搬过来了。\n")
+    assert len(lone) == 1 and "没点名" in lone[0], lone
+
+    plain = probe("#### 与摘录这件事无关的一节\n\n这里只是讲道理，围栏里写的是命令的输出。\n",
+                  "任写的一行。\n")
+    assert plain == [], f"围栏枚举把不像摘录的块也报了：{plain}"
+
+    nopath = "#### 摘自那一版（`aaaaaaa`），整行逐字\n\n说明：数字重数、其余逐字。\n"
+    assert len(probe(nopath, "这一行逐字搬过来了。\n")) == 1
+
+    neighbor = ("还有一处没动：README 里那句规矩另有其主，这一行没有锚。\n"
+                "#### 摘自上面点名的那一版，整行逐字（`aaaaaaa`）\n")
+    split = probe(neighbor, "这一行逐字搬过来了。\n")
+    assert len(split) == 1 and "没点名" in split[0], \
+        f"邻居那行的 README 替这句出处背了书：{split}"
+
+    ordered = ("#### 摘自 `docs/pinned.md` 那一版，先复述搬运前那一枚（`bbbbbbb`）、出处是后头这一枚"
+               "（`aaaaaaa`），整行逐字\n\n说明：数字重数、其余逐字。\n")
+    back = probe(ordered, "这一行逐字搬过来了。\n")
+    assert back == [], f"同一行里两枚锚，取的是字典序大的那枚而不是写在后头的那枚：{back}"
+
+
+def test_a_block_that_calls_itself_verbatim_matches_the_version_it_names(full_and_shallow_clone):
+    """归档里每一块自称逐字的摘录，都得经得起拿它点名那一版来对账。
+
+    动因是 `#223` 自己踩的那一步：为了让数用例的那两族闸门转绿，摘录里那两个数被改成了今天的数——
+    按 `#171` 那一族早就定过的规矩这是**合法**的处置（数字重数、其余逐字，锚就在往上两行之内），
+    可那一块的标题写的却是「整行逐字」。没人把标题和实物对过一次，于是"合法的重数"和"假的逐字声明"
+    是同一副样子。这一条把那句散文变成可核对的话。
+    """
+    if git_history_is_shallow(ROOT):
+        pytest.skip("这份克隆的 git 历史被截断了，逐字摘录点名的那些版读不到——这一条要读历史才答得出")
+    cache: dict[tuple[str, str], str | None] = {}
+
+    def source(sha: str, path: str) -> str | None:
+        if (sha, path) not in cache:
+            r = subprocess.run(["git", "show", f"{sha}:{path}"], cwd=ROOT,
+                               capture_output=True, text=True)
+            cache[(sha, path)] = r.stdout if r.returncode == 0 else None
+        return cache[(sha, path)]
+
+    blocks = _verbatim_blocks({f.name: f.read_text(encoding="utf-8") for f in DOCS})
+    assert len(blocks) >= 6, f"只扫到 {len(blocks)} 块自称逐字的摘录，多半是围栏枚举或窗口坏了"
+    defects = _excerpt_defects(blocks, source)
+    assert not defects, f"自称逐字的摘录和它点名那一版对不上：{defects[:4]}"
+
+
 # ------------------------------------------------- 可粘贴区里不许坐着拨端点的那一条（#198）
 BASH_FENCE = re.compile(r"^```bash[ \t]*\n(.*?)^```", re.S | re.M)
 
