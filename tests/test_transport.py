@@ -374,3 +374,17 @@ async def test_zero_and_silence_are_two_different_answers_in_the_usage_block(mon
     junk = {**ANSWER, "usage": {**ANSWER["usage"], "prompt_tokens_details": "unavailable"}}
     got_junk = await _chat(_transport(lambda r: httpx.Response(200, json=junk), monkeypatch))
     assert "cached_tokens" not in got_junk.raw_usage, "一整个坏掉的分支不算一次读数"
+
+
+async def test_a_refused_200_says_which_kind_of_bad_body_it_was(monkeypatch):
+    """两种「200 但 body 不能用」各自留下一句原因，而不是共用一个 `ok=False`。
+
+    这句话有人读：`llm.py` 把 `res.error` 原样搬进那次的 `last_error`，`actors.py` 再把它写成
+    `Proposal.failure`，所以它就是日志里那一句。剩下 `ok=False` 只能说"这一问没答上"，读者分不开
+    "端点吐回来的不是 JSON"和"是 JSON、里面没有 choices"，而这两种坏法的处理方向不一样。
+    """
+    for make, reason in ((lambda: httpx.Response(200, text="not json at all"), "unparseable body"),
+                         (lambda: httpx.Response(200, json={"usage": {}}), "no choices")):
+        res = await _chat(_transport(lambda request: make(), monkeypatch))
+        assert not res.ok
+        assert reason in res.error, f"原因被擦成了这一形：{res.error!r}"
