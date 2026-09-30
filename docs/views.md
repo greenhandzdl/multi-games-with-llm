@@ -266,7 +266,7 @@ rich 有两条坑，都各有一条测试钉着：
 
 ## 这些守卫是怎么验的
 
-渲染层 64 条用例（`test_render_html.py` 34 + `test_render_live.py` 30）里，每条都被"把被保护的
+渲染层 71 条用例（`test_render_html.py` 34 + `test_render_live.py` 37）里，每条都被"把被保护的
 分支改坏"验过一次它会真的红，改完再按 sha256 校验还原成字节相同的文件。这张表记的是**哪一具刀归
 哪条用例盯**；某一轮跑出来的判决读数（具名红用例、判词、超时秒数）逐轮记在 `docs/iterations.md`
 〈表头没写「变异」的那张账表搬进这一份〉与〈另外三本手册页里的逐片电池账搬进这一份〉两节。
@@ -299,6 +299,15 @@ rich 有两条坑，都各有一条测试钉着：
 | 超长不记 flag / 渲染分支删掉 | T3、T5 → 同上那条 + `test_render_html.py::test_the_over_long_marker_needs_its_own_flag_and_prints_no_length` |
 | `>` 写成 `>=`（到线即超长）/ 只留前缀不留长度 | T1、T4 → 接缝那条（边界断言读 `legality.SPEECH_SOFT_LIMIT` 现算，不写死 141） |
 | 前缀放宽成 `speech`（弃票也说成超长）/ 把字符数印进标记 / 两处来源不去重 | T6、T7、T8 → `...marker_needs_its_own_flag...`（T8 另抓 `test_the_gate_is_visible_not_silently_applied`） |
+| 键盘上的 Ctrl-C 不再被 `watch` 接住（那一枚 `except` 换了对象） | K1 → `test_ctrl_c_at_the_keyboard_exits_with_a_code_not_a_traceback` |
+| 外层那枚 `except` 元组里 `ImportError` / `ValueError` / `OSError` 各删一次（没有 `termios` 的平台、已关闭的 stdin、Linux 那一形的 ENOTTY） | K2、K3、K4 → 三条各盯一条：`test_a_platform_without_termios_stays_a_no_op`、`test_a_closed_stream_on_stdin_is_not_read_as_a_terminal`、`test_an_inappropriate_device_where_the_terminal_was_is_a_no_op` |
+| 入口那一格或还原那一格不再认 `termios.error`（它不是 `OSError`） | K5、K6 → `test_a_descriptor_closed_underneath_the_viewer_does_not_raise`、`test_losing_the_terminal_mid_game_still_exits_cleanly` |
+| 退出时根本不还原（那一枚 `tcsetattr` 删掉） | K7 → `test_the_terminal_is_left_as_it_was_found` |
+
+K 那四行是 `#225` 那一轮跑的：七具刀逐具下、逐具按 sha256 校验还原成字节相同的文件，那一轮的
+具名账在 `docs/iterations.md`〈直播键盘层那三枚免责标记〉一节。同一轮里 `test_the_terminal_is_left_as_it_was_found`
+比对的是规范位、回显位与两个读字符的计时旋钮，不是整份终端参数表——macOS 的 pty 在 `TCSADRAIN`
+回来之后会多报一个 `lflag` 位，钉住整份表就把内核的记账钉进了用例。
 
 W 那三行是 2026-09-21 把守卫从 4 个名字扩到 8 个、并把"确实在用那一份"从子串改成 AST 导入名
 之后跑的（电池脚本一次性、不入库；只跑 `tests/test_wiring.py -k share_one_definition` 这一条参数化

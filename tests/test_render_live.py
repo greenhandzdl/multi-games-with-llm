@@ -460,3 +460,150 @@ def test_an_ignored_key_does_not_redraw(gold, monkeypatch):
     con = _Recorder()
     render_live.watch(gold[0].path, console=con, poll=0)
     assert len(con.frames) == 1, [f[:1] for f in con.frames]
+
+
+# ---------------------------------------------------------- the terminal itself (`_cbreak`)
+class _FdOnly:
+    """A stdin that insists it is a terminal and hands out one given fd number — the shape a
+    real terminal has, and the only way to talk about an fd that stops being one."""
+
+    def __init__(self, fd: int):
+        self._fd = fd
+
+    def isatty(self) -> bool:
+        return True
+
+    def fileno(self) -> int:
+        return self._fd
+
+
+def test_ctrl_c_at_the_keyboard_exits_with_a_code_not_a_traceback(gold, monkeypatch):
+    """Ctrl-C is the exit a presenter reaches for, and the loop owes them a status code: an
+    uncaught `KeyboardInterrupt` buries the last frame under a traceback, which is the one
+    thing a demo can least afford in front of a room."""
+    def keystroke(timeout):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(render_live, "_read_key", keystroke)
+    try:
+        code = render_live.watch(gold[0].path, console=_Recorder(), poll=0)
+    except KeyboardInterrupt:
+        # pytest treats an escaped KeyboardInterrupt as a session abort, not a test failure: it
+        # prints a banner, kills the run, and every other verdict in the book goes undelivered.
+        # Translated here so that a regression in this cell costs one red instead of the run.
+        raise AssertionError("Ctrl-C 从 watch 里逃出来了：最后一帧下面压着的是 traceback") from None
+    assert code == 0
+
+
+def test_a_platform_without_termios_stays_a_no_op(monkeypatch):
+    """The import is inside the function, so blocking the module name is the whole platform:
+    this is the leg the "platform dependent" excuse was about, and it needs no excuse — a box
+    without `termios` has to keep drawing frames, not fail at the first poll."""
+    import io
+
+    monkeypatch.setitem(sys.modules, "termios", None)
+    monkeypatch.setattr(sys, "stdin", io.StringIO(""))
+    with render_live._cbreak():
+        pass
+
+
+def test_a_closed_stream_on_stdin_is_not_read_as_a_terminal(tmp_path, monkeypatch):
+    """`watch` behind a detached run can meet a `stdin` that is already closed. Reading it
+    raises `ValueError` from `isatty()` itself — before there is any fd to speak of — and that
+    has to stay a no-op rather than a crash on the way into the first frame."""
+    import io
+
+    handle = io.TextIOWrapper(io.BytesIO(b""))
+    handle.close()
+    monkeypatch.setattr(sys, "stdin", handle)
+    with render_live._cbreak():
+        pass
+
+
+def test_a_descriptor_closed_underneath_the_viewer_does_not_raise(monkeypatch):
+    """Between `fileno()` and the ioctl the descriptor can go away, and what comes back is
+    `termios.error` — which is *not* an `OSError` (its MRO is `termios.error → Exception`,
+    measured, and that is the whole defect this test exists for). A dead fd means "no terminal
+    to make raw", which is a no-op, not a traceback in front of the audience."""
+    import os
+
+    fd = os.open(os.devnull, os.O_RDONLY)
+    os.close(fd)
+    monkeypatch.setattr(sys, "stdin", _FdOnly(fd))
+    with render_live._cbreak():
+        pass
+
+
+def test_an_inappropriate_device_where_the_terminal_was_is_a_no_op(monkeypatch):
+    """The same "there is no terminal here" arrives as `termios.error` on macOS and as a plain
+    `OSError` (ENOTTY from the ioctl) on Linux — two classes, one promise. The cell above can
+    only show the first, so this one injects the second instead of waiting for a Linux box:
+    without it the `OSError` member of the tuple has no witness anywhere the suite runs."""
+    class _FilenoRefuses:
+        def isatty(self) -> bool:
+            return True
+
+        def fileno(self) -> int:
+            raise OSError(25, "Inappropriate ioctl for device")
+
+    monkeypatch.setattr(sys, "stdin", _FilenoRefuses())
+    with render_live._cbreak():
+        pass
+
+
+def test_the_terminal_is_left_as_it_was_found(monkeypatch):
+    """The one job `_cbreak` has when it *does* find a terminal is handing the settings back:
+    a viewer that leaves a shell in cbreak mode breaks that terminal for everything that
+    follows it. Compared flag by flag rather than list by list, because a macOS pty reports
+    one extra `lflag` bit after a `TCSADRAIN` round-trip (measured) — pinning the whole list
+    would pin the kernel's bookkeeping instead of this code's promise."""
+    import os
+    import pty
+    import termios
+
+    master, slave = pty.openpty()
+    try:
+        before = termios.tcgetattr(slave)
+        monkeypatch.setattr(sys, "stdin", _FdOnly(slave))
+        with render_live._cbreak():
+            during = termios.tcgetattr(slave)
+        after = termios.tcgetattr(slave)
+    finally:
+        os.close(master)
+        os.close(slave)
+    assert not during[3] & termios.ICANON, "cbreak 没落到实处：规范模式还开着"
+    assert not during[3] & termios.ECHO, "cbreak 没落到实处：按键还在回显"
+    assert bool(after[3] & termios.ICANON) == bool(before[3] & termios.ICANON), (
+        "退出时没把规范模式还回去")
+    assert bool(after[3] & termios.ECHO) == bool(before[3] & termios.ECHO), (
+        "退出时没把回显还回去")
+    assert after[6][termios.VMIN] == before[6][termios.VMIN]
+    assert after[6][termios.VTIME] == before[6][termios.VTIME]
+
+
+def test_losing_the_terminal_mid_game_still_exits_cleanly(gold, monkeypatch):
+    """The other end of the same wire: the tty goes away *during* the game (an ssh session
+    drops), so the restore on the way out is the call that raises. A finished game still owes
+    the caller an exit code, and the frame it already printed stays on screen."""
+    import os
+    import pty
+
+    master, slave = pty.openpty()
+    polls = 0
+    try:
+        def keystroke(timeout):
+            nonlocal polls
+            polls += 1
+            if polls == 2:
+                os.close(slave)          # 两次轮询之间，终端没了
+                return "q"
+            return "g"
+
+        monkeypatch.setattr(render_live, "_read_key", keystroke)
+        monkeypatch.setattr(sys, "stdin", _FdOnly(slave))
+        assert render_live.watch(gold[0].path, console=_Recorder(), poll=0) == 0
+    finally:
+        os.close(master)
+        if polls < 2:
+            os.close(slave)
+    assert polls == 2, "循环没走到按键那一格，这一趟什么也没测"

@@ -7838,7 +7838,7 @@ N1 / N4 / N7 / N8 四具红在同一条用例上，但红在不同那半句：�
 #### 摘自 `docs/views.md` 第 252 到 253 行与第 269 行（搬运前那一版，`297d912`），逐字——只有第一行里"渲染层有几条用例"那三个数按今天的树重数过
 
 ```text
-渲染层 64 条用例（`test_render_html.py` 34 + `test_render_live.py` 30）里，每条都被"把被保护的
+渲染层 71 条用例（`test_render_html.py` 34 + `test_render_live.py` 37）里，每条都被"把被保护的
 分支改坏"验过一次它会真的红，改完再按 sha256 校验还原成字节相同的文件。本轮重跑并确认被抓住的：
 ```
 
@@ -8517,7 +8517,7 @@ README 里 `tests/test_cli.py` 那一行：被计数闸门认出来的那个数�
 * `board`（`game.py:100` 写）：**接线了**——`cli.py:369` 那串键名多了它，`tests/test_cli.py:470` 两条下标读钉住它。
 * `reproducibility_note`（当时写在 `game.py` 的第 115 行，`#181` 把这一格删掉了）：扫面里除写它自己那一次，**零出现**。
 * `created_utc`（`batch.py:210`）、`pair_keys`（`batch.py:211`）、`n_logs`（`batch.py:222`）：同上，只剩写它们的那一行。
-* `rows`（`batch.py:222`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:288` 读清单里那一格；`tests/test_wiring.py:2044` 读的是另一份文档的 `rows`）——不是缺陷。
+* `rows`（`batch.py:222`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:288` 读清单里那一格；`tests/test_wiring.py::test_every_real_settlement_renders_the_very_sentence_it_was_written_with` 读的是另一份文档的 `rows`）——不是缺陷。
 
 两层豁免各自当场拦下一次误判：`render_html.py:208` 那个 `class="board"` 和 `tests/test_calibrate_guard.py:51` 那个 `"rows": […]` 都是**另一个命名空间里的同名**，若算成读者，`board` 和 `rows` 会被各自销案成假阴性；反方向上，`pair_keys` 与 `n_logs` 被第二层从"零读者"降级成"只被发布"——同一对名字在 `cli.py:577` 有属性级读者（`res.n_logs`、`res.pair_keys[0]`），零的只是清单里那两格。
 
@@ -10214,11 +10214,11 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   `ast.parse` 结果的模块层时，`schema.py:52` 那一格看不见，因为那枚 Literal 住在类体里。01:52:26Z 那趟报的是
   「既不是模块级的 Literal 别名，也不是某字段注解里嵌的 Literal」，改成走整棵树之后 01:53:03Z 两具都绿。
   这一笔要分清：那次红是**尺子红**，不是缺陷红。
-* 两具闸门。前一具 `test_every_stored_fact_value_has_a_word_in_the_table_that_renders_it`
-  (`tests/test_wiring.py:3022`) 对账三张表：名册从源码的 Literal 里读，词表从渲染它那一行所用的那张字典里读，
+* 两具闸门。前一具 `tests/test_wiring.py::test_every_stored_fact_value_has_a_word_in_the_table_that_renders_it`
+  对账三张表：名册从源码的 Literal 里读，词表从渲染它那一行所用的那张字典里读，
   两个方向都空才算过；另加一格地板（每张名册至少两枚），它只防「收集坏了」，两张表同时缩是合法改动。
-  后一具 `test_the_copied_role_words_and_default_style_are_still_members_of_their_owners`
-  (`tests/test_wiring.py:3059`) 钉的是两份**抄本**：`ROLE_WORDS`(`belief.py:141`) 的中文键必须等于同一个 id 在出厂板上的名字，
+  后一具 `tests/test_wiring.py::test_the_copied_role_words_and_default_style_are_still_members_of_their_owners`
+  钉的是两份**抄本**：`ROLE_WORDS`(`belief.py:141`) 的中文键必须等于同一个 id 在出厂板上的名字，
   它的值必须是 `BOARD_9`(`roles.py:103`) 发得出来的角色（没覆盖的那两枚按名字点名，不是放过），
   以及 `persona.py:47` 那格 `style` 的出厂默认必须仍在表里。
 * 五把刀各有一个只属于它的红法（干净基线 01:53:03Z 量过「2 passed」，逐把 01:54:30Z 起、末次落盘 02:01:11Z）：
@@ -10967,3 +10967,66 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   `1107 passed`，同点单独一趟 `1107 tests collected`（收住数那一行 `-q` 的全量日志不打印）。
 * 顺序照老规矩：散文先落、再复跑受扫的那本闸门。上面这些 bullet 落盘之后复跑一趟（**03:24:29Z** 整本
   `102 passed`），加上这一格之后再复跑一趟收口（**03:25:04Z** 整本 `102 passed`），绿的才是这一节最后的形状。
+
+### #225 直播键盘层那三枚免责标记：一枚坐在每次都执行的那一格上，两枚坐在真会炸的那两条腿上
+
+* 票面来自这一族本身：`bd51a30` 那一版整棵树还剩三枚 `# pragma: no cover`，三枚全在
+  `render_live.py` 的键盘层（复现：`git grep -n -F 'pragma: no cover' bd51a30 -- src`），分别坐在
+  `_cbreak` 外层那枚 `except` 的元组上、那具 `contextmanager` 的 `finally` 上、`watch` 的
+  `except KeyboardInterrupt` 上，前两枚写着「platform dependent」。这是仓库的最后三枚——
+  **08:43:40Z** 逐本数：src 3 → 0，tests 与 scripts 本来就是 0。
+* 先量这三枚的读者是谁（**08:48:07Z**）：`pyproject.toml` 的 dev extras 只声明 `pytest` 与
+  `pytest-asyncio`，仓库里没有一枚 ruff / mypy / coverage 的配置（也没有 `setup.cfg`、`tox.ini`），
+  没有 `.github`，解释器里 `find_spec` 对这四样报的是 `False / False / False / False`。所以标记不是
+  "暂时没人看"而是没有看的人。处置是**不装工具**：这一片要的承诺是"这一格有证人"，不是
+  "这一格不计进某个数"——装 coverage 只会把那三枚变成真的，而它们底下那两条腿本来就是测得到的。
+* 标记说的话先按它自己的字面量一遍（**08:31:33Z**，stdlib `sys.settrace` 数行事件，五种 stdin 形状）。
+  `finally` 体里那一格在五种形状下都执行 1 次——包括 stdin 是管道的那一形，也就是离线套件、
+  `watch --once` 和 CI 每天走的那一条；所以"platform dependent、测不到"不是谦逊，是假话。另两条腿
+  各在自己的形状里现形：已经关掉的流让外层那枚元组和它的体各 1 次，`fileno()` 之后号已经没了让入口
+  那格 `except termios.error` 1 次，tty 设好之后会话断掉让还原那一枚调用和它旁边那格各 1 次。口径写清：
+  行事件不是 coverage 的语句集——`finally:` 那一行自己一个事件都不报，报的是它体里第一格——这一趟问的
+  是"标记底下那几格跑不跑"，不是复刻谁的计数方式。
+* 真的缺陷是观众面前那一条：`termios.error` 不是 `OSError`（量过它的 MRO：`termios.error → Exception`），
+  所以 `bd51a30` 那一版在"号在 `fileno()` 之后断了"和"终端在某一帧之间断了、还原那一枚炸"这两形下把
+  traceback 压在观众正在看的那一帧下面，而这两形都是 ssh 会话掉线的日常形状。
+* 七格证人、七具刀（**08:42:58Z** 基线 `7 passed, 30 deselected`；**08:43:00Z → 08:43:06Z** K1…K7
+  逐具下、逐具 CAUGHT，每具报出的那一条正是 `docs/views.md` 那张异味表里给它点名的那一条；每具还原后
+  与原文字节相同，原文 sha256 前十二位 `84225e59362b`，最后一具还原后复验同一枚）。
+* K1 起初报的是 MISSED，而 MISSED 不是"没有证人"：pytest 把逃出来的 `KeyboardInterrupt` 当**会话中止**
+  处理。**08:53:24Z → 08:53:27Z** 把那格证人退回它修好之前的样子复量——只点那一格时是「FAILED 行 0 条 /
+  汇总行没有」，banner 点着 `tests/test_render_live.py` 里那记 `raise KeyboardInterrupt`；整本 37 格那一趟
+  只送到 `30 passed`，也就是除被打断的那一格外还有六格的判决没寄到。把这一格的失败改成自己截住 ^C、
+  翻成一格红之后，同一把刀在同一本上给 `1 failed, 36 passed`（那一本原文 sha256 前十二位
+  `0ea0ad401c6d`，两本都还原成字节相同）。落下来的规矩：会 ^C 的证人不能靠 traceback 输——它一次输掉
+  整本的判决，而电池把"MISSED"读成"这一格没人守"，正好把最响的失败读成最安静的那一种。
+* 刀接着落到尺子上，这是这一片第二处真缺陷：我自己新写的那两行 `except termios.error` 把裸名 `error`
+  的读数从 7 顶到 9，正好越过 `SHARED_READ_LIMIT`（8），于是 `#205` 立下的那条点名义务从同名面上被
+  撤销了下去——全套仍然绿，红的只是"没人再欠一句话"。两形对照（**08:46:31Z**，同一具探测、只换豁免）：
+  同名多类的裸名 43 个与豁免无关；有豁免那一形数到 15 个，没有那一形数到 14 个，差的就是 `error` 一个；
+  把门槛抬到 20 再数，两形各 29 个名字、`error` 读数是 7 对 9——这一格只在边界那一道上咬，不改变别的
+  名字归属。名册 15 条，与有豁免那一形双向零差。
+* 修的是读数不是名册：新增 `_imported_module_names`，只认 `import X` / `import X.Y as Z` 绑定的顶层名字
+  （`X.attr` 读的是模块上的对象，不是任何一具类的字段）；`from m import name` 照旧算读者，因为按接收者
+  类型反推是 `#205` 试过又收回的那把尺。失效方向单向：这一格只会把读数调低、同名面放大、要人点名的名字
+  变多，永远不会反过来替一具死字段脱身。夹具那一格 `modread` 与它的反面 `crowded` 各钉一边；反向两具刀
+  （**08:51:35Z → 08:51:39Z**，基线 `2 passed, 113 deselected`，`tests/test_wiring.py` 原文 sha256 前十二位
+  `72cdd4bb18dd`）：M1 把豁免整个卸掉、M2 把豁免加宽到任意名字接收者，两具都把那两条用例同时打红——
+  一具证明这格必须在，一具证明它不能更宽。
+* 手册页两处跟着改口：`docs/views.md` 那张异味表底下新增 K1…K7 的四行（同一把尺要求"表里点名的用例
+  真有其人"，所以名字写全）；「渲染层 71 条用例（`test_render_html.py` 34 + `test_render_live.py` 37）」
+  从 `bd51a30` 那一版的 64 条（34 + 30）改到今天的数，两处都是当天现推、不写"约"。
+* 三处 `test_wiring.py` 的行号指针在这一片里被顶歪（闸门红了三格），处置是改成 `文件.py::用例` 的符号形
+  而不是重挂号——理由同 `#217`：号会被下一次插入顶歪，名字不会。
+* 同一族里剩下的 46 枚也是零读者的豁免（`# noqa` 35 枚：src 4 / tests 25 / scripts 6；`# type: ignore`
+  11 枚：src 5 / tests 6 / scripts 0，**08:43:40Z** 逐本数，与 `bd51a30` 一字不变）。这一族没有"底下那格
+  其实天天在跑"这种可证的假话，删它们等于替仓库决定"永远不装 lint / type 检查"，那是处理变更，登记成一张
+  票而不是在这一片里单方面收掉。
+* 收尾对照（先写预期再跑）：`#224` 那趟是 `1107 passed` / `1107 tests collected`，这一片新增七枚
+  `def test_`、一枚没删，所以**预期 1114 collected、1114 passed**。中间一趟（**08:31:58Z → 08:33:09Z**）
+  全量离线是 `1 failed, 1113 passed`——那一记红就是本节标题：`docs/views.md` 前指〈直播键盘层那三枚免责
+  标记〉而当时这一节还不存在，是这条判据该有的行为。同点单独一趟收数（**08:33:20Z**）
+  `1114 tests collected`（收住数那一行 `-q` 的全量日志不打印）。本节标题落盘之后再跑一趟收口
+  （**09:04:36Z → 09:05:37Z**）：**1114 passed**，与预期一字不差。
+* 顺序照老规矩：散文先落、再复跑受扫的那本闸门。上面这些 bullet 落盘之后复跑一趟（**08:59:25Z** 整本
+  `102 passed`），加上这一格之后再复跑一趟收口（**09:03:36Z** 整本 `102 passed`），绿的才是这一节最后的形状。

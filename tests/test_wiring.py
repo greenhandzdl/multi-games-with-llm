@@ -1122,6 +1122,23 @@ def test_the_method_layer_names_every_zero_production_reader_and_each_carries_a_
 SHARED_READ_LIMIT = 8
 
 
+def _imported_module_names(tree: ast.AST) -> frozenset[str]:
+    """本文件里 `import X` / `import X.Y as Z` 绑定的那个顶层名字。
+
+    `X.attr` 读的是模块上的对象（`termios.error`、`tty.setcbreak`），不是任何一具类的字段，
+    所以它不许进字段尺的读数。只认这一形：`from m import name` 绑到的可能是类也可能是函数，
+    按接收者反推类型是 `#205` 试过又收回的那把尺，所以那一种照旧算读者。失效方向是单向的——
+    这一格只会把读数**调低**，也就是让同名面**变大**、要人点名的名字变多，永远不会反过来
+    替一具死字段脱身。
+    """
+    out: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                out.add(alias.asname or alias.name.split(".")[0])
+    return frozenset(out)
+
+
 def _field_defs_and_reads(
     src_roots: tuple[str, ...] = ("src",),
     read_roots: tuple[str, ...] = ("src", "scripts"),
@@ -1143,6 +1160,9 @@ def _field_defs_and_reads(
     第三格是 `#205` 加的那一面：读数只按**裸名**归属，所以一具类里的字段会把读者借给另一具
     同名字段——名册那一格判不出这种替付账，它只会问"有没有读者"。这一面把"两具以上类共用一个
     裸名、且裸名读数不超过 `SHARED_READ_LIMIT`"的名字交给人点名，见 `SHARED_NAME_TRIAGE`。
+    读数额高不等于归属清楚：上限那道门槛只管名册的大小，所以它必须先被 `_imported_module_names`
+    洗掉模块上的属性（`#225`：两行 `except termios.error` 就能把 `error` 的裸名读数从 7 顶到 9，
+    正好把它送出同名面——一条不相干的 python 关键字读法撤销了一份人的点名义务）。
     """
     inert = {*(INERT_FIELDS), *(leaf.rsplit(".", 1)[-1] for leaf in INERT_LEAVES)}
     readers: dict[str, int] = {}
@@ -1156,9 +1176,11 @@ def _field_defs_and_reads(
             read_files.setdefault(key, set()).add(origin)
 
     def count_reads(tree: ast.AST, bucket: dict[str, int], origin: str = "") -> None:
+        mods = _imported_module_names(tree)
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute):
-                if isinstance(node.ctx, ast.Load):
+                if isinstance(node.ctx, ast.Load) and not (
+                        isinstance(node.value, ast.Name) and node.value.id in mods):
                     bump(bucket, node.attr, origin)
             elif isinstance(node, ast.Call):
                 fn = node.func
@@ -2727,6 +2749,11 @@ def test_the_shared_face_admits_a_low_read_twin_and_refuses_the_other_two(tmp_pa
     多读一次就得出局；`solo` 只有一具类声明，读了也不算同名；`dark` 两具类零读者，必须带着读数
     `0` 和一份空的读者名单进来——名册那一条把它判成零读者，本面却看得见它有两具类，这正是
     `#205` 要人点名的那一形：`twin` 的读者全在 run.py 里点 `b.`，尺却把两具类记成共用同一份读数。
+
+    `modread` 是 `#225` 加的第四格：它的**字段**读者正好等于上限，另有一处 `socket.modread` 读的是
+    模块上的属性而不是任何一具类的字段。那一处不许把它顶出同名面——`crowded` 正是这一格的反面
+    （它多的是同具类的又一次读取，所以它出局），两格合起来才把豁免的限界钉住：只免本文件
+    `import X` 绑定的那个名字，实例读取一处不免。
     """
     pkg = tmp_path / "pkg"
     scripts = tmp_path / "script_side"
@@ -2734,21 +2761,26 @@ def test_the_shared_face_admits_a_low_read_twin_and_refuses_the_other_two(tmp_pa
         d.mkdir()
     (pkg / "t.py").write_text(
         "from dataclasses import dataclass\n\n\n@dataclass\nclass A:\n"
-        "    twin: int\n    crowded: int\n    dark: int\n    solo: int\n\n\n"
-        "@dataclass\nclass B:\n    twin: int\n    crowded: int\n    dark: int\n", encoding="utf-8")
+        "    twin: int\n    crowded: int\n    dark: int\n    solo: int\n    modread: int\n\n\n"
+        "@dataclass\nclass B:\n    twin: int\n    crowded: int\n    dark: int\n"
+        "    modread: int\n", encoding="utf-8")
     (scripts / "run.py").write_text(
-        "from pkg import t\n\na = t.A(1, 2, 3, 4)\nb = t.B(5, 6, 7)\n"
+        "from pkg import t\nimport socket\n\na = t.A(1, 2, 3, 4, 5)\nb = t.B(5, 6, 7, 8)\n"
         + "print(a.twin, b.crowded)\n" * SHARED_READ_LIMIT
-        + "print(b.crowded, a.solo)\n", encoding="utf-8")
+        + "print(b.crowded, a.solo)\n"
+        + "print(a.modread)\n" * SHARED_READ_LIMIT
+        + "print(socket.modread)\n", encoding="utf-8")
 
     _, dead, shared = _field_defs_and_reads((str(pkg),), (str(pkg), str(scripts)), ())
-    assert sorted(shared) == ["dark", "twin"], sorted(shared)
+    assert sorted(shared) == ["dark", "modread", "twin"], sorted(shared)
     assert dead == ["t.py::A.dark", "t.py::B.dark"], dead
     slots, n, files = shared["twin"]
     assert list(slots) == ["t.py::A", "t.py::B"], slots
     assert n == SHARED_READ_LIMIT, n
     assert sorted(Path(f).name for f in files) == ["run.py"], files
     assert shared["dark"] == (("t.py::A", "t.py::B"), 0, ()), shared["dark"]
+    assert shared["modread"][1] == SHARED_READ_LIMIT, shared["modread"]
+    assert "crowded" not in shared
 
 
 ABILITY_ALIAS = "Ability"

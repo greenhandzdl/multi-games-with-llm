@@ -236,7 +236,10 @@ def draw(console: Console, events: list[Event], meta: dict[str, Any], *,
 @contextmanager
 def _cbreak() -> Iterator[None]:
     """Raw-ish keystrokes when there is a terminal to read them from; a no-op when stdin is a
-    pipe, which is how `watch --once` and the CI run reach this code."""
+    pipe, which is how `watch --once` and the CI run reach this code. A no-op when there *was*
+    a terminal and it went away too: `termios.error` is not an `OSError`, so the ioctl layer
+    raises a class that has to be named on purpose, and the alternative is a traceback in
+    front of an audience that was watching a game."""
     fd = None
     old = None
     try:
@@ -245,17 +248,23 @@ def _cbreak() -> Iterator[None]:
 
         if sys.stdin.isatty():
             fd = sys.stdin.fileno()
-            old = termios.tcgetattr(fd)
-            tty.setcbreak(fd)
-    except (ImportError, OSError, ValueError):  # pragma: no cover - platform dependent
+            try:
+                old = termios.tcgetattr(fd)
+                tty.setcbreak(fd)
+            except termios.error:
+                fd = old = None            # 没改成任何东西，所以出去时也不碰
+    except (ImportError, OSError, ValueError):
         fd = None
     try:
         yield
-    finally:  # pragma: no cover - platform dependent
+    finally:
         if fd is not None and old is not None:
             import termios
 
-            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+            try:
+                termios.tcsetattr(fd, termios.TCSADRAIN, old)
+            except termios.error:
+                pass                       # 终端已经没了：没有东西可还，也不该拿退出码换 traceback
 
 
 def _read_key(timeout: float) -> str | None:
@@ -322,6 +331,6 @@ def watch(path: str | Path, *, god: bool = False, reveal_seat: int | None = None
                     frame()
                 if not keyboard and game_over_event(events) is not None:
                     return 0
-    except KeyboardInterrupt:  # pragma: no cover
+    except KeyboardInterrupt:
         return 0
     return 0
