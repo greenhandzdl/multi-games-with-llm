@@ -780,7 +780,7 @@ def test_the_headline_counts_the_files_it_judged_not_the_files_it_was_handed(tmp
     assert "3 份" not in text, "份数数的是交进来的行，而这一屏只判了 A 臂那两份"
 
 
-def test_a_log_without_a_config_table_is_not_a_second_config_table(tmp_path, key, capsys):
+def test_a_log_without_a_config_table_is_not_a_second_config_table(tmp_path, key):
     """一份没登记配置的文件，不许把同目录里两局好日志一起拒判。
 
     `cmd_gate` 的分臂守卫取的是 `meta.config_hash` 的集合，于是空文件贡献了一个 `None`——
@@ -796,7 +796,7 @@ def test_a_log_without_a_config_table_is_not_a_second_config_table(tmp_path, key
     assert meta_notice({}) in text, "闸门得说清少的那一份是什么，而不是安静地少一局"
 
 
-def test_the_gate_names_which_files_held_no_game(tmp_path, key, capsys):
+def test_the_gate_names_which_files_held_no_game(tmp_path, key):
     """"不是局的文件：N 份"要点名是那 N 份，否则那一份字节留在目录里会继续污染下一批。
 
     `#101`：`hollow.paths` 从 `#99` 起就在指标里算出来，但两个出口都只印 `note`，于是这个字段

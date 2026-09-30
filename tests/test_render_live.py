@@ -79,7 +79,7 @@ def test_a_broken_line_in_the_middle_is_not_skipped(tmp_path, gold):
         render_live.tail_events(log)
 
 
-def test_tail_events_resumes_after_the_last_seq_seen(tmp_path, gold):
+def test_tail_events_resumes_after_the_last_seq_seen(gold):
     """Live tailing re-reads the file each poll. `after` is what keeps that O(new) instead of
     O(file), and a boundary that drops or repeats one event is a frame with a hole in it."""
     _, events, _ = gold
@@ -90,7 +90,7 @@ def test_tail_events_resumes_after_the_last_seq_seen(tmp_path, gold):
     assert [e.seq for e in mid] == [e.seq for e in events[11:]]
 
 
-def test_watching_does_not_modify_the_log(tmp_path, gold):
+def test_watching_does_not_modify_the_log(gold):
     """The log is the artifact. A viewer that rewrote it would destroy the thing it is
     displaying, and the audit trail would no longer be about the game that was played."""
     before = hashlib.sha256(gold[0].path.read_bytes()).hexdigest()
@@ -507,7 +507,7 @@ def test_a_platform_without_termios_stays_a_no_op(monkeypatch):
         pass
 
 
-def test_a_closed_stream_on_stdin_is_not_read_as_a_terminal(tmp_path, monkeypatch):
+def test_a_closed_stream_on_stdin_is_not_read_as_a_terminal(monkeypatch):
     """`watch` behind a detached run can meet a `stdin` that is already closed. Reading it
     raises `ValueError` from `isatty()` itself — before there is any fd to speak of — and that
     has to stay a no-op rather than a crash on the way into the first frame."""

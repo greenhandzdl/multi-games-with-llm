@@ -1680,24 +1680,59 @@ def _declared_by_an_ancestor(cls: str, meth: str, param: str, parents: dict, inh
     return False
 
 
-def _params_declared_but_never_read(roots: tuple[str, ...] = ("src/wolfengine",),
-                                    *, framework_called: bool = False) -> list[str]:
-    """`#86` 的判据本体：签名要求你递、body 从不看的东西。
+def _declared_as_a_fixture(fn) -> bool:
+    """这一枚函数自己是不是夹具：装饰器的末端写着 `fixture`（`scope=` 那种 Call 形也算）。"""
+    for dec in fn.decorator_list:
+        d = dec.func if isinstance(dec, ast.Call) else dec
+        if isinstance(d, ast.Attribute) and d.attr == "fixture":
+            return True
+    return False
+
+
+def _fixtures_declared_in(trees: dict) -> frozenset[str]:
+    """本仓库自己声明的夹具名，从盘上的 `@pytest.fixture` 声明派生。
+
+    不抄 pytest 的内置名单：那是第三方 API，漂了之后只会把新的内置夹具当成"我们自己的夹具"放过
+    （`#222` 把三份手抄端点名单收回一处是同一种病）。限界：夹具若用 `name=` 改过对外名字，这一份
+    按函数名收会漏——**12:00:52Z** 复测全仓库 19 枚 `fixture` 声明，实参里零处 `name=`（10:13Z 那趟
+    普查也是零）。
+    """
+    return frozenset(fn.name for tree in trees.values()
+                     for fn, _cls, _depth in _functions_of(tree) if _declared_as_a_fixture(fn))
+
+
+def _argument_comes_from_the_framework(fn, param: str, depth: int,
+                                       declared_fixtures: frozenset[str]) -> bool:
+    """`framework_called` 那格豁免的判据本体：**按这一枚参数**问，不按整张签名。
+
+    两种"参数表不是写函数的人定的"里，回调那一种仍按函数豁免（`depth > 0`：递给被测代码的
+    httpx handler、批跑探针的 canary，整张表由对面那一步决定）；`test_` 那一种落到名字上——只有
+    这一枚参数是**本仓库声明过的夹具**时才放过，因为请求一枚自己的夹具本身就是用法（要的是它那
+    一步的副作用，值没打算读）。pytest 内置的带值夹具不在这份名册里，值不点名就是死格。
+    豁免只落在 `test_` 开头的函数上，所以一具夹具声明、一具普通 helper 的参数撞上夹具名都不白拿
+    通行证（`#132` 的"按键名数读者"在参数这一层的同形）。
+    """
+    if depth > 0:
+        return True
+    return fn.name.startswith("test_") and param in declared_fixtures
+
+
+def _dead_arguments_in(all_trees: dict, judged: dict, *,
+                       framework_called: bool = False) -> list[str]:
+    """判据本体：`judged` 里逐函数逐参数问一遍"签名要求它、body 从不读它"。
+
+    豁免的来源（契约桩、父类、夹具名册）一律取 `all_trees` 全量，判面只走 `judged`——`tests/` 里
+    那具 `Chorus` 的父类住在 `src/wolfengine`，两边必须看同一批 AST（`_parsed_trees` 那条注释就
+    是为这一对写的）。合成语料与活体语料共用这一具，正控制不许另写一把尺（`#153`）。
 
     "读过"只认 AST 里的 `Name`/Load——包括嵌套函数与 f-string 里的（尺按形状粗，这是**故意**的：
     闭包确实拿到了那个值，硬要区分调用栈深度换来的只是把真读者误判成谎言）。docstring 里提到
     参数名**不算**读过，与 `#81` 同一套理由：注释留着词、代码早不用了，子串搜索骗得过去。
-
-    `framework_called` 是**给测试侧用的**第三种豁免：函数名以 `test_` 开头（pytest 按名字从夹具
-    注册表里取参数）或它嵌在另一个函数里（它是递给被测代码的回调，参数表由对面那一步决定）。
-    引擎侧永远不传这个开关——引擎的函数是引擎自己调的。
     """
-    trees = _parsed_trees(("src", "tests", "scripts"))
-    stub_pairs, parents, inherited = _signatures_imposed_from_outside(trees)
+    stub_pairs, parents, inherited = _signatures_imposed_from_outside(all_trees)
+    declared = _fixtures_declared_in(all_trees)
     hits: list[str] = []
-    for path, tree in sorted(trees.items()):
-        if not any(path == r or path.startswith(r + "/") for r in roots):
-            continue
+    for path, tree in sorted(judged.items()):
         for fn, cls, depth in _functions_of(tree):
             reads = {n.id for n in ast.walk(fn)
                      if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)}
@@ -1706,10 +1741,24 @@ def _params_declared_but_never_read(roots: tuple[str, ...] = ("src/wolfengine",)
                     continue
                 if cls and _declared_by_an_ancestor(cls, fn.name, p, parents, inherited):
                     continue
-                if framework_called and (fn.name.startswith("test_") or depth > 0):
+                if framework_called and _argument_comes_from_the_framework(
+                        fn, p, depth, declared):
                     continue
                 hits.append(f"{path}:{fn.lineno} {cls + '.' if cls else ''}{fn.name}({p})")
     return sorted(hits)
+
+
+def _params_declared_but_never_read(roots: tuple[str, ...] = ("src/wolfengine",),
+                                    *, framework_called: bool = False) -> list[str]:
+    """`#86` 的判据入口：把 `roots` 交出去、把豁免的来源留在全量上。本体在 `_dead_arguments_in`。
+
+    `framework_called` 是**给测试侧用的**第三种豁免，`#227` 把它从"整张签名"收窄成"逐枚参数"：
+    按名字问一句"这是本仓库声明过的夹具吗"。引擎侧永远不传这个开关——引擎的函数是引擎自己调的。
+    """
+    trees = _parsed_trees(("src", "tests", "scripts"))
+    judged = {p: t for p, t in trees.items()
+              if any(p == r or p.startswith(r + "/") for r in roots)}
+    return _dead_arguments_in(trees, judged, framework_called=framework_called)
 
 
 def test_no_engine_function_declares_a_parameter_nobody_reads():
@@ -1755,8 +1804,10 @@ def test_the_test_side_is_out_of_that_scope_by_a_derivation_not_a_list():
 
     加宽之后现场是：未开框架豁免时满仓库的夹具参数都成了"谎言"（数量见 `raw`），开了以后只剩零处——
     而"只剩零处"不是因为我把名单念了一遍，是因为三条豁免把每一处都归到了某个**形状**：
-    - `test_` 开头：pytest 按名字从夹具注册表取参数，`test_x(key)` 收 `key` 是要那个 env 变量被设上，
-      不是要读它。这一半在 `raw` 里占大头（断言在下面，别让它悄悄变成零）。
+    - `test_` 开头**且这一枚参数的名字是本仓库声明过的夹具**：`test_x(key)` 收 `key` 是要那个 env
+      变量被设上，不是要读它。`#227` 之前这一格按整张签名放过，于是 pytest 内置的带值夹具藏了 7 处
+      死参数（`tmp_path`、`capsys`），11:50:25Z 由这条用例自己报出来的；现在按**参数名**问，内置那些
+      回到判面上，本仓库声明的仍放过。这一半在 `raw` 里占大头（断言在下面，别让它悄悄变成零）。
     - 嵌在另一个函数里：那是递给被测代码的回调（httpx 的 `handler(request)`、批跑探针的
       `canary(prompt)`），参数表由对面那一步决定。
     - 父类收了这个参数：`tests` 里的 `Chorus._line(act, target)` 覆盖 `actors.MockActor._line`，
@@ -1779,6 +1830,57 @@ def test_the_test_side_is_out_of_that_scope_by_a_derivation_not_a_list():
         "测试侧这些地方既不是夹具、也不是回调、也没有父类收着这个参数——那就是真的签名谎言："
         f"{left}")
     assert _params_declared_but_never_read(("scripts",), framework_called=True) == []
+
+
+def test_a_test_side_fixture_argument_is_exempt_by_its_name_not_by_the_whole_signature():
+    """`#227`：`#86` 在测试侧开的那格豁免按**函数**放过整张签名，可 pytest 的内置夹具只有两种活法。
+
+    10:05:56Z 只读普查 `tests/` 的 975 枚 `def test_`（同一具 AST 口径 **12:01:20Z** 复数是 976，多的
+    那一枚就是这条用例自己），把"形参声明了、body 一次都没点名"按名字分成两本：
+    本仓库自己声明的那一批 55 处（`key`、`no_network`、`gold`、`played`……）是**合法**的——请求一枚自己
+    的夹具就是取它那一步的副作用，值本来就没打算读。另一本是 pytest 内置的带值夹具（`tmp_path`、
+    `capsys`）7 处，逐枚读过那 7 个函数体：没有一处读到那个值（`test_watching_does_not_modify_the_log`
+    读的是 `gold[0].path`，`tmp_path` 一次没碰）。旧尺对这两本是同一个人：它问"这枚函数叫 `test_` 吗"，
+    不问"这一枚参数是谁给的"，所以那 7 处活到今天，而 `left == []` 一直绿着（上面那条用例就是它）。
+
+    收窄成按**参数名**问一句"这个名字是本仓库声明过的夹具吗"，答案派生自盘上的 `@pytest.fixture`
+    声明，不抄 pytest 的内置名单——那份名单是第三方 API，漂了只会把新的内置夹具当成"自己的夹具"放过
+    （`#222` 把三份手抄端点名单收回一处是同一种病）。限界两条：夹具若用 `name=` 改过对外名字，这一份
+    按函数名收会漏（**12:00:52Z** 复测全仓库 19 枚 `fixture` 声明的实参里零处 `name=`，10:13Z 那趟普查
+    也是零）；豁免只落在 `test_` 开头的函数
+    上，所以一具夹具声明、一具普通 helper 的参数撞上夹具名都不白拿通行证（`f/fixture_def_dead` 与
+    `f/helper_shares_name` 两格——`#132` 的"按键名数读者"在参数这一层的同形）。
+
+    七格三报四不报。不报的那四格是这条收窄的代价面：按名字收窄过头会把合法请求变成假缺陷（这一本
+    **12:01:20Z** 由这条谓词自己是 56 格），也会把闭包与回调那两种"参数表不是写函数的人定的"重新算成
+    谎言（同一本 16 格，两本合起来正是 `raw` 的 72 格）；`f/module_scoped` 那一格钉的是装饰器的
+    Call 形（`scope="module"`），活体语料里 19 枚夹具声明有 14 枚走那一形（11:52:20Z 现测，名册上是
+    16 个不同名字），只认裸 `ast.Attribute` 的尺会把它们整批从名册里漏掉。这一格只证形状；豁免在活体
+    语料上确实有人依赖，由上面那条用例的 `assert raw` 与 `left == []` 合起来证（那 56 格全靠这格豁免
+    才不报）。合成格子的键不带 `.py`：`名.py:号` 那一形会被〈行号指针〉那把尺当成对真文件的点名，
+    而这一具谓词只把键当字符串往外印，不需要后缀。
+    """
+    corpus = {
+        "f/builtin_dead": "def test_unread_tmp(tmp_path):\n    assert 1\n",
+        "f/builtin_read": "def test_reads_tmp(tmp_path):\n    assert tmp_path.exists()\n",
+        "f/declared_ok": "@pytest.fixture\ndef gold():\n    return 1\n"
+                         "\ndef test_just_wants_the_effect(gold):\n    assert 1\n",
+        "f/callback": "def test_nested():\n    def handler(request):\n        return 1\n"
+                      "    go(handler)\n",
+        "f/helper_shares_name": "@pytest.fixture\ndef key():\n    return 1\n"
+                                "\ndef helper(key):\n    return 1\n",
+        "f/fixture_def_dead": "@pytest.fixture\ndef base():\n    return 1\n"
+                              "\n@pytest.fixture\ndef played(base):\n    return 2\n",
+        "f/module_scoped": '@pytest.fixture(scope="module")\ndef slow():\n    return 1\n'
+                           "\ndef test_wants_the_setup_only(slow):\n    assert 1\n",
+    }
+    trees = {name: ast.parse(src) for name, src in corpus.items()}
+    assert sorted(_fixtures_declared_in(trees)) == ["base", "gold", "key", "played", "slow"]
+    assert _dead_arguments_in(trees, trees, framework_called=True) == [
+        "f/builtin_dead:1 test_unread_tmp(tmp_path)",
+        "f/fixture_def_dead:6 played(base)",
+        "f/helper_shares_name:5 helper(key)",
+    ]
 
 
 def _unread_imports(roots: tuple[str, ...]) -> list[str]:

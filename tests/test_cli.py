@@ -958,7 +958,7 @@ def test_a_number_from_the_command_line_keeps_its_field_type(tmp_path):
     assert man["arms"]["B"]["overrides"] == ["temperature", "max_tokens_speech"]
 
 
-def test_a_tuple_field_can_be_the_axis(tmp_path, capsys):
+def test_a_tuple_field_can_be_the_axis(tmp_path):
     """`temperature_ladder` 正是 plan §7 的处理变量之一，而复现命令把它印成 `[0.9, 1.1]`：
     `--set` 读不回同一个值的话，"打印得出来"和"粘得回去"就是两回事。"""
     assert cli.main(_batch_cmd(tmp_path,

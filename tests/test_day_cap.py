@@ -131,7 +131,7 @@ def test_the_cap_is_reachable_only_below_the_shipped_default(tmp_path):
 
 
 # --------------------------------------------------------------------------------- 命令行
-def test_run_exposes_the_cap_on_the_command_line(tmp_path, capsys):
+def test_run_exposes_the_cap_on_the_command_line(tmp_path):
     """`--max-days 2` 之后日志里不许出现第 3 天。这是对"参数真的接到了引擎"的唯一证明；
     只看返回码会放过一个把参数丢掉、然后照常打完 6 天的实现。"""
     with _quiet():
