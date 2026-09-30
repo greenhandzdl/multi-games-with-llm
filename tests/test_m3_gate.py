@@ -1059,3 +1059,21 @@ def test_a_batch_that_was_never_cut_says_so_on_the_gate_file(tmp_path, key):
     cut = (tmp_path / "cut" / "m3_gate.md").read_text(encoding="utf-8")
     assert "次回答被 `max_tokens` 截断" in cut, cut
     assert "无一被" not in cut, cut
+
+
+def test_a_table_that_voted_without_speaking_gets_no_style_reading_and_says_so():
+    """局是真的、一条发言都没有：`not rounds` 那一支的 note 此前从没被执行到过（#237 的执行名册里
+    它是 never_executed 的一格），而它相邻的三支（没有局、一局都没打、全是替身桌）各有证人。
+
+    钉两样：句子逐字在册（读的人要能在产物里搜到它），以及三条风格判据是 `None` + `n=0` 而不是 0.0
+    ——`#95` 那一族的老账：沉默不能读成"不消极"。延迟与溢出两格仍给数，证明这一格是"没人说话"
+    而不是"没有数据"。
+    """
+    out = metrics.m3_gate_verdict([_game([_vote(1, 3)], game_id="quiet")])
+    assert out["note"] == "可用局里一条发言都没有：四条风格判据没有分母。", out["note"]
+    assert out["verdict"] == "NOT_EVALUABLE", out
+    for key in ("passivity_rate", "collapse_round", "opening_distinct_rate"):
+        assert out["criteria"][key]["value"] is None, out["criteria"][key]
+        assert out["criteria"][key]["n"] == 0, out["criteria"][key]
+    assert out["n_games_usable"] == 1 and out["n_rounds"] == 0, out
+    assert out["criteria"]["latency_p95_s"]["n"] == 1, out["criteria"]["latency_p95_s"]

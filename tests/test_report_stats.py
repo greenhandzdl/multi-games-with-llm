@@ -303,3 +303,21 @@ def test_the_interval_stays_inside_the_unit_interval_where_the_normal_approximat
 def test_an_empty_denominator_is_the_whole_interval_rather_than_a_division_error():
     """零局可判的批次是真的会发生的：`m1_win_rate` 自己就有"分母为空"那条 note。"""
     assert metrics.wilson_ci(0, 0) == (0.0, 1.0)
+
+
+def test_a_pair_that_moved_only_the_declared_axis_says_so_instead_of_printing_nothing():
+    """三张拒绝的桶各有证人，"除了声明的轴什么都没动"这一句没有：`report.py` 里那句 `L.append`
+    在本次执行名册（#237）里是 never_executed，而两臂干净时的整段渲染此前没人跑到过。
+
+    反面也要钉：干净的一对不许顺手带出任何一张拒绝清单——只断言那句在场，会让一个把四行全印出来的
+    渲染器绿着。
+    """
+    a = Config()
+    b = dataclasses.replace(a, regions=dataclasses.replace(a.regions, b0=a.regions.b0 + 1))
+    out = report.axis_diff(a, b, axis=("regions",))
+    assert out.ok is True, out
+    body = out.render("hashA", "hashB")
+    assert "除声明轴外无差异。" in body, body
+    assert "声明的处理轴: regions" in body, body
+    for refusal in ("禁止作为处理轴", "后面没有代码", "未声明的差异"):
+        assert refusal not in body, f"{refusal} 不该出现在一对干净的臂上：{body}"
