@@ -226,6 +226,20 @@ def test_a_speech_turn_that_takes_the_assigned_act_raises_nothing():
     v = check_action(act(target=3, speech="3号从刚才那轮开始就一直躲，我要听他解释。"),
                      legal=SPEECH_LEGAL, percept=VILLAGER_TURN, phase=state.Phase.DAY_SPEECH)
     assert v.ok, v.reason
+    assert "speech_empty" not in v.flags
+
+
+def test_whitespace_only_speech_is_flagged_without_silencing_the_seat():
+    """一整段空白和"没说话"在两处出口里是同一件事，所以引擎必须留下记号。
+
+    这一格只标记不阻断，和 `impossible_percept` 同一条设计：把话闭掉等于把"这个模型交回
+    了一空格"这条读数一起闭掉。要红的是判据的方向而不是它的力度——所以正反两向都写在这一条
+    里：清白的发言不许带上这个标记。
+    """
+    v = check_action(act(target=3, speech="   "), legal=SPEECH_LEGAL,
+                     percept=VILLAGER_TURN, phase=state.Phase.DAY_SPEECH)
+    assert "speech_empty" in v.flags
+    assert v.ok and not v.violations, v.reason
 
 
 # ---------------------------------------------------------------- 引擎代打的动作
@@ -289,3 +303,19 @@ def test_discuss_needs_no_target_so_a_wolf_chat_never_burns_its_retry():
     legal = state.LegalSet(acts=("discuss",), targets=frozenset({4, 5}))
     assert check_action(schema.Action(act="discuss", speech="刀4号"), legal=legal,
                         percept=VILLAGER_TURN, phase=state.Phase.NIGHT_WOLF).ok
+
+
+def test_the_last_resort_default_takes_the_first_granted_act_rather_than_pass():
+    """一条窄路：既不发言、也不能弃票、又没有指派动作可服从时，代打者只能照名单第一项办。
+
+    这一支走不到是因为前四道 prefer 都很宽——`pass` 几乎总是合法、TARGETLESS_ACTS 几乎总有
+    一个命中。真走到这里的名册只剩一种形状：一个需要目标的 act 且 `allow_pass` 关着。此时
+    返回 `pass` 会被硬闸门拒（引擎自己的代打被记成模型违规），返回 `None` 会让那一轮没有
+    结算对象，所以只能从 `acts` 里挑一个并配上目标。
+    """
+    legal = state.LegalSet(acts=("vote",), targets=frozenset({2, 3}), allow_pass=False)
+    d = default_action(legal, [3, 2])
+    assert d.act == "vote" and d.target == 3
+    v = check_action(d, legal=legal, percept=VILLAGER_TURN,
+                     phase=state.Phase.DAY_VOTE, role="villager", hard=True)
+    assert v.ok, v.reason

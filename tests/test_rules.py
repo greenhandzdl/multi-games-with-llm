@@ -167,6 +167,30 @@ class TestNight:
         res = resolve_night(st, NightPlan(wolf_kill=5))
         assert "invalid_wolf_kill_target:5" in res.blocked and res.deaths == []
 
+    def test_poison_target_of_dead_seat_is_rejected_and_the_night_stays_peaceful(self):
+        """毒那一侧的兜底和刀那一侧不是同一条代码，所以要单独钉。
+
+        钉的不只是"blocked 里多了一句话"，是那句话之后这一晚的形状：没有死亡、`used_poison`
+        不成立、`peace` 成立。少了后半截，一次幻觉目标在日志里会读成"女巫下手了但没人死"。
+        """
+        st = mk_state(BASE, dead=(5,))
+        res = resolve_night(st, NightPlan(witch_poison=5))
+        assert "invalid_poison_target:5" in res.blocked
+        assert res.deaths == [] and not res.used_poison and res.peace
+
+    def test_same_knife_same_poison_belongs_to_the_poison(self):
+        """同刀同毒算谁杀的：房规允许双药同晚时，救不活那一口人（毒优先）。
+
+        这一格决定猎人开不开枪——`hunter_shoots_on` 认的是死因，把 "poison" 覆写成
+        "wolf_kill" 就等于替狼队多送一次枪。所以三条都断：blocked 里那句、死因是 poison、
+        以及 used_save 不成立而 used_poison 成立。
+        """
+        st = mk_state(BASE, house=HouseRules(one_potion_per_night=False))
+        res = resolve_night(st, NightPlan(wolf_kill=5, witch_save=True, witch_poison=5))
+        assert "poison_overrides_save" in res.blocked
+        assert res.dead_seats == [5] and res.deaths[0].cause == "poison"
+        assert not res.used_save and res.used_poison
+
 
 class TestSeerCheck:
     def test_reports_team(self):
@@ -312,6 +336,17 @@ class TestVote:
         second = tally_votes({1: 4, 2: 4, 3: 5}, eligible=[4, 5])   # 复投改出了多数
         assert resolve_tie(st, second) == 4
 
+    def test_a_nobody_house_ends_the_tie_even_when_the_revote_decides(self):
+        """`tie_break="nobody"` 一条都不放逐，哪怕复投已经改出了多数。
+
+        默认那一支（`pk_once_then_nobody`）上面两条已经钉住了；这一支是家规的另一半：
+        房东说平票就是平票，引擎不能拿"复投有结果了"当理由偷偷放逐一个人。
+        """
+        st = mk_state(BASE, house=HouseRules(tie_break="nobody"))
+        second = tally_votes({1: 4, 2: 4, 3: 5}, eligible=[4, 5])   # 和上一条同票面
+        assert second.out == 4  # 夹具本身有胜者，None 只能来自那一支
+        assert resolve_tie(st, second) is None
+
 
 # ------------------------------------------------------------------- legal actions
 
@@ -362,6 +397,38 @@ class TestLegalActions:
         st.pk_seats = (4, 5)
         la = legal_actions(st, 1)
         assert la.targets == frozenset({4, 5})
+
+    @pytest.mark.parametrize(
+        "phase_name,seat,reason",
+        [("NIGHT_WOLF", 4, "not_wolf"), ("NIGHT_WITCH", 1, "not_witch"), ("NIGHT_SEER", 4, "not_seer")],
+    )
+    def test_a_night_phase_asked_of_the_wrong_role_names_that_reason(
+        self, phase_name, seat, reason
+    ):
+        """能力不符不是一个空 LegalSet 了事，它得说出为什么空。
+
+        三道守卫各守一个夜间阶段：编排器把夜里的问题发给谁，取决于这里认不认那个角色的
+        能力表。若这一格退成了通用的 `no_actions_in_*`，报告里读起来像"引擎不认识这个阶段"，
+        而真相是"这一座位没有这个能力"——后者才是一个能被修的名字。空集那一侧同样要钉住：
+        一个说法带了非法动作，硬闸门阶段就会把一个永远给不出的选项摆上桌。
+        """
+        st = mk_state(BASE)
+        st.phase = Phase[phase_name]
+        la = legal_actions(st, seat)
+        assert la.reason_if_empty == reason
+        assert la.acts == () and la.targets == frozenset() and not la.allow_pass
+
+    def test_a_live_seat_facing_last_words_may_speak_without_a_target(self):
+        """遗言阶段不需要目标：把目标集造出来是编排器的事，不是合法性判据的事。
+
+        这一支若退到通用的"这个阶段没有动作"那一行，被放逐的人就永远拿不到一次说话机会，
+        而 `default_action` 会替它填一个 pass——观众看到的是一条空的遗言，不是引擎报错。
+        """
+        st = mk_state(BASE)
+        st.phase = Phase.LAST_WORDS
+        la = legal_actions(st, 4)
+        assert la.acts == ("last_words",) and la.targets == frozenset()
+        assert la.allow_pass and la.reason_if_empty == ""
 
     def test_every_act_the_assigner_can_draw_is_one_speech_may_answer_with(self):
         """闸门现在会核对 `assigned_act`，所以 persona 的词表必须是白天发言合法动作的子集。
