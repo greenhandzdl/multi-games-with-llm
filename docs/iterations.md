@@ -11348,3 +11348,19 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 * 普查今值（重测，不是减法）：同一趟带四格正控制名册的整套离线跑 rc=0，末行 1180 passed in 152.00s，`BRANCH_CENSUS side=src files=25 cells=711 executed=682 never_executed=29`，`side=tests cells=945 executed=877 never_executed=68`（新增四枚 def 没有分支体，tests 侧一字未动）。src 那 29 格按进程分档：进程内 12（`actors.py` 6、`phases.py` 4、`schema.py` 2）、子进程 `cli.py` 9、真人 tty `human.py` 3 加 `render_live.py` 3、真端点 `transport.py` 2。进程内那 12 格里恒假的一格是工单 #244、要牌桌夹具的十格是工单 #245、剩 `actors.py:187` 那一行取的是 `self.script[self.i]`，它归 #242 那枚窗口效应。四枚正控制各回显 1、1、1、2 次命中。
 
 * 方向纪律：这四格两样都办了（探针给了"造得出来"、刀给了"有人读"），恒假那一格一样都没办——它不是缺用例，写用例也补不上。剩下十格欠的是牌桌级夹具，不是断言。端点两格、真人 tty 六格、子进程九格这一片一格没动。
+
+### #245 替身桌那一族的五格：五具刀全落，探针把余下一格定性成到不了
+
+* 证人住新的一本 `tests/test_actors_synth.py`，五枚 def 各钉一格。夹具走的是**真装配**：`info.percept_for` → `belief.build_belief` → `assemble.assemble` → `actors.TurnContext`，与 `tests/test_info_isolation.py` 给的是同一个上下文形状。手搓一个空 prompt 也能让这些分支跑到，但那就不再是"这张桌上这个座位此刻看到的东西"——`_synthesize` 读的是 `ctx.legal`、`ctx.belief`、`ctx.persona` 三样，缺一样就不是同一条决策。夹具里那条 SPEECH 带 `meta`，因为 `build_belief` 只把记得出模型的发言算进账，没有 `meta` 时排名是空的、`pick` 会从 rng 里来而不是从证据里来，用例就会在"这个座位什么都没读"的情况下照样绿。
+
+* 第一版的红是它自己的证人：`acts` 只给 `pass` 那一格我写成 `speech is None`，实测红在 `assert '' is None`——`Action.speech` 的缺省是空串，断言跟着改成 `speech == ""`。这一格欠的是"没有句子"，不是"句子是 None"，写成后者就是把猜测钉进套件。
+
+* 电池一趟（`07:34:43Z—07:45:57Z`，脚本 park 成 `census245/knife245.py`）。`PREFLIGHT` 五枚锚点逐字对上：`actors.py:143` 那一行是 `failure=call.error`，`actors.py:229` 是给遗言席的 `"last_words"`，`actors.py:235` 是给"只能过"那一轮的 `Action(act="pass")`，`actors.py:241` 是被迫提名时改写的 `"accuse"` 与 `pick`，`actors.py:294` 的整行是 `"return None"`。`BASELINE` rc=0，末行 1185 passed in 72.46s。五具刀分别把 `failure=call.error` 换成空串、把 `last_words` 换成 `pass`、把 `pass` 换成 `listen`、把 `accuse` 换成 `defend`、把 `return None` 换成一条空 `suspects` 清单；汇总行报五具全部逮住：每具的 rc 是 1、整套只红一条，且红名单里点着的正是这一格自家的证人——这一片没有 #243 那种文档闸门共读。折行的那一格（`return Proposal(…` 跨两行）只替换钉住的首行、保留续行的 `request_meta=meta)`，行数仍然是中性的。逐具还原后 sha 回到 `PREFLIGHT` 记的 `60860517cda7`，`AFTER_RESTORE` rc=0，末行 1185 passed in 72.71s。
+
+* 普查今值（重测，不是减法）：同一趟带五格正控制名册的整套离线跑 rc=0，`BRANCH_CENSUS side=src files=25 cells=711 executed=687 never_executed=24`，`side=tests cells=945 executed=877 never_executed=68`（五枚 def 没有分支体，tests 侧一字未动）。src 那 24 格按文件：`cli.py` 9、`phases.py` 4、`human.py` 3、`render_live.py` 3、`schema.py` 2、`transport.py` 2、`actors.py` 1。正控制回显 2、1、1、1、1 次命中，没有 `CENSUS_RULER_BROKEN`；这一片的证人住在正常收集路径里，所以不必像 #243 那样 `--ignore` 掉某一本。剩下的进程内七格＝`phases.py` 那四格＋`schema.py` 那两格＋`actors.py:187` 那一格（`script` 取行的窗口效应，归 #242）。
+
+* `schema.py:296` 那一枚 `continue` 的定性走的是探针而不是减法。判据是 `schema.py:295` 那句 `isinstance(data, dict)`，体首句 `schema.py:296` 是一枚 `continue`。探针（同脚本 `probe_296()`）双路并查：trace 数行事件，另外把 `json.loads` 包一层记下真正送进循环的每个候选解析出来的类型。38 形输入（含 `[]`、`[1,2]`、`"a string"`、`5`、`null`、`{`、`}`、围栏、截断、数组套对象、双对象、`x{…}` 这些形状）里 24 个候选解析成功：判定行回显 24 次经过，体首句一次没落，送进循环的解析结果里没有一个是非 dict 的类型。原因是结构性的：那三条候选来源（`extract_first_object` 两次、`salvage_candidates` 一路）返回的都是**从第一个 `{` 起切的切片**，而 JSON 文法里以 `{` 开头的值只会是对象。所以它是 #244 那一族的第二格——到不了，不是没人走；工单口径由"一格欠证人"改成"两格到不了"。
+
+* 尺面登记：这一趟没加新盲区，但把第三号筛子用了第二次。普查的 NEVER 名单要连着过三道筛——证人住哪个进程、夹具窗口、可达性——`schema.py` 现在同一本里两格落在第三道筛、一格落在第一道筛之外，只有 `actors.py` 那五格是"真欠证人"，也只有它们能靠补用例收掉。
+
+* 方向纪律：`phases.py` 那四格这一片一格没动。它们是空名册守卫（狼队没人、胜负已定、没人发言、没人投票），欠的是把 `Table` 摆到那个时刻的牌桌级夹具，不是断言；其中"没人发言"那一格在写用例前要先量它是不是等价变异——如果没有下游读者能分辨，任何刀都不会红，就不该记成缺证人。端点两格、真人 tty 六格、子进程九格这一片同样一格没动。
