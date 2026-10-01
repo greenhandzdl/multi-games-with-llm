@@ -234,8 +234,12 @@ def test_wolves_hear_each_other_and_nobody_else_hears_them():
 
 
 def test_unordered_input_cannot_silently_build_a_shorter_world():
-    with pytest.raises(info.IsolationError):
-        info.Percept(seat=1, at_seq=LAST_SEQ, events=(BOARD[5], BOARD[2]))
+    """`__post_init__` has two belts and both raise the same exception type, so a bare
+    `pytest.raises(IsolationError)` passes on either: this fixture used to hand seat 1 two
+    private deals, and the refusal it proved was the visibility one, not the ordering one.
+    The events below are visible to seat 1 and descend, so only the ordering belt can fire."""
+    with pytest.raises(info.IsolationError, match="ordered by seq"):
+        info.Percept(seat=1, at_seq=LAST_SEQ, events=(BOARD[15], BOARD[0]))
 
 
 def test_a_wolf_seat_reads_his_roster_in_his_own_prompt():

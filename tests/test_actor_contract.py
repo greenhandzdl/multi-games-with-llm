@@ -29,6 +29,8 @@ import io
 import random
 from typing import get_args
 
+import pytest
+
 from wolfengine import game, phases, rules
 from wolfengine.agent import Agent
 from wolfengine.actors import ActorKind, HumanActor, MockActor, Proposal
@@ -197,3 +199,17 @@ def test_the_reserved_seat_declares_the_shape_the_orchestrator_reads():
         "`blocking` 是 `wave_size` 与墙钟闸门的输入：改成 False 就是把 §15 第 2 条改回去")
     assert seat.timeout_for(Phase.NIGHT_WOLF) is None, (
         "这个座位的截止时间是『永远』不是『没填』；给它一个数，第 1 条的替身就成了唯一说法")
+
+
+def test_play_stops_when_the_table_has_neither_actors_nor_a_transport(tmp_path):
+    """`play()` mints its own LLM actors only for a table it builds from a transport; with
+    neither argument there is no table at all. The refusal has to be one sentence at the door:
+    opening a log first would leave a game file with a name and nothing in it, which the read
+    side has its own rules to explain. Hence the path one level below `tmp_path` — the fixture's
+    own directory exists either way, so emptiness there proves nothing about who created it."""
+    out = tmp_path / "g-none"
+    with contextlib.redirect_stdout(io.StringIO()):
+        with pytest.raises(ValueError) as why:
+            asyncio.run(game.play(cfg=Config(), deal_seed=SEED, out_dir=out))
+    assert str(why.value) == "play() needs either `actors` or a `transport`", str(why.value)
+    assert not out.exists(), f"门口就该停，目录却已经被摊开了：{out}"

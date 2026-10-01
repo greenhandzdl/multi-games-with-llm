@@ -826,3 +826,40 @@ def test_the_broken_numbering_sentence_has_one_owner():
     assert "seq_damage" in (Path("src/wolfengine/cli.py")).read_text(encoding="utf-8"), \
         "audit 那一面自己数了一套"
 
+
+def _meta(game_id: str) -> dict:
+    return {"game_id": game_id, "deal_seed": 7, "actor_kinds": ["llm"], "config_hash": "h"}
+
+
+def test_the_manifest_refuses_to_land_behind_the_first_fact(tmp_path):
+    """Append-only has to cover the manifest line too, or the discipline is decorative: a
+    `write_meta()` after the first event would either overwrite the events or park the manifest
+    behind them, where the shared reader is no longer allowed to relocate it. Both of
+    `write_meta`'s belts raise, so which one fires is the claim under test."""
+    path = tmp_path / "late.jsonl"
+    log = EventLog(path, meta=_meta("g-late"))
+    log.append(Kind.GAME_START, day=1, phase="night_wolf", seats=[1, 2, 3])
+    assert path.exists(), "夹具没先落下一条事实，下面那条拒绝就什么也没证明"
+    before = path.read_text(encoding="utf-8")
+    with pytest.raises(RuntimeError) as why:
+        log.write_meta()
+    assert str(why.value) == "write_meta() must come before the first append()", str(why.value)
+    assert path.read_text(encoding="utf-8") == before, "拒绝之前已经动手改写过那个文件"
+
+
+def test_one_log_file_cannot_hold_two_games(tmp_path):
+    """The other belt, the one the手册 and views.md have both been citing as settled: a game id
+    repeats (it is semantic), the file must not, because two `seq` numberings interleaved into
+    one file are irrecoverable. A fresh in-memory log over an occupied path is exactly the case
+    the ordering belt above cannot reach."""
+    path = tmp_path / "reuse.jsonl"
+    EventLog(path, meta=_meta("g-one")).write_meta()
+    before = path.read_text(encoding="utf-8")
+    with pytest.raises(FileExistsError) as why:
+        EventLog(path, meta=_meta("g-two")).write_meta()
+    text = str(why.value)
+    assert str(path) in text, f"报告里没点名是哪个文件：{text}"
+    assert "not reusable" in text, text
+    assert "before the first append" not in text, f"落到了另一条带子上：{text}"
+    assert path.read_text(encoding="utf-8") == before, "拒绝之前已经动手改写过那个文件"
+

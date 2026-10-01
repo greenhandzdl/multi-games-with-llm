@@ -240,8 +240,8 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 `N passed in M.NNs` 汇总整个吃掉，只能从进度行的百分比反推（这一条的账见 `#154`）。
 "哪个文件有几条"那一类主张由 `test_a_case_count_written_next_to_a_module_name_matches_that_module`
 自己核（这一轮它就抓红了 `tests/test_cli.py` 的三处旧数），套件总数那一格仍然只能靠上面这句"要重数"。
-分布：日志读不下去的用例住在 `tests/test_log_recovery.py`（现 46 条，
-其中四条是参数化的——三条各 4 个参数、一条 3 个，跑起来 57 个用例）；
+分布：日志读不下去的用例住在 `tests/test_log_recovery.py`（现 48 条，
+其中四条是参数化的——三条各 4 个参数、一条 3 个，跑起来 59 个用例）；
 钉"末行只宽一行"的和钉"manifest 只有一个读者"的住在
 `test_wiring.py`。`#57` 又新写了一个文件 `tests/test_loopback_endpoint.py`（四条，全仓库只有它
 和 `tests/test_calibrate_rehearsal.py` 真的开 socket，开的是 127.0.0.1 上自己起的桩）；`#58`–`#60`
@@ -351,7 +351,7 @@ plan §15 要求上桌前从编排层清掉的三条隐含假设各有代码与�
 
 A1–C3 八具的具名账在 `docs/iterations.md`〈手册里那四张具名变异账表搬进了这一份〉一节的 A·B·C 表。
 
-重跑：`.venv/bin/pytest tests/test_actor_contract.py`（8 条，半秒内，不发请求）。
+重跑：`.venv/bin/pytest tests/test_actor_contract.py`（9 条，半秒内，不发请求）。
 
 跑变异不只是为了证明测试能红，也是为了给写在文档里的那句理由做证——理由写错了，全套绿灯都不会红。
 

@@ -1589,3 +1589,50 @@ def test_the_batch_report_prints_the_reconciled_denominator_for_both_arms(tmp_pa
     b_cell = out["fallback_copies"]["B"]
     assert f"比过 {b_cell['n_compared']} 条" in row_b[0] and "0 条两份拷贝对不上" in row_b[0], row_b[0]
     assert b_cell["n_compared"] > 0, "干净臂连分母都没印出来：这一节就退化成一句'没问题'"
+
+
+def test_a_dotted_path_under_a_scalar_names_the_nesting_as_the_problem():
+    """`BadOverride` has several reasons behind one type, and a reader who gets the wrong one
+    goes looking in the wrong file: the axis list is not what a scalar lacks. So the sentence
+    is pinned here, and the three sibling refusals are pinned *out*."""
+    with pytest.raises(batch.BadOverride) as why:
+        batch.apply_overrides(Config(), {"temperature.deep": 1})
+    text = str(why.value)
+    assert "不是嵌套表，不能再往下走" in text, text
+    for sibling in ("不是可比字段", "后面没有代码", "配置里没有"):
+        assert sibling not in text, f"另一条理由混进来了：{text}"
+
+
+def test_a_whole_table_is_refused_as_a_whole_table():
+    """The mirror image of the cell above: a leaf-shaped command aimed at a nested field has to
+    say "leaf only", because silently replacing every sub-budget at once is exactly the
+    undeclared-axis difference `compare` would later refuse to explain."""
+    with pytest.raises(batch.BadOverride) as why:
+        batch.apply_overrides(Config(), {"regions": 900})
+    text = str(why.value)
+    assert "只能设叶子字段，不能整块替换" in text, text
+    assert "不是嵌套表" not in text, f"两条理由说的是相反的事：{text}"
+
+
+def test_a_batch_without_arms_stops_before_the_directory(tmp_path):
+    """Zero arms is not "a batch of nothing": there is no arm to name a directory after, and a
+    directory that appears anyway is read by the next `compare` as one more empty arm. The path
+    is one level below `tmp_path` on purpose — pointing the check at the fixture's own directory
+    would pass no matter what, because creating it adds nothing *inside* it."""
+    out = tmp_path / "b-no-arms"
+    with pytest.raises(batch.BatchAborted) as why:
+        asyncio.run(batch.run_batch([], games=1, seed0=1, out_dir=out, mock=True))
+    assert str(why.value) == "没有配置臂", str(why.value)
+    assert not out.exists(), f"门口就该停，目录却已经摊开了：{out}"
+
+
+def test_two_arms_sharing_one_name_stop_before_the_directory(tmp_path):
+    """Arm names are the keys of the report rows, so a repeat is not cosmetic: two arms would
+    answer for the same rows, and the paired-seed comparison silently keeps whichever landed
+    last. Refused at the door, for the same reason as the empty case above."""
+    twins = [batch.Arm("A", Config(), overrides=()), batch.Arm("A", Config(), overrides=())]
+    out = tmp_path / "b-twins"
+    with pytest.raises(batch.BatchAborted) as why:
+        asyncio.run(batch.run_batch(twins, games=1, seed0=1, out_dir=out, mock=True))
+    assert str(why.value) == "配置臂重名", str(why.value)
+    assert not out.exists(), f"门口就该停，目录却已经摊开了：{out}"
