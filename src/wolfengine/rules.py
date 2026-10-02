@@ -203,7 +203,7 @@ def resolve_night(state: GameState, plan: NightPlan) -> NightResolution:
         res.used_poison = True
 
     for seat in sorted(dying):
-        res.deaths.append(Death(seat=seat, day=day, night=day, cause=dying[seat]))  # type: ignore[arg-type]
+        res.deaths.append(Death(seat=seat, day=day, night=day, cause=dying[seat]))
     res.peace = not res.deaths
 
     # --- seer ------------------------------------------------------------------

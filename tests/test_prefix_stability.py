@@ -181,7 +181,7 @@ def test_the_budget_lever_folds_whole_days_and_stops_at_the_day_floor():
                                     "text": f"{(i % 9) + 1}号说昨晚的动静不对劲。"})
                      for i in range(1, n + 1))
 
-    fold = lambda n: plan_fold(chronicle(n), est=len,                     # noqa: E731
+    fold = lambda n: plan_fold(chronicle(n), est=len,
                                start_window=90, min_window=4, b2_cap=1)
     for n in (60, 90, 200, 400):
         plan = fold(n)
@@ -425,7 +425,7 @@ def test_a_marker_is_not_chronicle_material_even_handed_to_the_primitives():
     assert "[e9]" not in compress.chrono_bytes(tuple(dirty), (1,), 4)
     # 8 条还是 9 条会改几何边界（8→8 与 9→12），所以 `plan_fold` 那一步的漏过滤不是看不见的：
     # 它对折的次数会多一轮，窗口的落点也一样，但 rounds 不同——缓存冲洗就多算了这一次。
-    fold = lambda evs: compress.plan_fold(  # noqa: E731
+    fold = lambda evs: compress.plan_fold(
         evs, est=estimate_tokens, b2_cap=1)
     assert fold(tuple(dirty)) == fold(tuple(speeches)), \
         "标记占了编年史的一格：窗口、对折轮数都会因为它多出一条而挪动"

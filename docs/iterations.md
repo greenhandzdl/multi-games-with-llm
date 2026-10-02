@@ -10210,7 +10210,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   「先红一条再登记」。刀之前先还掉一笔尺子债：普查里最贵的一格是**配对口径**——`TEAM_ZH` 的下标空间是 `Winner`，
   不是同名的 `Team`(`roles.py:17`)，按表名去配对会报缺词 god 与 villager、死词 good，两格假缺词加一格假死词，
   而这三格压根不是那张表读的东西。闸门按「渲染它的那一行用的是哪枚取值」配，不按表名配。
-* 收集器自己的一形 bug 是红出来的，不是想出来的：`_literal_values`(`tests/test_wiring.py:380`) 只遍历
+* 收集器自己的一形 bug 是红出来的，不是想出来的：`_literal_values`(`tests/test_wiring.py:381`) 只遍历
   `ast.parse` 结果的模块层时，`schema.py:52` 那一格看不见，因为那枚 Literal 住在类体里。01:52:26Z 那趟报的是
   「既不是模块级的 Literal 别名，也不是某字段注解里嵌的 Literal」，改成走整棵树之后 01:53:03Z 两具都绿。
   这一笔要分清：那次红是**尺子红**，不是缺陷红。
@@ -10229,7 +10229,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   K4 把出厂默认 style 改成 quiet → 两红，红在后一具闸门的最后一支；
   K5 把收集器收回只扫模块层 → 两红，红字正是那条「既不是模块级的 Literal 别名」，它是正控制，证明「认两形」那一格不是装饰。
   逐把还原都逐字节比过哈希（「RESTORED sha match: True」），跑完 `git status` 只剩我自己那两处改动。
-* 顶号一处，还是那具行号闸门替我记的账：`_literal_values`(`tests/test_wiring.py:380`) 那处收拢长了九行，把归档里
+* 顶号一处，还是那具行号闸门替我记的账：`_literal_values`(`tests/test_wiring.py:381`) 那处收拢长了九行，把归档里
   指着 `rows = doc["rows"]` 的号从 2030 顶到 2039（本文件第 8519 行那处已随代码改口）。它在五把刀里每次都跟着红，
   因为它是被我插的那九行动的、不是被刀动的——判 CAUGHT 时点名的始终是另一具，两红里得先扣掉它。
 * 文档对齐这一趟是**负结果**（02:05:36Z 现测）：五张表名加上「人话表」这个词，在 README 与 docs/ 的非归档页里各
@@ -10461,7 +10461,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 * RED 05:01:05Z：1 failed，报文点名 `('views.md', 298, <那一格>, 0)`，括号里就是主人条数。错的那一形
   在这里只描述、不贴出来。
 * 处置＝两格都写回点得到的样子：`views.md` 的 294 行补上基础名（和上一行是同一条参数化用例的另一格，
-  `tests/test_wiring.py:267` 的 `test_the_two_views_share_one_definition_of_each_viewing_rule`），
+  `tests/test_wiring.py:268` 的 `test_the_two_views_share_one_definition_of_each_viewing_rule`），
   `views.md` 的 298 行换成单数那一形（主人是
   `tests/test_render_html.py:302` 的 `test_the_over_long_marker_needs_its_own_flag_and_prints_no_length`）。
   两处都是行内改，那一页一行没增没减——`views.md` 被按行号点过，插行会顶号。
@@ -11021,7 +11021,10 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 * 同一族里剩下的 46 枚也是零读者的豁免（`# noqa` 35 枚：src 4 / tests 25 / scripts 6；`# type: ignore`
   11 枚：src 5 / tests 6 / scripts 0，**08:43:40Z** 逐本数，与 `bd51a30` 一字不变）。这一族没有"底下那格
   其实天天在跑"这种可证的假话，删它们等于替仓库决定"永远不装 lint / type 检查"，那是处理变更，登记成一张
-  票而不是在这一片里单方面收掉。
+  票而不是在这一片里单方面收掉。那张票后来收了，收的时候把口径换了：同一片代码 **13:12:51Z** 按注释 token
+  重数是 43 枚（`# noqa` 33：src 4 / tests 23 / scripts 6；`# type: ignore` 10：src 5 / tests 5 / scripts 0），
+  上面那 46 是行级扫描的数，多出的 3 枚是散文里的字面提及而不是挂在代码上的豁免；处置见〈#253 零读者豁免
+  那一族：摘掉，不是装工具〉。
 * 收尾对照（先写预期再跑）：`#224` 那趟是 `1107 passed` / `1107 tests collected`，这一片新增七枚
   `def test_`、一枚没删，所以**预期 1114 collected、1114 passed**。中间一趟（**08:31:58Z → 08:33:09Z**）
   全量离线是 `1 failed, 1113 passed`——那一记红就是本节标题：`docs/views.md` 前指〈直播键盘层那三枚免责
@@ -11459,4 +11462,60 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 * 归档副本：`census251/probe251.py`（成对比重，带灵敏度、重复性、改回读原文那枚正控制）、
   `census251/fixptr251.py`（指针漂移：默认干跑，只搬号不搬句，点名被删格子的那几枚一律留给人工改句子）、
   `census251/head251/`（两份 pristine 与那份改回读 `text` 的正控制变体）。尺子仍是 #237 那根，内容哈希没换。
+
+### #253 零读者豁免那一族：摘掉，不是装工具，并给"标记的收件人必须在场"立一条闸门（**13:13:41Z** 落笔）
+
+* 票面是 `#226` 那句话：46 枚 `# noqa` / `# type: ignore` 没有一个收件人。收票前先把口径钉住——
+  **13:12:51Z** 按注释 token 重数是 **43 枚**（`# noqa` 33：src 4 / tests 23 / scripts 6；`# type: ignore`
+  10：src 5 / tests 5 / scripts 0），而同一棵树上按行扫给 46。多出的 3 枚是散文里的字面提及，不是挂在代码
+  上的豁免：`tests/conftest.py` 文件头那句「blunt: no `# noqa`, no allowlist」、`tests/test_wiring.py` 里
+  `#84` 用例那句「`# noqa` 在这把尺上一个字都不算」、以及同本 `#209` 用例讲 `rules.py` 那枚除外标记的句子。
+  这一片的判据因此只能走 tokenize：认行的尺会把"讲那种标记"读成"挂那种标记"，那三句会替自己保住三枚假豁免。
+* 收件人不在场不是"我没看见"，是四处各自能复算（**13:12:51Z** 现测）：`pyproject.toml` 的
+  `optional-dependencies` 里 dev 只有 pytest 与 pytest-asyncio；`uv.lock` 那 325 行里 mypy / ruff / flake8 /
+  pylint / pyright 五个名字各 0 次命中；`.venv/bin` 里那五把刀一把都没有；仓库没有 `.github/`，CI 配置一份
+  也没落。第五处是 `#84` 那趟实测：同一把尺（未用导入探测）上 `# noqa` 一个字都挡不住，所以这一族连
+  "曾经挡住过什么"都拿不出来——与 `#118` 同一种病，只是那次是一条 docstring 里的假出处。
+* 处置选**摘掉**。装检查器不是清理而是能力变更：加 dev 依赖、走网络、还要一次性接住三棵树的既有病，
+  而这一片要回答的只是"文件里那句话是不是谎"。方向也单向：这些注释不是记录，是祈使，而祈使的收件人不存在。
+  真有一天装上下一个 lint，名册应当由那个工具自己的报告反推（理由同 `#227` 不抄 pytest 内置名单），
+  不由今天这 43 枚预付。摘的时候只切 directive 那一截：8 枚注释里除 directive 还写着"为什么"，理由原样留在
+  行尾——`batch.py` 留「探针失败就别开始花钱」，`test_doc_citations.py` 两枚留「名册住在它的主人那一本」与
+  「拼形状，不留字面量」，`test_live_path.py` 留「形状表那把尺也量折叠标记这一格」，`test_payload_shape.py`
+  两枚留"the authored transcript, reused as the fixture"与"the roster, derived once, test-side"，
+  `test_render_html.py` 留同一句 authored transcript，`test_wiring.py` 留「这里要的正是"以什么姿态失败"」。
+* 删注释这一格不能靠"我看过了"：被改的 19 本逐本与 `4281543` 比 AST（**13:14:30Z** 现测）
+  `FILES_TOUCHED 19 / AST_IDENTICAL 18 / AST_DIFFERS 1`，差的那本就是新闸门所在的 `tests/test_wiring.py`，
+  差的内容是两个 `def`（一具 helper 加一条用例）与字符串常量 加 5 减 1。行数侧：18 本 `+N −N` 逐行相抵，
+  第 19 本 `+50 −3`，多出的 47 行正是那两枚 def——代码没被"移除注释"这件事碰到，两边各说一遍。
+* 只删不立尺会放它回来，所以落一条闸门：`tests/test_wiring.py::test_no_suppression_marker_addresses_a_checker_the_repo_never_runs`
+  按注释 token 扫 src / tests / scripts 三棵树，任何一枚 directive 直接红，判决行逐格印「文件:行 原文」。
+  先落的红是 `1 failed, 116 deselected`（43 枚逐一点名），摘完再跑 `1 passed, 116 deselected`；这两趟的秒数
+  没进笔记，能在这一片里复算的红绿对是下面那两具刀。
+* 两具刀（**13:13:41Z → 13:13:49Z**，同一趟里基线先跑 `BASELINE rc=0 green=yes`）：P 把一枚真豁免
+  （`# noqa: E402`）放回 `scripts/calibrate.py` 那一行行尾 → `rc=1 red=True named=True -> CAUGHT`；Q 把同样的
+  字样放进模块 docstring 里（用 `ast` 找 docstring 的 `end_lineno` 定位插入点，插完先确认那一行不是 COMMENT
+  行）→ `rc=0 green=True -> CLEAN`。合起来 `VERDICT BOTH_ASRULED knifes=2/2`，两次还原后
+  `RESTORED sha256_12 6c7c9d278b38` 与 `PREFLIGHT sha256_12 6c7c9d278b38` 同一枚哈希。过宽那一侧（把散文算进
+  名册）是量出来的，不是推出来的——那一具正是这节开头那 3 枚假豁免的形状。
+* 唯一的自伤在写盘脚本那一头：`strip253.py` 的干跑与写盘两条路都对，末尾那行"行数没动"的自查先把
+  `per_file` 的键按 `Path` 存、再按字符串取，19 本全部写完之后 `KeyError` 自杀，判决行一行没印出来。
+  结果没受影响是另两路独立核的：`git diff --numstat` 逐本相抵、闸门复跑绿。脚本的键已改成同一种
+  （**13:14:30Z** 用一对只读字典重放，回显 `GUARD_REPLAY keys_match=yes bad={}`），修好的那份在现树上干跑
+  （**13:14:34Z**）回显 `PLANNED_MARKERS 0 files 0` 后按名册断言退出——那条 ABORT 在设计里：它钉的是
+  "这份名册是按 43 枚那一片写的"，现树数到 0 正是它该报的数，不是它坏了。
+* 这一片把 `docs/iterations.md` 里 `#226` 那句 46 枚就地改口：只在原句后面追加口径与现测数，不重排历史句
+  （规矩同 `#227`）。新增 `import tokenize` 顶歪了 3 处 `test_wiring.py` 行号指针，闸门先红那一趟点名三处
+  （`1 failed, 101 passed`），挂号 +1 之后 `102 passed`。
+* 收尾：全量离线（**13:08:54Z → 13:10:27Z**，`tests` + `scripts` 两本）`1192 passed in 91.95s`、`SUITE_RC=0`，
+  与 `4281543` 那趟的 1191 差的正是新闸门那一条用例；起跑时 `uptime` 回显 load averages 11.68 / 11.82 / 11.12
+  （本机那枚共驻训练进程全程在），秒数不作跨趟比较，计数作。
+* 顺序照老规矩：散文先落、再复跑受扫的那本闸门。上面这些 bullet 与 `#226` 那句就地改口一起落盘之后复跑
+  一趟（**13:18:40Z → 13:18:57Z**，`tests/test_doc_citations.py` 整本加这一片新落的那一条用例）
+  **103 passed**——那 103 枚里有 102 枚是文档闸门，多出的那一枚就是这条新尺。全量收口（**13:20:07Z →
+  13:21:50Z**）`1192 passed`、`SUITE_RC=0`，那一趟起跑时负载已涨到 32.07（共驻那枚进程还在），仍然一格没红。
+  最后落的那一句就是这一段本身：它只被文档闸门读，所以它的收口读数写在提交说明里，不再往本节追加句子。
+* 归档副本：`census253/strip253.py`（坏的那份留着不改，sha256 前十二位 `8400a9a53c60`——键混用那处就在那份里）、
+  `census253/strip253-fixed.py`（键统一后的同一份，`edd0e7e7269f`）、`census253/knife253.py`（`0a3f8e759c0b`，
+  P/Q 两具与两次 RESTORED 自证）、`census253/suite253.log`（全量那趟的原始回显，11 行，含 `uptime` 那一行）。
 

@@ -207,9 +207,9 @@ def test_no_candidate_is_tried_twice():
         seen.append(s)
         return real(s)
 
-    json.loads = spy  # type: ignore[assignment]
+    json.loads = spy
     try:
         parse_action('{"act":"accuse","target":3,"speech":"好"}')
     finally:
-        json.loads = real  # type: ignore[assignment]
+        json.loads = real
     assert len(seen) == len(set(seen)), seen

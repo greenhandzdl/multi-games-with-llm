@@ -27,8 +27,8 @@ from wolfengine import metrics
 from wolfengine.events import EventLog, Kind
 
 sys.path.insert(0, str(Path(__file__).parent))
-import test_golden_game as G  # noqa: E402  (the authored transcript, reused as the fixture)
-from declared_kinds import KINDS  # noqa: E402  (the roster, derived once, test-side since `#160`)
+import test_golden_game as G  # the authored transcript, reused as the fixture
+from declared_kinds import KINDS  # the roster, derived once, test-side since `#160`
 
 TABLE = Path("src/wolfengine/events.py")
 

@@ -145,11 +145,11 @@ def test_the_wave_is_capped_by_the_prefix_ladder_not_by_the_seat_count(tmp_path)
 class _AsModel(MockActor):
     """按 mock 剧本答题、但**声明**自己是模型的座位：只为把 `play()` 的墙钟闸门打开。"""
 
-    kind = "llm"  # type: ignore[assignment]
+    kind = "llm"
 
 
 class _AsHuman(MockActor):
-    kind = "human"  # type: ignore[assignment]
+    kind = "human"
     blocking = True
 
 

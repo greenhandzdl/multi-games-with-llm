@@ -227,10 +227,10 @@ def default_action(legal: LegalSet, belief_top: Iterable[int]) -> Action:
     if legal.assigned_act in legal.acts:
         act = str(legal.assigned_act)
         tgt = pick() if act not in TARGETLESS_ACTS else None
-        return Action(act=act, target=tgt, speech="", evidence=[])  # type: ignore[arg-type]
+        return Action(act=act, target=tgt, speech="", evidence=[])
     for act in legal.acts:
         if act in TARGETLESS_ACTS:
-            return Action(act=act, speech="", evidence=[])  # type: ignore[arg-type]
+            return Action(act=act, speech="", evidence=[])
     if legal.acts:
-        return Action(act=legal.acts[0], target=pick(), speech="", evidence=[])  # type: ignore[arg-type]
+        return Action(act=legal.acts[0], target=pick(), speech="", evidence=[])
     return Action(act="pass", speech="", evidence=[])

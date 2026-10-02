@@ -173,7 +173,7 @@ async def play(
     # and killing the game over it would discard the reason the human was there.
     enforce_clock = all(k == "llm" for k in kinds)
     limit = cfg.max_game_wallclock_s if wallclock_limit_s is None else wallclock_limit_s
-    spent = lambda: sum(c.completion_tokens_spent for c in counters.values())  # noqa: E731
+    spent = lambda: sum(c.completion_tokens_spent for c in counters.values())
 
     terminal, winner = DRAW_DAY_LIMIT, None
     try:

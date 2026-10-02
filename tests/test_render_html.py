@@ -36,7 +36,7 @@ from wolfengine import belief, render_html
 from wolfengine.events import PUBLIC, Event, EventLog, Kind
 
 sys.path.insert(0, str(Path(__file__).parent))
-import test_golden_game as G  # noqa: E402  (the authored transcript, reused as the fixture)
+import test_golden_game as G  # the authored transcript, reused as the fixture
 
 
 @pytest.fixture(scope="module")

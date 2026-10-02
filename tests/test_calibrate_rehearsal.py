@@ -61,7 +61,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 
     protocol_version = "HTTP/1.1"
 
-    def log_message(self, *a) -> None:  # noqa: A003
+    def log_message(self, *a) -> None:
         pass                            # 静默：测试输出里不要 78 行访问日志
 
     def _send(self, code: int, payload, *, sse: bool = False) -> None:
@@ -75,7 +75,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(raw)
 
-    def do_GET(self) -> None:  # noqa: N802
+    def do_GET(self) -> None:
         self.server.state["calls"].append(("GET " + self.path, None))
         if self.path.endswith("/models"):
             # 真端点就是这个形状：没有 revision/version 字段，所以 R7（被人换了权重）只能间接发现。
@@ -85,7 +85,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         else:
             self._send(404, {"error": {"message": "no such route"}})
 
-    def do_POST(self) -> None:  # noqa: N802
+    def do_POST(self) -> None:
         n = int(self.headers.get("Content-Length") or 0)
         try:
             body = json.loads(self.rfile.read(n) or b"{}")

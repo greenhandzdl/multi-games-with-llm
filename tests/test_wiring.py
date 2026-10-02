@@ -18,6 +18,7 @@ import dataclasses
 import json
 import random
 import re
+import tokenize
 from pathlib import Path
 from typing import get_args
 
@@ -3161,7 +3162,7 @@ def test_every_stored_fact_value_has_a_word_in_the_table_that_renders_it():
     决定猎人能不能开枪，这一行既给人看也喂模型；`compress.py:54` 的 `TEAM_ZH` 缺格时原样打印，
     英文阵营名直接进「X阵营获胜」；`compress.py:53` 的 `VERDICT_ZH` 同形，验不了的那一格在法官私发
     那一行里变成英文。写侧没有护栏兜着：`rules.py:206` 那格的 `cause` 是从一个 `dict[int, str]` 里
-    取的，后面还挂着一条 `type: ignore`，也就是说类型检查器被明确告知别管这一行。
+    取的，而这一行行尾原先挂着的那枚对类型检查器的除外标记已被 `#226` 摘掉（`4281543` 那一版还在）——它的收件人从来没在这个仓库跑过。
 
     口径不是拿表名配的。`TEAM_ZH` 名字像 `roles.py:17` 的 `Team`，下标其实是 `state.py:32` 的
     `Winner`——按名字配会数出两格假缺词加一格假死词（"神""民"两营从来不会被宣布获胜），
@@ -3342,7 +3343,7 @@ def test_the_endpoint_substitutes_actually_explode_before_the_socket(no_network)
                 continue
             try:
                 await outcome
-            except BaseException as e:  # noqa: BLE001 - 这里要的正是"以什么姿态失败"
+            except BaseException as e:  # 这里要的正是"以什么姿态失败"
                 outcomes[verb] = _classify(e)
             else:
                 outcomes[verb] = "居然发成功了"
@@ -3350,7 +3351,7 @@ def test_the_endpoint_substitutes_actually_explode_before_the_socket(no_network)
             await HttpTransport(Config(), client=client).chat(
                 [{"role": "user", "content": "x"}], model="m", temperature=0.2,
                 max_tokens=8, timeout_s=1.0)
-        except BaseException as e:  # noqa: BLE001
+        except BaseException as e:
             outcomes["chat"] = _classify(e)
         else:
             outcomes["chat"] = "居然发成功了"
@@ -3361,3 +3362,49 @@ def test_the_endpoint_substitutes_actually_explode_before_the_socket(no_network)
         f"这些该被换成替身的调用没有抛出替身那句 `AssertionError`：{silent}"
         "——`conftest.block_the_endpoint` 的手没落到，全仓库那些 `assert no_network == []` 守的就是空气")
     assert reached == [], f"桩 transport 被走到了 {len(reached)} 次，替身一层都没拦住"
+
+
+# ------------------------------------------------- 豁免标记的收件人在不在场
+SUPPRESSION_RX = re.compile(r"noqa|type:[ \t]*ignore")
+
+
+def _suppression_markers(roots: tuple[str, ...]) -> list[str]:
+    """只从注释 token 里找豁免标记，散文里的字面提及一律不算。
+
+    这一格形状是这一片的地基：票面写的"46 枚"是行级扫描的数，它把三枚散文算了进去
+    （`tests/conftest.py` 文件头那句、本文件 `#84` 用例里的同一句、以及 `#209` 那一节里讲
+    `rules.py` 类型注解除外标记的那一句）。13:00:34Z 按注释 token 重数是 43 枚。
+    所以判据必须走 tokenize：行级正则会把"讲那种标记"当成"挂那种标记"，而只认整行形状
+    又会漏掉跟在代码后面的那些——43 枚里没有一枚是独占一行的注释。
+    """
+    hits = []
+    for root in roots:
+        for path in sorted(Path(root).rglob("*.py")):
+            lines = path.read_text(encoding="utf-8").splitlines(keepends=True) + [""]
+            for tok in tokenize.generate_tokens(iter(lines).__next__):
+                if tok.type == tokenize.COMMENT and SUPPRESSION_RX.search(tok.string):
+                    hits.append(f"{path}:{tok.start[0]} {tok.string.strip()}")
+    return hits
+
+
+def test_no_suppression_marker_addresses_a_checker_the_repo_never_runs():
+    """`#226`：一行豁免注释的收件人是检查器，而这个仓库的依赖闭包里没有检查器。
+
+    13:00:34Z 现测 43 枚：`# noqa` 33 枚（src 4／tests 23／scripts 6）、`# type: ignore`
+    10 枚（src 5／tests 5）。收件人不在场的四条证据：
+    `pyproject.toml` 的 dev extras 只有 pytest 与 pytest-asyncio；`uv.lock` 里没有 mypy、
+    ruff、flake8、pylint、pyright 任何一枚；`.venv/bin` 里没有那几把刀；仓库里没有 CI 配置。
+    所以这 43 枚每一枚都在对一个从不运行的工具说话——`# noqa: E402` 挡不住任何东西，
+    `#84` 那把尺的 T3 早就量过这一点。
+
+    `# type: ignore` 那一族还多一层：那句话是主张"类型检查器会报这一行"，而本仓库从来没跑过
+    任何类型检查器，所以它和 `#118` 被订正过的那类"拿一条没实测过的出处当依据"是同一种形状。
+    留着它们，仓库就在替一个不存在的读者维护一份没人核对的名单。
+
+    方向要说清：这条判据不是"永远不许装 lint／type 检查"。装一把刀是**能力变更**（要动 dev
+    依赖、要跑一次全仓库普查），豁免名单应当由那把刀自己报出来再逐条写，不该由这些注释预支。
+    失效方向因此是单向的——今天删掉的只是没有收件人的字，将来若真装了工具，它会把它认为该豁免
+    的每一格重新点名，那时补上的每一枚都有证人。
+    """
+    dead = _suppression_markers(("src", "tests", "scripts"))
+    assert not dead, f"这些豁免注释没有一个收件人（仓库里没有 lint／type 检查器）：{dead}"

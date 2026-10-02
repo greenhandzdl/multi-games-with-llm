@@ -26,8 +26,8 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from wolfengine.config import Config  # noqa: E402
-from wolfengine.metrics import (  # noqa: E402
+from wolfengine.config import Config
+from wolfengine.metrics import (
     CALIBRATION_KEYS as QUOTABLE_KEYS,
     collapse_round,
     declared_models,
@@ -37,7 +37,7 @@ from wolfengine.metrics import (  # noqa: E402
     opening_distinct_rate,
     template_top_fragments,
 )
-from wolfengine.transport import usage_from  # noqa: E402
+from wolfengine.transport import usage_from
 
 CONF = Config()
 KEY_ENV = CONF.api_key_env
@@ -144,7 +144,7 @@ class Client:
                         "text": ch["message"]["content"] or "",
                         "choice_keys": sorted(ch.keys()),
                     }
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 last = {"ok": False, "err": redact(f"{type(e).__name__}: {e}")[:200], "dt": time.perf_counter() - t0}
             if attempt < tries - 1:
                 await asyncio.sleep(1.5 * (attempt + 1))
@@ -156,7 +156,7 @@ async def _probe(out: dict, name: str, fn) -> None:
     """Record a probe's failure as a row rather than aborting a ten-minute run."""
     try:
         out[name] = await fn()
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         out[name] = f"PROBE FAILED: {redact(f'{type(e).__name__}: {e}')[:160]}"
 
 
@@ -287,7 +287,7 @@ async def measure_streaming(c: httpx.AsyncClient, cl: Client) -> dict:
             async for line in r.aiter_lines():
                 if line.startswith("data:") and "[DONE]" not in line:
                     stamps.append(time.perf_counter() - t0)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         return {"supported": False, "err": redact(str(e))[:150]}
     if len(stamps) < 2:
         return {"supported": True, "chunks": len(stamps), "verdict": "too few chunks to tell"}

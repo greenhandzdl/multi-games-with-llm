@@ -37,7 +37,7 @@ from wolfengine.events import EventLog, Kind, LogDamage
 from live_frame import frame_text
 
 sys.path.insert(0, str(Path(__file__).parent))
-import test_golden_game as G  # noqa: E402
+import test_golden_game as G
 
 
 @pytest.fixture(scope="module")

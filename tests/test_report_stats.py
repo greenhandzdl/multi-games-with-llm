@@ -72,7 +72,7 @@ def test_rate_difference_resamples_pairs_not_sides():
     paired = report.cluster_bootstrap_rate_diff(a, b, B=2000, seed=3)
     unpaired = report.cluster_bootstrap_rate_diff(a, b, B=2000, seed=3, paired=False)
     assert paired["diff"] == pytest.approx(sum(offs) / 10 / 50, abs=1e-9)
-    w = lambda d: d["ci"][1] - d["ci"][0]  # noqa: E731
+    w = lambda d: d["ci"][1] - d["ci"][0]
     assert w(paired) < 0.5 * w(unpaired), (paired["ci"], unpaired["ci"])
     assert paired["ci"][0] > 0, "a constant positive shift must not straddle 0"
     assert unpaired["ci"][0] < 0 < unpaired["ci"][1], "配对的意义就在于此"

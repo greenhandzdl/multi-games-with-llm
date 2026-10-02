@@ -113,7 +113,7 @@ class Event:
             "actor": self.actor,
             "t_wall": self.t_wall,
             "visibility": (
-                "all" if self.visibility == PUBLIC else sorted(self.visibility)  # type: ignore[arg-type]
+                "all" if self.visibility == PUBLIC else sorted(self.visibility)
             ),
             "payload": self.payload,
             "request": self.request,

@@ -157,7 +157,7 @@ async def _head(fn: ProbeFn | None, *, when: str) -> tuple[list[dict[str, Any]],
         return [], f"{when}未跑 canary 探针，本批无法排除端点漂移"
     try:
         return await _probe_pass(fn), ""
-    except Exception as e:  # noqa: BLE001 — probe failure = do not start spending
+    except Exception as e:  # probe failure = do not start spending
         raise BatchAborted(f"canary {when}失败：{type(e).__name__}: {str(e)[:160]}") from e
 
 

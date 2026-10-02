@@ -139,7 +139,7 @@ class HttpTransport:
             # seat. Aborting a whole game over one slow read would discard 8 good seats.
             return TransportResult(ok=False, latency_s=time.perf_counter() - t0,
                                    error=_scrub_string(f"{type(e).__name__}: {e}", self.cfg.api_key_env)[:200])
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             # ConnectError / ConnectTimeout / any NetworkError / ProtocolError: nothing ever
             # came back, so this cannot be a fact about the model's behaviour. `llm.py` turns
             # the flag into `EndpointUnavailable` once its retries are spent and `game.py`
@@ -169,7 +169,7 @@ class HttpTransport:
             )
         try:
             o = r.json()
-        except Exception as e:  # noqa: BLE001
+        except Exception as e:
             return TransportResult(ok=False, latency_s=dt, status=r.status_code,
                                    error=_scrub_string(f"unparseable body: {e}",
                                                        self.cfg.api_key_env)[:200],

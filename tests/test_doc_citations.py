@@ -140,7 +140,7 @@ import pytest
 from pathlib import Path
 
 from conftest import git_history_is_shallow
-from test_wiring import VIEWING_RULES  # noqa: E402  (名册住在它的主人那一本，不抄第二份)
+from test_wiring import VIEWING_RULES  # 名册住在它的主人那一本，不抄第二份
 from wolfengine import cli
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -459,8 +459,8 @@ def _cli_surface() -> dict[str, set[str]]:
     `--x` 形状，那种第二处实现会漏掉文档里真在用的一条。
     """
     ap = cli.build_parser()
-    subs = next(a for a in ap._actions if isinstance(a, argparse._SubParsersAction))  # noqa: SLF001
-    return {name: {opt for act in p._actions for opt in act.option_strings}  # noqa: SLF001
+    subs = next(a for a in ap._actions if isinstance(a, argparse._SubParsersAction))
+    return {name: {opt for act in p._actions for opt in act.option_strings}
             for name, p in subs.choices.items()}
 
 
@@ -546,8 +546,8 @@ def _subparsers() -> dict[str, argparse.ArgumentParser]:
     自己加的，永远有 help，算进来等于白送一格）。并成一个返回值就让这两条判据互相顶。
     """
     ap = cli.build_parser()
-    subs = next(a for a in ap._actions if isinstance(a, argparse._SubParsersAction))  # noqa: SLF001
-    return subs.choices  # noqa: SLF001
+    subs = next(a for a in ap._actions if isinstance(a, argparse._SubParsersAction))
+    return subs.choices
 
 
 def _knob_roster() -> dict[str, dict[str, tuple[frozenset[str], str | None]]]:
@@ -556,8 +556,8 @@ def _knob_roster() -> dict[str, dict[str, tuple[frozenset[str], str | None]]]:
     按 `dest` 归并而不是按参数串各算一枚：`export` 和 `compare` 的落点旋钮写作 `-o/--out`，手册
     敲见 `-o` 就是把这个旋钮教过了；要求两形都出现过，只会逼人往手册里再塞一句废话。
     """
-    return {name: {act.dest: (frozenset(act.option_strings), act.help)  # noqa: SLF001
-                   for act in p._actions                                # noqa: SLF001
+    return {name: {act.dest: (frozenset(act.option_strings), act.help)
+                   for act in p._actions
                    if act.option_strings and not isinstance(act, argparse._HelpAction)}
             for name, p in _subparsers().items()}
 
@@ -628,8 +628,8 @@ def _auto_help_opts() -> dict[str, frozenset[str]]:
     """
     return {name: frozenset(act.option_strings)
             for name, p in _subparsers().items()
-            for act in p._actions                                    # noqa: SLF001
-            if isinstance(act, argparse._HelpAction)}                # noqa: SLF001
+            for act in p._actions
+            if isinstance(act, argparse._HelpAction)}
 
 
 def test_the_knob_roster_is_the_whole_surface_minus_the_auto_help():
@@ -3346,7 +3346,7 @@ def test_the_dangling_member_rule_bites_on_a_never_existing_class_and_grants_his
         kinds=("def", "ann", "assign"))[self_cls]
     assert imp_cls in modules[imp_mod] and imp_cls not in _engine_module_classes(
         imports=False)[imp_mod]
-    dotted = lambda c, m: f"{c}.{m}"            # noqa: E731  拼形状，不留字面量
+    dotted = lambda c, m: f"{c}.{m}"            # 拼形状，不留字面量
     pages = {
         "a.md": "".join([
             f"`{dotted(live_cls, live_member)}` 天天落盘。\n",

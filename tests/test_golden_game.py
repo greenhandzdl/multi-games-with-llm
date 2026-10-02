@@ -61,7 +61,7 @@ def A(act: str, target: int | None = None, speech: str = "", *,
       evidence: list[str] | None = None, belief: Belief | None = None,
       potion: str | None = None) -> Action:
     return Action(act=act, target=target, speech=speech, evidence=evidence or [],
-                  belief=belief, potion=potion)  # type: ignore[arg-type]
+                  belief=belief, potion=potion)
 
 
 SCRIPTS: dict[int, list[Action]] = {

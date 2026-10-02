@@ -30,7 +30,7 @@ from wolfengine.state import Phase
 from wolfengine.transport import HttpTransport
 
 sys.path.insert(0, str(Path(__file__).parent))
-from test_payload_shape import undeclared_keys  # noqa: E402  (形状表那把尺也量折叠标记这一格)
+from test_payload_shape import undeclared_keys  # 形状表那把尺也量折叠标记这一格
 
 # The acts the gate does not expect a target for (legality.TARGETLESS_ACTS).
 TARGETLESS = {"pass", "last_words", "discuss", "defend", "listen", "save"}
