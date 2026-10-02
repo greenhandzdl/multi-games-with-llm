@@ -11519,3 +11519,41 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   `census253/strip253-fixed.py`（键统一后的同一份，`edd0e7e7269f`）、`census253/knife253.py`（`0a3f8e759c0b`，
   P/Q 两具与两次 RESTORED 自证）、`census253/suite253.log`（全量那趟的原始回显，11 行，含 `uptime` 那一行）。
 
+### #254 加宽出来的那一格今天 0 枚：第三族豁免的证人不是语料，是把刀放回它被摘掉的那一行（**13:28:14Z** 起笔）
+
+* 起点是上一条留下的那一格：新闸门的正则只认两族（`noqa` 与 `type: ignore`），第三族
+  `# pragma: no cover` 能从它眼皮底下走过去。它的收件人是 coverage，而 coverage 同样不在依赖闭包里
+  （`#225` 那一片量过四样 `find_spec` 全 False；这一片 **13:27:24Z** 只读复现 `coverage` 与 `pytest_cov`
+  各 False，同一趟 `git grep -F` 现测本树 0 枚、`4281543` 0 枚、`bd51a30` 3 枚）。所以这一族与前两族是
+  同一种病，不是另一种东西。
+* 先量这一格今天有没有真依赖：语料 0 枚（那三枚由 `#225` 摘掉，见上一条那一趟）。按"加宽出来的那一格
+  0 红就先删分支"那把尺，这条分支活不下来；留着的唯一理由是一条**只靠这一格才成立**的正控制，
+  所以下面那一趟是本条的全部依据，不是装饰。
+* 同一具刀跑两趟，只换那条正则：刀把一枚 `# pragma: no cover - platform dependent` 放回 `#225`
+  摘掉它的那一行行尾（直播键盘层那个 `except` 的元组），加宽前（**13:28:14Z → 13:28:15Z**）回显
+  `KNIFE_P_pragma_marker rc=0 red=False named=False -> MISSED`——闸门对着真存在的标记一声不响；
+  加宽后（**13:29:51Z → 13:29:52Z**）同一具刀 `rc=1 red=True named=True -> CAUGHT`，红名单点着那一行的号。
+  两趟里那具反面刀（同样的字样插进模块 docstring，走 `ast` 找 `end_lineno`，插完先确认那一行不是
+  COMMENT 行）都报 `CLEAN`，过宽那一侧没被这一下带进来。被刀那本每趟还原后
+  `RESTORED sha256_12 84225e59362b` 与 `PREFLIGHT` 同一枚哈希，`VERDICT` 由 `CHECK_FAILED` 翻成
+  `BOTH_ASRULED knifes=2/2`。
+* 覆盖面按实际语料定，不按形状可能性铺：pylint / `ruff: noqa` / isort / yapf / `mypy:` / `coverage:` /
+  nose 这几族今天全树 0 枚（**13:30:05Z** 逐本注释 token 扫），所以正则没有为它们加分支——一条从没人用过的
+  形状不需要正控制，替它加等于把尺面当答案。
+* 插行的代价先量后写：`README.md` 与 `docs/*.md` 里点 `tests/test_wiring.py` 行号的总共 3 枚
+  （**13:28:34Z** 数：268 一枚、381 两枚），而这一片两处 hunk 的起点是 3365 与 3401
+  （`+11 −3`，净八行：docstring 里新增八行（七行正文加一行空行），另三枚是就地改写——那条正则、
+  收尾那句"不是永远不许装"点名三样、以及报错信息那一句），都落在 381 之后，
+  所以那 3 枚不必挂号——**13:35:28Z** 把全部被点的号从大到小重数了一遍，最大的一枚是 381，
+  指向 3366 之后的一枚也没有。文档闸门那一趟没红是这件事的第二重证人。
+* 闸门自己从此带一条常驻样本：它 docstring 里那句写的是 `# pragma: no cover` 这个形状，而它挂在
+  STRING token 上、不是 COMMENT token——判据一旦退回行级扫描，第一个红的就是它自己。
+* 收尾：`tests/test_wiring.py` 那一本加文档闸门那一趟与全量收口的读数写在提交说明里。被刀那本
+  在这一片里字节未变——`src/wolfengine/render_live.py` 的 sha256 前十二位 **13:35:19Z** 复量仍是
+  `84225e59362b`，与刀前 `PREFLIGHT` 那一枚相同；`git status` 此时列两本（`tests/test_wiring.py`
+  与这一本归档），被刀那本不在其列。
+* 归档副本：`census254/knife254.py`（sha256 前十二位 `c9d7cb7bffb4`，103 行）——两具刀都在这一本里，
+  P 把标记放回 `#225` 摘掉它的那一行，Q 把同样的字样插进模块 docstring，`ANCHOR` 是
+  `except (ImportError, OSError, ValueError):` 那一行。还原走内存里的原始字节并复量哈希，
+  不用 `git checkout --`（它会连带丢掉这一片未提交的归档改动）。
+

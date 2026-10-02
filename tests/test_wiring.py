@@ -3365,7 +3365,7 @@ def test_the_endpoint_substitutes_actually_explode_before_the_socket(no_network)
 
 
 # ------------------------------------------------- 豁免标记的收件人在不在场
-SUPPRESSION_RX = re.compile(r"noqa|type:[ \t]*ignore")
+SUPPRESSION_RX = re.compile(r"noqa|type:[ \t]*ignore|pragma:[ \t]*no[ \t]*cover")
 
 
 def _suppression_markers(roots: tuple[str, ...]) -> list[str]:
@@ -3401,10 +3401,18 @@ def test_no_suppression_marker_addresses_a_checker_the_repo_never_runs():
     任何类型检查器，所以它和 `#118` 被订正过的那类"拿一条没实测过的出处当依据"是同一种形状。
     留着它们，仓库就在替一个不存在的读者维护一份没人核对的名单。
 
-    方向要说清：这条判据不是"永远不许装 lint／type 检查"。装一把刀是**能力变更**（要动 dev
+    第三族是 `# pragma: no cover`，收件人是 coverage，这一格是上一条收完之后加宽出来的：现测语料
+    0 枚（`bd51a30` 里那 3 枚全坐在 `render_live.py` 的键盘层，由 `#225` 那一片摘掉），所以它今天
+    没有一格真依赖可红。按"加宽出来的那一格 0 红就该删分支"那把尺它活不下来，留着的理由是一条
+    只靠这一格才成立的正控制：13:28:14Z 把一枚标记放回 `#225` 摘掉它的那一行行尾，加宽之前那具刀
+    报 MISSED（闸门照旧绿），加宽之后报 CAUGHT；同一趟把同样的字样写进模块 docstring——那是
+    STRING token 不是 COMMENT token——闸门照旧绿，过宽那一侧同样量过。本文件这一段就是这个形状的
+    一个常驻样本：它在讲那种标记，因此它不该进名册，而它一直在那本被扫的树里。
+
+    方向要说清：这条判据不是"永远不许装 lint／type／coverage 那三样"。装一把刀是**能力变更**（要动 dev
     依赖、要跑一次全仓库普查），豁免名单应当由那把刀自己报出来再逐条写，不该由这些注释预支。
     失效方向因此是单向的——今天删掉的只是没有收件人的字，将来若真装了工具，它会把它认为该豁免
     的每一格重新点名，那时补上的每一枚都有证人。
     """
     dead = _suppression_markers(("src", "tests", "scripts"))
-    assert not dead, f"这些豁免注释没有一个收件人（仓库里没有 lint／type 检查器）：{dead}"
+    assert not dead, f"这些豁免注释没有一个收件人（仓库里没有 lint／type／coverage 那三样）：{dead}"
