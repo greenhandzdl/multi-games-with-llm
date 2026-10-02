@@ -2715,6 +2715,11 @@ def test_a_full_turn_round_trip_needs_no_endpoint(tmp_path):
                               known_ids=frozenset(info.eid(e.seq) for e in log.all()))
     assert v.ok, (v.violations, parsed.errors)
     assert v.citation_stats["valid"] == ["e11"]
+    # `known_ids` above is built from the log, so an id the model invented would still clear the
+    # gate. The round trip is only honest if this turn's prompt really showed that id — and the
+    # act it chose was one this seat was offered.
+    assert parsed.action.act in pr.legal_acts, (parsed.action.act, pr.legal_acts)
+    assert "e11" in "\n".join(m["content"] for m in pr.messages)
 
 
 def _is_literal_subscript(value: ast.expr) -> bool:
@@ -3416,3 +3421,129 @@ def test_no_suppression_marker_addresses_a_checker_the_repo_never_runs():
     """
     dead = _suppression_markers(("src", "tests", "scripts"))
     assert not dead, f"这些豁免注释没有一个收件人（仓库里没有 lint／type／coverage 那三样）：{dead}"
+
+
+# ------------------------------------------------- 局部名层：赋了却从没读回的名字
+def _names_loaded(node: ast.AST) -> set[str]:
+    """这一坨节点里被读到的名字。增广赋值的目标算一次读——`n += 1` 确实把 n 读了出来。"""
+    out: set[str] = set()
+    for n in ast.walk(node):
+        if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load):
+            out.add(n.id)
+        elif isinstance(n, ast.AugAssign) and isinstance(n.target, ast.Name):
+            out.add(n.target.id)
+    return out
+
+
+def _stored_locals(fn: ast.AST) -> tuple[dict[str, int], set[str], set[str]]:
+    """这一层函数落下的简单赋值（名字→首次行号）、全部读取、参数名；class 体整块跳过。"""
+    stored: dict[str, int] = {}
+    read: set[str] = set()
+    declared = {a.arg for a in (*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs)}
+    for star in (fn.args.vararg, fn.args.kwarg):
+        if star:
+            declared.add(star.arg)
+    stack: list[ast.AST] = list(fn.body)
+    while stack:
+        n = stack.pop()
+        if isinstance(n, ast.ClassDef):
+            continue          # 类体是自一个命名空间：那里的 `md = …` 是类属性，归类名层那把尺
+        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            read |= _names_loaded(n)   # 嵌套函数里读到的外层名字，是这一层的闭包读
+            stack.extend(n.body)
+            continue
+        if isinstance(n, ast.Assign):
+            for t in n.targets:        # 元组解包的那些成员不进判据，见下面那条用例的口径
+                if isinstance(t, ast.Name):
+                    stored.setdefault(t.id, t.lineno)
+        elif isinstance(n, (ast.AugAssign, ast.AnnAssign)) and n.value is not None:
+            if isinstance(n.target, ast.Name):
+                stored.setdefault(n.target.id, n.target.lineno)
+        read |= _names_loaded(n)
+        stack.extend(ast.iter_child_nodes(n))
+    return stored, read, declared
+
+
+def _unread_locals(roots: tuple[str, ...]) -> list[str]:
+    """`x = …` 落在一层函数里、这一层再到它的嵌套函数都没再读过 x 的那些行。
+
+    每条口径都由下面那条对照用例逐形钉住（钉的是"这一形判不判"，不是仓库今天有几枚）：元组解包
+    落下的成员不判、下划线开头的名字不判（那是"故意丢掉"的记号）、class 体不算函数作用域、
+    只有注解没有值的不算赋值。参数不判——声明了却没人读的入参是参数层那把尺（`#86`）的活。
+    一处已知量不到的形状：嵌套函数里自己落下、自己从没读的名字，会被外层同名的那次读救活。
+    """
+    cells: list[str] = []
+    for root in roots:
+        for f in sorted(Path(root).rglob("*.py")):
+            if "__pycache__" in f.parts:
+                continue
+            text = f.read_text(encoding="utf-8")
+            for n in ast.walk(ast.parse(text)):
+                if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                stored, read, declared = _stored_locals(n)
+                cells += [f"{f}:{ln} {name}" for name, ln in stored.items()
+                          if name not in read and name not in declared
+                          and not name.startswith("_")]
+    return sorted(cells)
+
+
+def test_no_local_name_is_assigned_and_then_left_unread():
+    """`#255`：死名探测一路都有尺——函数（`#81`）、导入（`#83`/`#84`）、字段（`#172`）、类名
+    （`#214`）、常量（`#160`）、声明（`#191`）、文件（`#186`）——唯独函数体内那一层没有。
+
+    14:04:23Z 按上面的口径现测 `src`／`tests`／`scripts` 三棵树：63 格里 62 格是元组解包落下的
+    成员（`cfg, state, log, agent, …` 那种，测试里靠解包拿桌、只用其中两三样是通行写法），
+    真缺陷只有一格：`test_a_full_turn_round_trip_needs_no_endpoint` 把 `assemble.assemble(...)`
+    的结果赋给 `pr` 然后一次都不读。那一格不是死代码，是**这条链少了一层断言**——那次装配的产物
+    从没被核对，所以"装配器把合法动作和证据编号送进 prompt"这件事当时无人证。同一条命令把口径
+    换成"含元组解包成员"再数是 63，换成"只数简单赋值"是 1；两形的差就是那 62 格。
+
+    尺面因此按简单赋值那一档来。判据本体住在 `_unread_locals`，仓库侧这条只管"今天得是空的"，
+    能不能开火由旁边那条合成用例钉——真实语料干净时，只发"为空"这一条等于没尺。
+    """
+    cells = _unread_locals(("src", "tests", "scripts"))
+    assert not cells, f"这些局部名赋完就没人读（要么接进断言，要么删掉那一格）：{cells}"
+
+
+def test_the_local_name_ruler_fires_once_and_spares_the_carved_out_shapes(tmp_path):
+    """正控制：一枚真缺陷红，其余每一形都不红，逐形各钉一次。
+
+    这条不读仓库文件——仓库侧今天是空的，所以"检测能力在"只能往 tmp_path 写一小段代码来钉。
+    夹具里每一个函数是一形：`plain` 是必须红的那一枚，其余各钉一条豁免口径。
+    """
+    (tmp_path / "probe_locals.py").write_text(
+        "def plain():\n"
+        "    dead = 1\n"
+        "    return 0\n"
+        "def unpacked():\n"
+        "    first, second = (1, 2)\n"
+        "    return first\n"
+        "def thrown_away():\n"
+        "    _ignored = 1\n"
+        "    return 0\n"
+        "def boxed():\n"
+        "    class Holder:\n"
+        "        attr = 1\n"
+        "    return 0\n"
+        "def captured():\n"
+        "    from_outer = 1\n"
+        "    def inner():\n"
+        "        return from_outer\n"
+        "    return inner\n"
+        "def bumped():\n"
+        "    n = 0\n"
+        "    n += 1\n"
+        "    return 0\n"
+        "def annotated_only():\n"
+        "    bare: int\n"
+        "    return 0\n"
+        "def shadowed_param(first):\n"
+        "    first = 2\n"
+        "    return 0\n"
+        "class TopLevel:\n"
+        "    attr = 1\n", encoding="utf-8")
+    got = [c.split(" ")[-1] for c in _unread_locals((str(tmp_path),))]
+    assert got == ["dead"], (
+        f"只有 `plain()` 那一格该被判；元组成员、下划线、类属性、闭包读、增广赋值、"
+        f"裸注解、与参数同名都各有正面夹具挡着，实际报出：{got}")
