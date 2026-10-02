@@ -11355,7 +11355,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 
 * 第一版的红是它自己的证人：`acts` 只给 `pass` 那一格我写成 `speech is None`，实测红在 `assert '' is None`——`Action.speech` 的缺省是空串，断言跟着改成 `speech == ""`。这一格欠的是"没有句子"，不是"句子是 None"，写成后者就是把猜测钉进套件。
 
-* 电池一趟（`07:34:43Z—07:45:57Z`，脚本 park 成 `census245/knife245.py`）。`PREFLIGHT` 五枚锚点逐字对上：`actors.py:143` 那一行是 `failure=call.error`，`actors.py:229` 是给遗言席的 `"last_words"`，`actors.py:235` 是给"只能过"那一轮的 `Action(act="pass")`，`actors.py:241` 是被迫提名时改写的 `"accuse"` 与 `pick`，`actors.py:294` 的整行是 `"return None"`。`BASELINE` rc=0，末行 1185 passed in 72.46s。五具刀分别把 `failure=call.error` 换成空串、把 `last_words` 换成 `pass`、把 `pass` 换成 `listen`、把 `accuse` 换成 `defend`、把 `return None` 换成一条空 `suspects` 清单；汇总行报五具全部逮住：每具的 rc 是 1、整套只红一条，且红名单里点着的正是这一格自家的证人——这一片没有 #243 那种文档闸门共读。折行的那一格（`return Proposal(…` 跨两行）只替换钉住的首行、保留续行的 `request_meta=meta)`，行数仍然是中性的。逐具还原后 sha 回到 `PREFLIGHT` 记的 `60860517cda7`，`AFTER_RESTORE` rc=0，末行 1185 passed in 72.71s。
+* 电池一趟（`07:34:43Z—07:45:57Z`，脚本当初只落在 `/tmp/knife245.py`，按本文开头那条关于 `/tmp` 工件的规矩它就是本轮的一次性东西、并没有 park 成归档副本；这一句先前写成了「park 成 census245/」，是假话，在此订正）。`PREFLIGHT` 五枚锚点逐字对上：`actors.py:143` 那一行是 `failure=call.error`，`actors.py:229` 是给遗言席的 `"last_words"`，`actors.py:235` 是给"只能过"那一轮的 `Action(act="pass")`，`actors.py:241` 是被迫提名时改写的 `"accuse"` 与 `pick`，`actors.py:294` 的整行是 `"return None"`。`BASELINE` rc=0，末行 1185 passed in 72.46s。五具刀分别把 `failure=call.error` 换成空串、把 `last_words` 换成 `pass`、把 `pass` 换成 `listen`、把 `accuse` 换成 `defend`、把 `return None` 换成一条空 `suspects` 清单；汇总行报五具全部逮住：每具的 rc 是 1、整套只红一条，且红名单里点着的正是这一格自家的证人——这一片没有 #243 那种文档闸门共读。折行的那一格（`return Proposal(…` 跨两行）只替换钉住的首行、保留续行的 `request_meta=meta)`，行数仍然是中性的。逐具还原后 sha 回到 `PREFLIGHT` 记的 `60860517cda7`，`AFTER_RESTORE` rc=0，末行 1185 passed in 72.71s。
 
 * 普查今值（重测，不是减法）：同一趟带五格正控制名册的整套离线跑 rc=0，`BRANCH_CENSUS side=src files=25 cells=711 executed=687 never_executed=24`，`side=tests cells=945 executed=877 never_executed=68`（五枚 def 没有分支体，tests 侧一字未动）。src 那 24 格按文件：`cli.py` 9、`phases.py` 4、`human.py` 3、`render_live.py` 3、`schema.py` 2、`transport.py` 2、`actors.py` 1。正控制回显 2、1、1、1、1 次命中，没有 `CENSUS_RULER_BROKEN`；这一片的证人住在正常收集路径里，所以不必像 #243 那样 `--ignore` 掉某一本。剩下的进程内七格＝`phases.py` 那四格＋`schema.py` 那两格＋`actors.py:187` 那一格（`script` 取行的窗口效应，归 #242）。
 
@@ -11364,3 +11364,39 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 * 尺面登记：这一趟没加新盲区，但把第三号筛子用了第二次。普查的 NEVER 名单要连着过三道筛——证人住哪个进程、夹具窗口、可达性——`schema.py` 现在同一本里两格落在第三道筛、一格落在第一道筛之外，只有 `actors.py` 那五格是"真欠证人"，也只有它们能靠补用例收掉。
 
 * 方向纪律：`phases.py` 那四格这一片一格没动。它们是空名册守卫（狼队没人、胜负已定、没人发言、没人投票），欠的是把 `Table` 摆到那个时刻的牌桌级夹具，不是断言；其中"没人发言"那一格在写用例前要先量它是不是等价变异——如果没有下游读者能分辨，任何刀都不会红，就不该记成缺证人。端点两格、真人 tty 六格、子进程九格这一片同样一格没动。
+
+### #248 白昼那四枚空名册守卫：一枚量成等价变异，三枚落了证人
+
+* 顺序是先量再写。四格都住在 `phases.py` 的"名册空了就返回"上，欠的是把 `Table` 摆到那个时刻
+  的夹具；但 #245 那一节自己留下的话是"没人发言"那格要先量等价性。量法：把守卫那一行换成 `pass`
+  做成同包模块副本（`from . import rules` 照旧解析），原件与副本跑同一张桌，逐字比日志摘要、
+  事件条数与抛出的异常。四格的读数——空狼队那一格拆了守卫以后
+  `wolves[(day - 1) % len(wolves)]` 除零，整夜崩；胜负已定那一格拆了以后事件从十一条变十四条，
+  也就是已经结束的局又开了一轮发言、又投了一次票；空投票人名册那一格拆了以后多一条结算；
+  "没人发言"那一格摘要一字不差、条数一字不差。
+* 前三枚各有证人，都在 `tests/test_phase_guards.py`：
+  `tests/test_phase_guards.py::test_a_night_with_no_wolves_left_asks_no_one_for_a_knife`、
+  `tests/test_phase_guards.py::test_a_decided_dawn_announces_but_does_not_open_the_floor`、
+  `tests/test_phase_guards.py::test_a_ballot_with_no_voters_returns_before_the_boxes_open`。
+  夹具是真发牌、真 `Agent`、真 `MockActor`，只把座位的 `alive` 翻成 False 来摆出空名册——
+  "没人"这件事必须由真名册算出来。每条各配一本反向对照：狼还活着要落刀、没结束的局要发言、
+  有人投票要多写结算。
+* 第四枚不配证人，登记成等价变异：`phases.py:196` 的 `speakers` 为空时，守卫之后的每一条语句都在
+  遍历同一张空表，整段本来就是空转，任何刀都不会红；而生产链上它的两个调用点递的也不是空表——
+  `phases.py:185` 的 `check_win` 先一步返回，PK 那一支递的是平票席。写一条"什么都不发生"的断言
+  只会给普查造出一个假的执行人，所以这一格与 `schema.py` 那两枚同族（#244）：量出来的是
+  "没有可被读到的差异"，不是"没人测过"。
+* 电池一趟（选集是这一本新写的六条，基线按这一本自己量：那一本六条全绿）：
+  三具刀各自把守卫那一行换成 `pass`，每具 rc 是 1、这一本只红一条、红的正是这一格自家的证人
+  （空狼队那具报的是除零，另两具报的是断言里的人话）。逐具还原后 `phases.py` 的字节与
+  `PREFLIGHT` 记的一致（sha 前缀 `e6910a2ab909`），收尾再跑仍六条全绿。
+* 同趟普查今值（整趟 325.97 秒，那一趟把整套都跑绿了）：
+  `BRANCH_CENSUS side=src files=25 cells=711 executed=690 never_executed=21`；
+  `BRANCH_CENSUS side=tests files=43 cells=946 executed=878 never_executed=68`。
+  21 格按文件：`cli.py` 九枚、`render_live.py` 三枚、`human.py` 三枚、`transport.py` 两枚、
+  `schema.py` 两枚、`phases.py` 一枚（＝上面登记成等价变异的那一枚）、`actors.py` 一枚
+  （#242 那枚窗口效应）。正控制三格的回显命中数是 1、1、1，无 `CENSUS_RULER_BROKEN`。
+* 尺面登记：这一片的四格把"第三个过滤器"用到了第四次——可达性（能不能走到）与可读性
+  （拆了有没有人分辨）是两问，只量前者会把一枚空转写成一条假证人。探针与电池这一回按 #243 的
+  办法留了归档副本（`census248/probe248.py`、`census248/knife248.py`，在仓库外的记忆目录里），
+  下一趟不必重造尺子就能重算上面那两个回显。
