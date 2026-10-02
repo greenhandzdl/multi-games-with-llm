@@ -11677,3 +11677,6 @@ speech／vote／last_words 三处的 computed `border-left-color` 全是 `rgba(0
 **计数跟着动**：文档闸门点名三处——`docs/views.md` 里"渲染层有几条用例"那一句，加上 `docs/iterations.md`
 里两处复述同一句的地方，由 72/35 改成 73/36 之后 `tests/test_doc_citations.py` 与 `tests/test_doc_tables.py` 一起绿。
 没量的那格：`li.flagged` 只设 `background`，它没有左边条可言——那一行的条色来自它同时是 speech/vote 那一格。
+**那一格的补量**（16:06:37Z，同一张页面，负结果登记、不立新尺子）：`li.flagged` 不是第二处被顶掉的声明——
+它的 background 算出 `rgb(253, 243, 230)`，同一行（元素 id 为 `e21`，类名是 speech 加 flagged）的左边条仍是 speech 那根的 `rgb(138, 166, 193)`；
+`li.death` 的 background 也算出 `rgb(253, 239, 239)`，它的条是 `rgba(0, 0, 0, 0)`，与上面那句"它没有颜色规则"一致。
