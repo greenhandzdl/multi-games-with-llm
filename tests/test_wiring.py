@@ -3436,7 +3436,11 @@ def _names_loaded(node: ast.AST) -> set[str]:
 
 
 def _stored_locals(fn: ast.AST) -> tuple[dict[str, int], set[str], set[str]]:
-    """这一层函数落下的简单赋值（名字→首次行号）、全部读取、参数名；class 体整块跳过。"""
+    """这一层函数落下的简单绑定（名字→首次行号）、全部读取、参数名；class 体整块跳过。
+
+    `#256` 把绑定这一侧从"只有 `=`"加宽到四种同样会"赋了没人读"的形状：`for` 的目标、
+    `with … as`、`except … as`、海象 `:=`。元组解包那一档一律不判，口径与 `Assign` 一致。
+    """
     stored: dict[str, int] = {}
     read: set[str] = set()
     declared = {a.arg for a in (*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs)}
@@ -3459,18 +3463,35 @@ def _stored_locals(fn: ast.AST) -> tuple[dict[str, int], set[str], set[str]]:
         elif isinstance(n, (ast.AugAssign, ast.AnnAssign)) and n.value is not None:
             if isinstance(n.target, ast.Name):
                 stored.setdefault(n.target.id, n.target.lineno)
+        elif isinstance(n, ast.For):
+            if isinstance(n.target, ast.Name):   # `for a, b in …` 是解包，成员不判
+                stored.setdefault(n.target.id, n.target.lineno)
+        elif isinstance(n, ast.With):
+            for item in n.items:
+                if isinstance(item.optional_vars, ast.Name):
+                    stored.setdefault(item.optional_vars.id, item.optional_vars.lineno)
+        elif isinstance(n, ast.ExceptHandler):
+            if n.name:
+                stored.setdefault(n.name, n.lineno)
+        elif isinstance(n, ast.NamedExpr):
+            if isinstance(n.target, ast.Name):
+                stored.setdefault(n.target.id, n.target.lineno)
         read |= _names_loaded(n)
         stack.extend(ast.iter_child_nodes(n))
     return stored, read, declared
 
 
 def _unread_locals(roots: tuple[str, ...]) -> list[str]:
-    """`x = …` 落在一层函数里、这一层再到它的嵌套函数都没再读过 x 的那些行。
+    """`x = …`／`for x in …`／`with … as x`／`except … as x`／`x := …` 落在一层函数里，
+    这一层再到它的嵌套函数都没再读过 x 的那些行。
 
     每条口径都由下面那条对照用例逐形钉住（钉的是"这一形判不判"，不是仓库今天有几枚）：元组解包
     落下的成员不判、下划线开头的名字不判（那是"故意丢掉"的记号）、class 体不算函数作用域、
     只有注解没有值的不算赋值。参数不判——声明了却没人读的入参是参数层那把尺（`#86`）的活。
     一处已知量不到的形状：嵌套函数里自己落下、自己从没读的名字，会被外层同名的那次读救活。
+
+    绑定这一侧 `#255` 只认 `=`，`#256` 加宽到上面那五种；加宽后三侧今值仍是 0 枚，所以这条用例
+    的正当性不靠"报出过东西"，靠的是分母（那四种形状在仓库里究竟有几枚简单绑定）与逐形的合成对照。
     """
     cells: list[str] = []
     for root in roots:
@@ -3501,6 +3522,11 @@ def test_no_local_name_is_assigned_and_then_left_unread():
 
     尺面因此按简单赋值那一档来。判据本体住在 `_unread_locals`，仓库侧这条只管"今天得是空的"，
     能不能开火由旁边那条合成用例钉——真实语料干净时，只发"为空"这一条等于没尺。
+
+    `#256` 把绑定这一侧从 `=` 一种加宽到 `=`／`for`／`with … as`／`except … as`／`:=` 五种。
+    加宽后的今值还是三侧各 0 枚，所以这一格的红与不红要另两把尺来背书：分母那一趟数出简单那一档
+    共 547 枚绑定（14:45:25Z 现测于 `f329387` 那棵树，逐形拆解住在项目记忆 `census256/`），
+    判据那一趟由下面那条合成用例逐形钉、并由五具刀（每具拆掉一个绑定形状）证实能开火。
     """
     cells = _unread_locals(("src", "tests", "scripts"))
     assert not cells, f"这些局部名赋完就没人读（要么接进断言，要么删掉那一格）：{cells}"
@@ -3510,7 +3536,9 @@ def test_the_local_name_ruler_fires_once_and_spares_the_carved_out_shapes(tmp_pa
     """正控制：一枚真缺陷红，其余每一形都不红，逐形各钉一次。
 
     这条不读仓库文件——仓库侧今天是空的，所以"检测能力在"只能往 tmp_path 写一小段代码来钉。
-    夹具里每一个函数是一形：`plain` 是必须红的那一枚，其余各钉一条豁免口径。
+    夹具里每一个函数是一形：`plain` 是必须红的那一枚，`loop_dead`／`with_dead`／`handler_dead`／
+    `walrus_dead` 是 `#256` 加宽出来的四枚，其余每枚钉一条豁免口径——活样本各配一枚反面，
+    这样"某形判不判"就不是靠 `_stored_locals` 里那段代码自证。
     """
     (tmp_path / "probe_locals.py").write_text(
         "def plain():\n"
@@ -3541,9 +3569,46 @@ def test_the_local_name_ruler_fires_once_and_spares_the_carved_out_shapes(tmp_pa
         "def shadowed_param(first):\n"
         "    first = 2\n"
         "    return 0\n"
+        "def loop_dead():\n"
+        "    for unused_loop in range(3):\n"
+        "        pass\n"
+        "    return 0\n"
+        "def loop_used():\n"
+        "    for idx in range(3):\n"
+        "        print(idx)\n"
+        "    return 0\n"
+        "def loop_unpack():\n"
+        "    for pair_a, pair_b in ((1, 2),):\n"
+        "        return pair_b\n"
+        "def with_dead():\n"
+        "    with open('p') as unused_ctx:\n"
+        "        pass\n"
+        "    return 0\n"
+        "def with_used():\n"
+        "    with open('p') as fh:\n"
+        "        return fh\n"
+        "def handler_dead():\n"
+        "    try:\n"
+        "        pass\n"
+        "    except OSError as unused_err:\n"
+        "        pass\n"
+        "    return 0\n"
+        "def handler_used():\n"
+        "    try:\n"
+        "        pass\n"
+        "    except OSError as err:\n"
+        "        return str(err)\n"
+        "def walrus_dead():\n"
+        "    if (unused_wal := 3) > 9:\n"
+        "        return 1\n"
+        "    return 0\n"
+        "def walrus_used():\n"
+        "    if (kept := 3) > 9:\n"
+        "        return kept\n"
+        "    return 0\n"
         "class TopLevel:\n"
         "    attr = 1\n", encoding="utf-8")
     got = [c.split(" ")[-1] for c in _unread_locals((str(tmp_path),))]
-    assert got == ["dead"], (
-        f"只有 `plain()` 那一格该被判；元组成员、下划线、类属性、闭包读、增广赋值、"
-        f"裸注解、与参数同名都各有正面夹具挡着，实际报出：{got}")
+    assert sorted(got) == ["dead", "unused_ctx", "unused_err", "unused_loop", "unused_wal"], (
+        f"每一形该红的只有 `dead`/`unused_*` 那五枚；解包成员、下划线、类属性、闭包读、增广赋值、"
+        f"裸注解、与参数同名，以及 `for`/`with`/`except`/`:=` 的活样本各钉一次不红。实际报出：{got}")
