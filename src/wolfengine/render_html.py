@@ -60,7 +60,7 @@ h1{font-size:1.3em;margin:0 0 .2em}h2{font-size:1.05em;margin:1.6em 0 .4em;
 ul.chron{list-style:none;margin:0;padding:0}
 ul.chron li{padding:1px 0 1px .5em;border-left:3px solid transparent}
 li.speech{border-left-color:#8aa6c1}li.vote{border-left-color:#c1b08a}
-li.death{background:#fdefef}li.flagged{background:#fdf3e6}
+li.death{background:#fdefef}li.flagged{background:#fdf3e6}li.last_words{border-left-color:#8f5fa8;background:#f6eefa;font-style:italic}
 .mind{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:.88em}
 .mind section{border:1px solid #ddd6c6;border-radius:6px;padding:6px 10px;background:#fff}
 .mind h3{font-size:1em;margin:.2em 0}

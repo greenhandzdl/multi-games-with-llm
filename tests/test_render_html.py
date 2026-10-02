@@ -604,8 +604,8 @@ def test_every_class_the_renderer_emits_is_styled_or_asserted_on(emitted):
     「留给以后的人上色」这个理由在**这个**产物上不成立：单文件 HTML，不带外部样式表，也没有第二个
     消费者。现测两处这样的一格——两张表头行 `ballot-head`/`tally-head`，边框是 `table` 和 `th,td`
     两条元素规则给的，那个类名本身没人读，所以属性一起删掉。第三处 `last_words` 处置**不同**：它不是
-    装饰，而是产物里唯一能说"这一行是临终遗言"的记号，所以留着它，由
-    `test_a_last_words_line_carries_a_hook_no_ordinary_speech_has` 当它的读者。
+    装饰，而是能说"这一行是临终遗言"的记号，`#209` 给它补了属于自己的颜色规则，它的读者是下面两条：
+    一条数真产物上的行，一条钉 `_SHELL` 里那条规则在不在。
     """
     unobserved = emitted - _style_rule_names() - _markup_readers()
     assert unobserved == set(), f"零读者的类名：{sorted(unobserved)}"
@@ -620,8 +620,8 @@ def test_no_test_names_a_class_the_renderer_never_emits(emitted):
 
 
 def test_a_last_words_line_carries_a_hook_no_ordinary_speech_has(pair):
-    """遗言那一格**没有** CSS 规则，那个 class 属性是产物里唯一能分辨"这一行是临终遗言、不是普通
-    发言"的记号——所以它不是装饰，删掉它这一桌的复盘页就把两种话说成同一种话。
+    """遗言那一格在 `#209` 之前**没有** CSS 规则，那个 class 属性是产物里唯一能分辨"这一行是临终遗言、
+    不是普通发言"的记号——所以它不是装饰，删掉它这一桌的复盘页就把两种话说成同一种话。
 
     这一条就是上面那条零读者闸门所需的"读者"：它数的是真产物上的行，不是源码里的名字。现测作者局有
     两条 last_words 事件（39、74 号），两个视图里各两行。
@@ -630,6 +630,14 @@ def test_a_last_words_line_carries_a_hook_no_ordinary_speech_has(pair):
     for doc in (spectator, god):
         found = doc.count('class="last_words"')
         assert found == 2, f"遗言行的记号数不对：{found}（作者局有两条 last_words 事件）"
+
+
+def test_a_last_words_line_gets_its_own_colour_rule():
+    """#209 的定夺：遗言要有自己的颜色。上面那条只证明"产物里有一个能分辨的记号"，而那个记号住在
+    DOM 属性里——把复盘页投给人看时，读者看不到属性，只看得到颜色，所以"能分辨"在这一页上其实不成立。
+    判据取的是 `_SHELL` 里真有一条以 `last_words` 为选择器的规则这件事，不取任何像素。
+    """
+    assert "last_words" in _style_rule_names(), sorted(_style_rule_names())
 
 
 def test_the_class_scanners_are_not_blind(emitted):
