@@ -193,8 +193,6 @@ async def run_day(t: Table) -> None:
 async def run_speeches(t: Table, *, speakers: list[int], pk: bool = False) -> None:
     phase = Phase.DAY_PK_SPEECH if pk else Phase.DAY_SPEECH
     t.state.phase = phase
-    if not speakers:
-        return
     beliefs = {s: build_belief(s, t.log.for_seat(s)) for s in speakers}
     legal = {s: rules.legal_actions(t.state, s) for s in speakers}
     assigned = assign_speech_acts(t.state, speakers, t.agent.personas, beliefs, t.rng, t.cfg, legal)

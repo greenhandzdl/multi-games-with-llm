@@ -203,8 +203,6 @@ def _deviations_of(text: str) -> list[str]:
     stripped = text.strip()
     if stripped.startswith("```"):
         devs.append("fence")
-    if stripped.startswith("\n") or stripped.startswith("  "):
-        devs.append("leading_whitespace")
     if any(c in text for c in STRUCTURAL_WIDTH):
         devs.append("full_width_punctuation")
     if any(c in text for c in ("“", "”", "‘", "’")):

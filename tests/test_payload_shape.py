@@ -192,7 +192,7 @@ def src_load_sites(key: str) -> list[str]:
     `\\["k"\\]` 漏掉 `p.get('k')`（单引号），而 `k` 出现在 docstring 里又会被当成读者。两条都在
     下面的控制用例里钉住了。
 
-    只认"payload 上取这个键"是 `#132` 加的第二层：上一版数的是键名，于是 `schema.py:352` 那句
+    只认"payload 上取这个键"是 `#132` 加的第二层：上一版数的是键名，于是 `schema.py:350` 那句
     `out.get("evidence")`——读的是模型答出来的那个 dict，跟落盘的 payload 没有半点关系——替五个
     kind 的 `evidence` 格子付了账。名字撞对不等于同一格事。
     """
@@ -226,7 +226,7 @@ def test_the_reader_gate_sees_code_that_a_grep_misses_and_refuses_prose_that_a_g
       双引号版的 grep 报"零读者"，AST 报得出来。
     * `_night_text` 的 docstring 里有一句 `payload["action"]`，字面量和读法一模一样。
       grep 会把它当成读者（我这轮真的这么被骗过一次），AST 只看代码，所以 `action` 是零。
-    * `schema.py:352` 的 `out.get("evidence")` 是真代码、真键名、真 Load——但 `out` 是模型答
+    * `schema.py:350` 的 `out.get("evidence")` 是真代码、真键名、真 Load——但 `out` 是模型答
       出来的那个 dict，不是落盘的 payload。只数键名的尺子会替 payload 的格子付假账（`#132`）。
     """
     assert any("compress.py:" in h for h in src_load_sites("summary")), \
