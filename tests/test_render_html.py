@@ -640,6 +640,24 @@ def test_a_last_words_line_gets_its_own_colour_rule():
     assert "last_words" in _style_rule_names(), sorted(_style_rule_names())
 
 
+def test_a_kind_colour_bar_rule_is_strong_enough_to_land():
+    """一根分类色条的规则必须压得过那条 shorthand，否则它是看不见的墨。
+
+    `ul.chron li{border-left:3px solid transparent}` 的特异度是 (0,1,2)，而 `li.speech{border-left-color:…}`
+    只有 (0,1,1)——shorthand 里那个 `transparent` 每次都比分类色赢。2026-10-02 15:51Z 在真页面上量到
+    computed `border-left-style:solid`、`border-left-width:3px` 都在，`border-left-color` 却是
+    `rgba(0, 0, 0, 0)`，speech／vote／last_words 三处一起：条子的粗细一直在，颜色从来没上过。
+    这一条不模拟整个 cascade，只钉这一处形状：给 `li` 设 `border-left-color` 的规则，选择器要写成
+    `ul.chron li.<类名>`。反面那格（`border-left-color` 一次都不出现）由上面那句 `assert bars` 兜住，
+    它不许这条判据在没有任何对象的情况下绿。
+    """
+    css = _STYLE_BLOCK.search(Path(render_html.__file__).read_text(encoding="utf-8")).group(1)
+    bars = [sel.strip() for sel in re.findall(r"([^{}]*)\{[^{}]*border-left-color[^{}]*\}", css)]
+    assert bars, "一条 `border-left-color` 规则都没有：这根条子的判据失去对象了"
+    weak = [sel for sel in bars if not sel.startswith("ul.chron li.")]
+    assert weak == [], f"这些分类色条会被 `ul.chron li` 的 shorthand 顶掉：{weak}"
+
+
 def test_the_class_scanners_are_not_blind(emitted):
     """三条对账都靠这两个扫描器，所以单独钉它们的形状——这一条不读真实语料的新东西，
     它不会被产物变好而削弱：它钉的是"检测能力在"。每一行都对应普查真栽过或真险过的一种形状。

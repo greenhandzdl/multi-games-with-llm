@@ -7838,7 +7838,7 @@ N1 / N4 / N7 / N8 四具红在同一条用例上，但红在不同那半句：�
 #### 摘自 `docs/views.md` 第 252 到 253 行与第 269 行（搬运前那一版，`297d912`），逐字——只有第一行里"渲染层有几条用例"那三个数按今天的树重数过
 
 ```text
-渲染层 72 条用例（`test_render_html.py` 35 + `test_render_live.py` 37）里，每条都被"把被保护的
+渲染层 73 条用例（`test_render_html.py` 36 + `test_render_live.py` 37）里，每条都被"把被保护的
 分支改坏"验过一次它会真的红，改完再按 sha256 校验还原成字节相同的文件。本轮重跑并确认被抓住的：
 ```
 
@@ -11014,7 +11014,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   `72cdd4bb18dd`）：M1 把豁免整个卸掉、M2 把豁免加宽到任意名字接收者，两具都把那两条用例同时打红——
   一具证明这格必须在，一具证明它不能更宽。
 * 手册页两处跟着改口：`docs/views.md` 那张异味表底下新增 K1…K7 的四行（同一把尺要求"表里点名的用例
-  真有其人"，所以名字写全）；「渲染层 72 条用例（`test_render_html.py` 35 + `test_render_live.py` 37）」
+  真有其人"，所以名字写全）；「渲染层 73 条用例（`test_render_html.py` 36 + `test_render_live.py` 37）」
   从 `bd51a30` 那一版的 64 条（34 + 30）改到今天的数，两处都是当天现推、不写"约"。
 * 三处 `test_wiring.py` 的行号指针在这一片里被顶歪（闸门红了三格），处置是改成 `文件.py::用例` 的符号形
   而不是重挂号——理由同 `#217`：号会被下一次插入顶歪，名字不会。
@@ -11651,3 +11651,29 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   抄本一起按今天的树重数（`test_render_html.py` 由三十四到今日现数，总数由七十一到今日现数），
   由 `test_a_case_count_written_next_to_a_module_name_matches_that_module` 钉住；这一格之前的三处都写三十四。
 * 没动的：`ballot-head`/`tally-head` 那两格仍是"属性一起删掉"的处置，它们没有自己的语义，边框由元素规则给。
+
+### #258 分类色条终于上色：三条规则的墨从没落到像素上（**15:56:30Z** 落笔）
+
+起因是复核 #257：那条判据只读 `_SHELL` 的字符串，而"遗言有自己的颜色"是一句关于**投给人看的那一份**的主张，
+所以拿真页面量了一遍（作者局渲染成单文件 HTML，Chrome 读 computed 值）。量到的不是颜色，是**粗细还在、颜色是空的**：
+`ul.chron li{border-left:3px solid transparent}` 的特异度 (0,1,2) 压过 `li.speech{border-left-color:…}` 的 (0,1,1)，
+speech／vote／last_words 三处的 computed `border-left-color` 全是 `rgba(0, 0, 0, 0)`（15:51Z）。
+也就是说这三条规则从写下来那天起就没画过任何东西——#257 新加的那条只有一半生效（`background` 与 `font-style` 生效，
+左边条没生效），另外两条（`#22` 之前就有的 speech/vote）整条是看不见的墨。
+
+处置按失效方向定：这不是"没人读的类名"（名字在产物里、行也真被渲染），而是**声明被顶掉**，
+所以往"让它生效"那一边走，而不是摘掉承认不检查——分类色条正是复盘页分辨 kind 的那格视觉。
+改法是把三条选择器写成 `ul.chron li.<类名>`（`render_html.py:62` 与 `render_html.py:63` 两行，行数不变；
+这两行各挤着两/三条规则的排法没动，`test_the_class_scanners_are_not_blind` 钉的就是这个形状）。
+
+**先红**：`test_a_kind_colour_bar_rule_is_strong_enough_to_land` 于 15:54:12Z 报出三枚名字
+`['li.speech', 'li.vote', 'li.last_words']`。判据不模拟整个 cascade，只钉这一处形状，
+并用 `assert bars` 兜住反面那格（`border-left-color` 一次都不出现时不许它 vacuous 绿）。
+**后绿**：15:54:49Z 渲染两本 73 条全过（`test_render_html.py` 36 + `test_render_live.py` 37）。
+**一具刀**：把 `ul.chron li.last_words{` 退回 `li.last_words{` → 恰好一枚红、正是具名证人；
+按内存里的字节还原（没有 `git checkout --`），还原前后 sha12 都是 `504f6ff23db4`（MATCH=True）。
+**像素复核**：改完之后同一张页面量到 `solid`/`3px`/`rgb(143, 95, 168)`（last_words）、
+`rgb(138, 166, 193)`（speech）、`rgb(193, 176, 138)`（vote），`death` 那行本来就是 `transparent`——它没有颜色规则。
+**计数跟着动**：文档闸门点名三处——`docs/views.md` 里"渲染层有几条用例"那一句，加上 `docs/iterations.md`
+里两处复述同一句的地方，由 72/35 改成 73/36 之后 `tests/test_doc_citations.py` 与 `tests/test_doc_tables.py` 一起绿。
+没量的那格：`li.flagged` 只设 `background`，它没有左边条可言——那一行的条色来自它同时是 speech/vote 那一格。
