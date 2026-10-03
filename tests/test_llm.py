@@ -1,6 +1,6 @@
 """`llm.py`: the retry policy and the timeout book, tested for the first time.
 
-The class docstring at llm.py:123 already advertised a "retry test" that would assert on
+The comment on the injected sleep at llm.py:129 already advertised a "retry test" that would assert on
 backoff *values* instead of waiting through them. No such test existed, and neither did any
 test for the distinction this module exists to make — between a call that should be retried,
 a prompt that must be shortened, and an endpoint that should end the game.

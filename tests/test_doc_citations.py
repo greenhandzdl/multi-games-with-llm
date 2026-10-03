@@ -1288,7 +1288,21 @@ def _bad_line_cites(cites) -> list[tuple[str, int, str, str]]:
         # 注释行只接受**写成名字**的证据：那里的英文散文词太多，随便一个词都能给错号背书
         # （`#108`：`DECISIVE` 的号指着它上面的注释，靠句里的 `batch` 绿着）。
         pool = strong if window.lstrip().startswith("#") else toks
-        if not any(t in window for t in pool):
+        hits = [t for t in pool if t in window]
+        # 只有钝词在场，跟没有证据是一回事（`#263`）：一个词在目标文件里占了 1/16 以上的行，
+        # 那么猜错的号撞上它的概率本来就近乎"随便指一行"。07:47:06Z 实测：这条在今天的 434 枚引用里
+        # 只点 2 枚，而那两枚**都是错号**——归档那枚想说 `counts = _counts(events)`，靠邻居行里的
+        # `events` 绿着；`test_llm.py` 那枚把 `__init__` 体里的一条注释说成"类 docstring"，靠
+        # `max_retries_per_call` 里那截 `call` 绿着。写成名字的那类不在此列：反引号里那串是作者
+        # 点名要核对的东西，哪怕它到处都在。
+        if len(hits) == 1 and hits[0] not in strong:
+            dull, occ = hits[0], sum(1 for r in rows if hits[0] in r)
+            if occ >= max(8, -(-len(rows) // 16)):
+                bad.append((doc, no, f"{target}:{line_no}",
+                            f"钝词独撑：{dull} 在 {target} 的 {occ}/{len(rows)} 行里都出现，"
+                            f"这个号指对指错它都绿（把要核对的东西写成名字）"))
+                continue
+        if not hits:
             # 措辞要自带归因：一次插行造成的"顶偏"和"这句话本来指点别的东西"不是同一件事，前者
             # 改文档里的号就完事，后者要改句子。变异电池把本闸门当证人时读的就是这一格（`#77`）。
             head = ("号落在注释行上，而这句话没把被指的东西写成名字（散文词不算）"
@@ -3784,3 +3798,30 @@ def test_no_pasteable_block_in_the_manual_pages_dials_the_endpoint():
     assert len({n for n, _ in blocks}) >= 4, sorted({n for n, _ in blocks})
     dialers = [(n, d) for n, b in blocks for d in _dialers_in_blocks([b])]
     assert not dialers, f"可粘贴区里坐着会拨局域网判官的命令行：{dialers}"
+
+
+def test_a_pointer_endorsed_only_by_a_word_the_whole_file_repeats_is_bad():
+    """`#263`：`_bad_line_cites` 要的是"pool 里任意一枚词在被点那一行出现过"，于是 07:32:14Z
+    实测到的一幕——`#262` 往名册那几行中间插了一行，把归档里点 `test_wiring.py` 的号顶偏一格，
+    那一句写的是 `assert sorted(dead) == sorted(FIELD_TRIAGE)`，而被顶到的那一行也有 `assert`，
+    闸门就放它绿了（同一趟的另一枚号它报得出，差别只在邻居行有没有第二枚词）。
+
+    两向都要证：同一句指着对的那一行必须仍绿（那行同时有 `sorted`、`dead`、`FIELD_TRIAGE`），
+    指着上一行的必须红。前提自己先站着——那两行的差别要落在本尺看得见的最小格上，
+    否则这里的红是"测试写坏了"而不是"闸门变严了"。
+
+    豁免那一格（写成名字的钝词放行）不需要这里配夹具：07:51:42Z 数今天 434 枚引用，单枚背书且
+    写成名字的有 223 枚，其中落在钝词阈值以上的有 3 枚（都在归档指 `metrics.py` 的那几句里，点名的
+    是 `None`）——摘掉豁免，真语料闸门就红，所以它不是死分支，也不必再造一个只靠它成立的样本。
+    """
+    rows = (ROOT / "tests/test_wiring.py").read_text(encoding="utf-8").splitlines()
+    n = next(i for i, r in enumerate(rows, 1) if "sorted(dead) == sorted(FIELD_TRIAGE)" in r)
+    assert "assert" in rows[n - 2], rows[n - 2]
+    assert not any(t in rows[n - 2] for t in ("sorted", "dead", "FIELD_TRIAGE")), rows[n - 2]
+    head = "谓词那一行 `assert sorted(dead) == sorted(FIELD_TRIAGE)` 钉住名册与名单相等（`test_wiring.py:"
+    cites = _line_citations({"probe.md": "\n\n\n".join([f"{head}{n}）", f"{head}{n - 1}）"])})
+    assert len(cites) == 2, cites
+    bad = _bad_line_cites(cites)
+    assert len(bad) == 1, f"两枚号里报出 {len(bad)} 枚（要的是只报错位那一枚）：{bad}"
+    assert bad[0][2].endswith(f":{n - 1}"), bad[0]
+    assert "钝词" in bad[0][3], bad[0]
