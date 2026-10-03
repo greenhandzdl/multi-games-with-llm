@@ -2531,7 +2531,7 @@ seq 101 vote_result  {"summary": "票型：3号2票。弃票1人。3号被投票
 根因是**一个谓词两处写**：这个条件原本只写在 `phases.run_vote` 的那一支 `and` 上
 （`res.tied and res.pk_seats and house.tie_break == "pk_once_then_nobody"`），而句子（当天在 `phases.py`
 里拼，`#113` 起搬进 `compress._vote_summary`）根本没读房规，于是分支和文案各说各话。收成一条 `rules.will_pk(state, res)`
-（`src/wolfengine/rules.py:285`），两边同问它：分支在 `phases.py:227`，句子经 `_publish` 的
+（`src/wolfengine/rules.py:283`），两边同问它：分支在 `phases.py:227`，句子经 `_publish` 的
 `pending_pk` 旗标（`phases.py:227/273`）随结算记录一起落盘，如今由 `compress.py:147` 的 `_vote_summary`
 读它决定说哪一句。
 **旗标而不是在渲染侧重算**：
@@ -2597,8 +2597,8 @@ PK 发言确实是 3、5 号，防止"永远不说无人出局"这种退化修�
 （11:27Z 在全仓 `*.py` 里 grep 那个文件名：只有 `tests/test_judge_wording.py` 的 docstring 命中一处——
 散文读者，不是断言）。修好的是以后的日志。
 
-第三处发现**没有修**，因为它的代价不是这一条该付的：`rules.NightResolution.peace`（平安夜，`rules.py:140`，
-`rules.py:207` 算出来）在产物链上**零读者**，只有 `tests/test_rules.py` 和 `tests/test_night_guards.py` 读它。
+第三处发现**当时没有修**，因为它的代价不是这一条该付的：`rules.NightResolution.peace`（平安夜那个布尔，曾住在
+`NightResolution` 的字段表里、由夜晚结算算出来）在产物链上**零读者**，只有 `tests/test_rules.py` 和 `tests/test_night_guards.py` 读它；这一格后来由 `#88` 删掉，账见那一节。
 于是女巫救人的那一夜什么公开句子都不发——上面那份留存日志的第一夜正是这一种：seq 13 狼刀 3号，seq 15
 5号交出解药（`"potion": "save"`，可见域只有 `[5]`；`#114` 之后的日志不再有这一格，那一瓶由 `act` 说），seq 17 验人，seq 18 直接"天亮了，第1天开始。"，中间
 既没有 `death` 也没有一句"昨晚平安夜"。那瓶药花掉了，而这在九个座位的公开视图里等于没发生，"昨晚是平安夜"
@@ -7111,7 +7111,7 @@ renders a prompt: Region B is assembled by `assemble._region_b()` from a `Percep
 而手册那一行没红过——没有任何一条断言拿"这一刻的规模"和手册比。
 
 **这一族里确有一小截有读者，搬运不改变它**：嵌在链句里的「某个 `test_…py` 现 N 条」共 3 处
-（`test_anti_repeat.py` 12、`test_vote_wave.py` 6、`test_night_guards.py` 5），`#44` 一直在核它们，
+（`test_anti_repeat.py` 12、`test_vote_wave.py` 6、`test_night_guards.py` 10），`#44` 一直在核它们，
 语料本来就把归档算在内，所以搬过来它们照样是活主张、照样对得上。没有读者的是外层那个
 "数到 **N**"/"N passed"的形状本身：它是整套规模，而整套规模没人核。
 
@@ -7152,7 +7152,7 @@ renders a prompt: Region B is assembled by `assemble._region_b()` from a `Percep
 `tests/test_cli.py` 一条，四个名字钉的是同一格 `request.assigned_act`）、13:00:19Z 数到 **767**（`#69`
 那四条全在同一个新方向上：写侧的幂等守卫，两个失败方向各要有证人）、13:30:20Z 数到 **775**（`#70`
 那八格也在一根链条上：白名单放行摊平后的那一格、聚合算术四格、机器出口两格）、13:40:38Z 数到
-**776**（`#70` 的电池量出来的那一格：分母那句话原本写了两份、谁都没读，现在是一处实现加一个绝对值）、14:06:11Z 数到 **777**（`#72` 那格：行号闸门的窗口从 ±2 收成被点名的那一行，多出来的那条断言是变异体 E2 先活下来、之后要回来的）、14:24:19Z 数到 **779**（`#71` 那两格：体检脚本里第二份 `cached_tokens` 读法收进 `usage_from()`，一条管行为一条管"只有一个读取点"，后者由变异 M2 单独证明它不是重复）、14:59:14Z 数到 **791**（`#73` 那十二格落在四个新文件里：`tests/test_vote_wave.py` 四条、`tests/test_night_guards.py` 四条、`tests/test_last_words.py` 二条、`tests/test_house_wired.py` 二条——这四个数是 `#73` 那天的**历史读数**，写成汉字才不被"每天核现行条数"那格闸门顶成新数（今天的 `tests/test_vote_wave.py` 现 6 条，`#110`、`#113` 各补了一条进去；`tests/test_night_guards.py` 现 5 条，`#114` 补的那一条钉的是被闸门退回的那份原文）；这一片没改产品代码，改的是"哪句散文有读者"）；16:19Z 数到 **965**（`#131` 的电池顺手数的：791 之后这条链没有逐轮记下去，`#74`–`#130` 那几十轮的格子都堆在这一格里，所以这是一个合并的账，不指认哪一片补了几条）；16:45Z 数到 **970**（`#130` 那五格：`tests/test_legality.py` 两格、`tests/test_wiring.py` 一格、`tests/test_human_seat.py` 两格，另外把 `tests/test_render_live.py` 里钉住整行的那一条改了期望，条数不动）；17:28Z 数到 **973**（`#133` 那三格：`tests/test_wiring.py` 一格、`tests/test_human_seat.py` 两格）；18:02Z 数到 **975**（`#134` 那两格：`tests/test_info_isolation.py` 两条）；06:53Z 数到 **976**（`#135` 那一跑：搬文档的那一刀只加了一条扫描范围的守卫，落在 `tests/test_no_secrets.py`）；07:19Z 数到 **977**（`#136` 补的那条整块执行的用例住在 `tests/test_cli.py`）；07:45Z 数到 **978**（`#137` 的另一条整块执行用例，也在 `tests/test_cli.py`，它把上一格抽块的那个函数改成了按标题取块）；08:21Z 数到 **979**（`#138` 的又一条整块执行用例，把〈命令一览〉那一块按 README 的顺序逐条敲进同一个空目录，还是住在 `tests/test_cli.py`）；08:58Z 数到 **980**（`#126` 的那一条：钉行号闸门的**语料组成**，落在 `tests/test_doc_citations.py`）；09:43Z 数到 **982**（`#139` 那两条也住在
+**776**（`#70` 的电池量出来的那一格：分母那句话原本写了两份、谁都没读，现在是一处实现加一个绝对值）、14:06:11Z 数到 **777**（`#72` 那格：行号闸门的窗口从 ±2 收成被点名的那一行，多出来的那条断言是变异体 E2 先活下来、之后要回来的）、14:24:19Z 数到 **779**（`#71` 那两格：体检脚本里第二份 `cached_tokens` 读法收进 `usage_from()`，一条管行为一条管"只有一个读取点"，后者由变异 M2 单独证明它不是重复）、14:59:14Z 数到 **791**（`#73` 那十二格落在四个新文件里：`tests/test_vote_wave.py` 四条、`tests/test_night_guards.py` 四条、`tests/test_last_words.py` 二条、`tests/test_house_wired.py` 二条——这四个数是 `#73` 那天的**历史读数**，写成汉字才不被"每天核现行条数"那格闸门顶成新数（今天的 `tests/test_vote_wave.py` 现 6 条，`#110`、`#113` 各补了一条进去；`tests/test_night_guards.py` 现 10 条，`#114` 补的那一条钉的是被闸门退回的那份原文，`#88` 那五格又给它补了平安夜那一族）；这一片没改产品代码，改的是"哪句散文有读者"）；16:19Z 数到 **965**（`#131` 的电池顺手数的：791 之后这条链没有逐轮记下去，`#74`–`#130` 那几十轮的格子都堆在这一格里，所以这是一个合并的账，不指认哪一片补了几条）；16:45Z 数到 **970**（`#130` 那五格：`tests/test_legality.py` 两格、`tests/test_wiring.py` 一格、`tests/test_human_seat.py` 两格，另外把 `tests/test_render_live.py` 里钉住整行的那一条改了期望，条数不动）；17:28Z 数到 **973**（`#133` 那三格：`tests/test_wiring.py` 一格、`tests/test_human_seat.py` 两格）；18:02Z 数到 **975**（`#134` 那两格：`tests/test_info_isolation.py` 两条）；06:53Z 数到 **976**（`#135` 那一跑：搬文档的那一刀只加了一条扫描范围的守卫，落在 `tests/test_no_secrets.py`）；07:19Z 数到 **977**（`#136` 补的那条整块执行的用例住在 `tests/test_cli.py`）；07:45Z 数到 **978**（`#137` 的另一条整块执行用例，也在 `tests/test_cli.py`，它把上一格抽块的那个函数改成了按标题取块）；08:21Z 数到 **979**（`#138` 的又一条整块执行用例，把〈命令一览〉那一块按 README 的顺序逐条敲进同一个空目录，还是住在 `tests/test_cli.py`）；08:58Z 数到 **980**（`#126` 的那一条：钉行号闸门的**语料组成**，落在 `tests/test_doc_citations.py`）；09:43Z 数到 **982**（`#139` 那两条也住在
 同一个文件：一条钉 src/ 的每个 .py 都进了行号闸门的语料，一条钉"语料条数==扫描到的文件数"，后者防的是
 按文件名建键时 `__init__.py` 那种同名静默吞掉）；10:44:13Z 数到 **984**（`#140` 那两条仍住在同一个文件：
 一条拿五格夹具分"该认出几条、该报出几条"，一条把真语料里认出的条数钉成地板三处）；11:22:26Z 数到
@@ -7838,7 +7838,7 @@ N1 / N4 / N7 / N8 四具红在同一条用例上，但红在不同那半句：�
 #### 摘自 `docs/views.md` 第 252 到 253 行与第 269 行（搬运前那一版，`297d912`），逐字——只有第一行里"渲染层有几条用例"那三个数按今天的树重数过
 
 ```text
-渲染层 73 条用例（`test_render_html.py` 36 + `test_render_live.py` 37）里，每条都被"把被保护的
+渲染层 79 条用例（`test_render_html.py` 40 + `test_render_live.py` 39）里，每条都被"把被保护的
 分支改坏"验过一次它会真的红，改完再按 sha256 校验还原成字节相同的文件。本轮重跑并确认被抓住的：
 ```
 
@@ -8017,7 +8017,7 @@ J3 证明的是第三条腿（那一处必须真是 README 那句规矩）不 re
 
 17 格的处置全在 `tests/test_wiring.py` 的 `FIELD_TRIAGE` 里逐格登记：6 格"留"（`RegionBudget` 那六格，
 理由都指向 `metrics.py` 的 `REGION_CAP_KEYS`）＋ 11 格"待判"。本片**不删任何字段**——`#156` 当年
-也是先立名册再逐片删。`NightResolution.peace` 那一格直接挂在已有的票 #88 上。
+也是先立名册再逐片删。`NightResolution.peace` 那一格挂在已有的票 #88 上，已随那一票删掉了。
 
 #### 这一片的差分电池（八具刀 + 一具负控制，预注册写在脚本的 EXPECT 里）
 
@@ -10210,7 +10210,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   「先红一条再登记」。刀之前先还掉一笔尺子债：普查里最贵的一格是**配对口径**——`TEAM_ZH` 的下标空间是 `Winner`，
   不是同名的 `Team`(`roles.py:17`)，按表名去配对会报缺词 god 与 villager、死词 good，两格假缺词加一格假死词，
   而这三格压根不是那张表读的东西。闸门按「渲染它的那一行用的是哪枚取值」配，不按表名配。
-* 收集器自己的一形 bug 是红出来的，不是想出来的：`_literal_values`(`tests/test_wiring.py:381`) 只遍历
+* 收集器自己的一形 bug 是红出来的，不是想出来的：`_literal_values`(`tests/test_wiring.py:384`) 只遍历
   `ast.parse` 结果的模块层时，`schema.py:52` 那一格看不见，因为那枚 Literal 住在类体里。01:52:26Z 那趟报的是
   「既不是模块级的 Literal 别名，也不是某字段注解里嵌的 Literal」，改成走整棵树之后 01:53:03Z 两具都绿。
   这一笔要分清：那次红是**尺子红**，不是缺陷红。
@@ -10229,7 +10229,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   K4 把出厂默认 style 改成 quiet → 两红，红在后一具闸门的最后一支；
   K5 把收集器收回只扫模块层 → 两红，红字正是那条「既不是模块级的 Literal 别名」，它是正控制，证明「认两形」那一格不是装饰。
   逐把还原都逐字节比过哈希（「RESTORED sha match: True」），跑完 `git status` 只剩我自己那两处改动。
-* 顶号一处，还是那具行号闸门替我记的账：`_literal_values`(`tests/test_wiring.py:381`) 那处收拢长了九行，把归档里
+* 顶号一处，还是那具行号闸门替我记的账：`_literal_values`(`tests/test_wiring.py:384`) 那处收拢长了九行，把归档里
   指着 `rows = doc["rows"]` 的号从 2030 顶到 2039（本文件第 8519 行那处已随代码改口）。它在五把刀里每次都跟着红，
   因为它是被我插的那九行动的、不是被刀动的——判 CAUGHT 时点名的始终是另一具，两红里得先扣掉它。
 * 文档对齐这一趟是**负结果**（02:05:36Z 现测）：五张表名加上「人话表」这个词，在 README 与 docs/ 的非归档页里各
@@ -10461,7 +10461,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 * RED 05:01:05Z：1 failed，报文点名 `('views.md', 298, <那一格>, 0)`，括号里就是主人条数。错的那一形
   在这里只描述、不贴出来。
 * 处置＝两格都写回点得到的样子：`views.md` 的 294 行补上基础名（和上一行是同一条参数化用例的另一格，
-  `tests/test_wiring.py:268` 的 `test_the_two_views_share_one_definition_of_each_viewing_rule`），
+  `tests/test_wiring.py:271` 的 `test_the_two_views_share_one_definition_of_each_viewing_rule`），
   `views.md` 的 298 行换成单数那一形（主人是
   `tests/test_render_html.py:302` 的 `test_the_over_long_marker_needs_its_own_flag_and_prints_no_length`）。
   两处都是行内改，那一页一行没增没减——`views.md` 被按行号点过，插行会顶号。
@@ -11014,8 +11014,8 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   `72cdd4bb18dd`）：M1 把豁免整个卸掉、M2 把豁免加宽到任意名字接收者，两具都把那两条用例同时打红——
   一具证明这格必须在，一具证明它不能更宽。
 * 手册页两处跟着改口：`docs/views.md` 那张异味表底下新增 K1…K7 的四行（同一把尺要求"表里点名的用例
-  真有其人"，所以名字写全）；「渲染层 73 条用例（`test_render_html.py` 36 + `test_render_live.py` 37）」
-  从 `bd51a30` 那一版的 64 条（34 + 30）改到今天的数，两处都是当天现推、不写"约"。
+  真有其人"，所以名字写全）；「渲染层七十三条用例（`test_render_html.py` 三十六 + `test_render_live.py` 三十七）」，那是当天的数
+  从 `bd51a30` 那一版的 64 条（34 + 30）改到当天的数，两处都是当天现推、不写"约"；今天的数只住在 `docs/views.md` 那一页。
 * 三处 `test_wiring.py` 的行号指针在这一片里被顶歪（闸门红了三格），处置是改成 `文件.py::用例` 的符号形
   而不是重挂号——理由同 `#217`：号会被下一次插入顶歪，名字不会。
 * 同一族里剩下的 46 枚也是零读者的豁免（`# noqa` 35 枚：src 4 / tests 25 / scripts 6；`# type: ignore`
@@ -11292,13 +11292,13 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 
 * 接 `#239` 那张新名册的头一族。三十六格里 `rules.py` 与 `legality.py` 合占九格，这一片挑它不是因为便宜，是因为这九格全是"引擎怎么对一桌人说话"的判定：能力不符时说什么、同刀同毒算谁杀的、平票放不放人、交回一段空白时记不记、代打兜底时挑哪个动作。`metrics.py` 那六格和 `actors.py` 那六格算的是读数与替身，晚一步做不会让这一片的答案变贵。
 
-* 九格的落点逐格点名（一句一格、句里写出的名字就是那一行原话里的词，沿用 `#239` 立的那条取词口径）。`rules.py:60` 那一格回的是 `not_wolf`。`rules.py:66` 那一格回的是 `not_witch`。`rules.py:80` 那一格回的是 `not_seer`。`rules.py:101` 那一格发的是 `last_words` 那一支动作集。`rules.py:165` 那一格往 blocked 里塞的是 `invalid_poison_target`。`rules.py:197` 那一格塞的是 `poison_overrides_save`。`rules.py:303` 那一行的条件问 `tie_break` 是不是 `nobody`。`legality.py:127` 那一格往 flags 里记的是 `speech_empty`。`legality.py:235` 那一格取的是 `legal.acts` 的第一枚。这里要说白平票那一格的号为什么落在条件行：体里那句是一枚裸的 `return None`，行号闸门的窗口只有被点那一行，裸 return 上没有任何可核对的名字，所以指针指不到它。这一格是本片落笔前预检出来的，不是被闸门红回来的——预先读过那一行就知道号钉不上，改锚到条件行即可，不动闸门。
+* 九格的落点逐格点名（一句一格、句里写出的名字就是那一行原话里的词，沿用 `#239` 立的那条取词口径）。`rules.py:60` 那一格回的是 `not_wolf`。`rules.py:66` 那一格回的是 `not_witch`。`rules.py:80` 那一格回的是 `not_seer`。`rules.py:101` 那一格发的是 `last_words` 那一支动作集。`rules.py:164` 那一格往 blocked 里塞的是 `invalid_poison_target`。`rules.py:196` 那一格塞的是 `poison_overrides_save`。`rules.py:301` 那一行的条件问 `tie_break` 是不是 `nobody`。`legality.py:127` 那一格往 flags 里记的是 `speech_empty`。`legality.py:235` 那一格取的是 `legal.acts` 的第一枚。这里要说白平票那一格的号为什么落在条件行：体里那句是一枚裸的 `return None`，行号闸门的窗口只有被点那一行，裸 return 上没有任何可核对的名字，所以指针指不到它。这一格是本片落笔前预检出来的，不是被闸门红回来的——预先读过那一行就知道号钉不上，改锚到条件行即可，不动闸门。
 
 * 新增七枚 def、收成九条用例（其中一枚是三格参数化），两本各一处或两处：`tests/test_rules.py` 的夜晚结算两枚（毒到的座位已经死了要拒、同刀同毒那一格归毒不算归刀）、平票家规一枚、遗言那一支一枚、能力不符那一枚三格参数化；`tests/test_legality.py` 的两枚是一整段空白发言要留记号、窄路兜底取名单第一项而不是 pass。一条 `def test_` 都没删。另外还动了**既有**的一枚：`test_a_speech_turn_that_takes_the_assigned_act_raises_nothing` 被补了一记反向断言（清白发言不许带上那个记号），因为只写"空白要记"的判据是单向的，见下面反向那一段。
 
 * 九具定位刀一趟跑完（**03:10:18Z**—**03:10:22Z**；脚本逐具回显判决与红名单，没回显各自的秒数，所以这里只给窗口）：九具全 CAUGHT，且**每一具都只红一条**（回显的 n_red 逐具都是 1，红的那一条正是这一格的新用例）。锚点先数 `count==1`、落盘后回读、跑完按 sha256 比字节还原，`src` 侧还原后 `git status` 只剩两本测试文件（30 行与 67 行，纯插入、零删除）。局部性最干净的是能力不符那一族：同一枚参数化用例被三具刀各打一次，每具只红自己那一格——`not_wolf` 那具打不红 `not_seer` 那一行，因为三条家规各有自己的名字，不是靠一条通用兜底站着。
 
-* 两具反向刀是第二趟（**03:10:22Z**—**03:10:23Z** 同一取法）。`legality.py:126` 那一行的守卫反过来（`action.speech.strip()` 前那个 `not` 摘掉）红两条：新那一条和上一段说的那枚既有断言——这一格的两向因此不是同一把刀量的，空白要留记号由前者的红来证，清白不许带记号由后者的红来证。`rules.py:164` 那一行的条件反过来（把 `is_alive` 前面那个 `not` 摘掉）红七条：本片新增的两条在内，另有五条早在这一片之前就在读这一带的行为——`test_knife_and_poison_on_different_seats_double_death`、`test_poison_on_the_knife_target_owns_the_death`、`test_two_potions_one_night_drops_the_poison_not_silently`、`test_two_potions_permitted_house_rule_variant`、`test_apply_night_consumes_potions_and_records_deaths`。这一具值得单记的不是红了多少条，是它照出的那一形：**这一格从来不是"没人管"，它只是分支体没人走**——happy path 那一侧的用例多得很，缺席的那一条恰好在"毒到一个还活着的人"这个反方向上。所以定位与方向是两件事，前者由上面那九具"每具只红一条"给出，后者由这两具扫出一片红的刀给出；拿后一具去要求定位、或拿前一具去声称"两个方向都钉住了"，都是把刀的品种读错了。
+* 两具反向刀是第二趟（**03:10:22Z**—**03:10:23Z** 同一取法）。`legality.py:126` 那一行的守卫反过来（`action.speech.strip()` 前那个 `not` 摘掉）红两条：新那一条和上一段说的那枚既有断言——这一格的两向因此不是同一把刀量的，空白要留记号由前者的红来证，清白不许带记号由后者的红来证。`rules.py:163` 那一行的条件反过来（把 `is_alive` 前面那个 `not` 摘掉）红七条：本片新增的两条在内，另有五条早在这一片之前就在读这一带的行为——`test_knife_and_poison_on_different_seats_double_death`、`test_poison_on_the_knife_target_owns_the_death`、`test_two_potions_one_night_drops_the_poison_not_silently`、`test_two_potions_permitted_house_rule_variant`、`test_apply_night_consumes_potions_and_records_deaths`。这一具值得单记的不是红了多少条，是它照出的那一形：**这一格从来不是"没人管"，它只是分支体没人走**——happy path 那一侧的用例多得很，缺席的那一条恰好在"毒到一个还活着的人"这个反方向上。所以定位与方向是两件事，前者由上面那九具"每具只红一条"给出，后者由这两具扫出一片红的刀给出；拿后一具去要求定位、或拿前一具去声称"两个方向都钉住了"，都是把刀的品种读错了。
 
 * 普查的今值（重测，不是减法）。这一片之前那一趟回显 `executed=658 never_executed=53`（`#239` 末尾记的就是这一趟）；这一片之后那趟 **03:01:12Z** 起跑、末行自报 `1165 passed in 300.71s (0:05:00)`，回显 `BRANCH_CENSUS side=src files=25 cells=711 executed=667 never_executed=44`——格数一字没动、执行数 +9、缺席数 −9，与新增的九条用例同数。三枚新加的正控制（能力不符、平票家规、空白发言那三格）各自回一次命中，也就是说每格现在恰好只有一条用例走到它，这既是这一片的成果也是它的限界。tests 侧同一趟回显 `cells=945 executed=877 never_executed=68`，三个数一字没动——不是尺子坏了，是这九条新用例里没有任何分支体，加的只是断言，判定名册因此一格没长。新名册按本数：`metrics.py` 六格、`actors.py` 六格、`schema.py` 四格、`report.py` 四格、`phases.py` 四格、`batch.py` 两格、`render_html.py` 一格，进程内合 27 格；不在进程内那一档照旧四本——`cli.py` 九格、`human.py` 三格、`render_live.py` 三格、`transport.py` 两格，合 17 格。27 + 17 = 44，与那一趟回显的缺席读数同一个数。尺子仍住在仓库外（`/tmp/trace239/`，那本插件的内容哈希记在本项目的记忆里，这里不重述——重述一枚八个字符的十六进制前缀，就会撞 `#221` 那枚提交锚闸门，它按形状认锚、而它问的是"这一版提交存不存在"），所以这组 711/667/44 不能从新克隆复算——`#237` 末尾那张"要不要把尺子收进仓库"的票还欠着。
 
@@ -11566,7 +11566,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   **63 格**，只数简单赋值是 **1 格**，两形的差就是那 62 格解包成员（`cfg, state, log, agent, …` 那种——
   测试靠解包拿桌、只用其中两三样是通行写法，判它会把测试全打成红）。14:13:18Z 拿 `git archive`（那一刻
   的提交就是 `c88e25c`）抽出的原始字节复量同一对数：63 与 1，一字未动。
-* 那唯一的一格是 `tests/test_wiring.py:2704` 的 `pr`——整局回合链那条用例把 `assemble.assemble` 的
+* 那唯一的一格是 `tests/test_wiring.py:2703` 的 `pr`——整局回合链那条用例把 `assemble.assemble` 的
   产物赋给它，然后一次都不读。按失效方向它不是死代码：这一格坏掉时不会崩、也不会红，坏的是
   "装配器把合法动作与证据编号交给了这一席"这件事从此无人证。所以处置是**补断言**，不是删那一行。
 * 补之前先量这两条今天成不成立（14:03:15Z 现读）：`pr.legal_acts` 是
@@ -11669,7 +11669,7 @@ speech／vote／last_words 三处的 computed `border-left-color` 全是 `rgba(0
 **先红**：`test_a_kind_colour_bar_rule_is_strong_enough_to_land` 于 15:54:12Z 报出三枚名字
 `['li.speech', 'li.vote', 'li.last_words']`。判据不模拟整个 cascade，只钉这一处形状，
 并用 `assert bars` 兜住反面那格（`border-left-color` 一次都不出现时不许它 vacuous 绿）。
-**后绿**：15:54:49Z 渲染两本 73 条全过（`test_render_html.py` 36 + `test_render_live.py` 37）。
+**后绿**：15:54:49Z 渲染两本七十三条全过（`test_render_html.py` 三十六 + `test_render_live.py` 三十七，当天的数）。
 **一具刀**：把 `ul.chron li.last_words{` 退回 `li.last_words{` → 恰好一枚红、正是具名证人；
 按内存里的字节还原（没有 `git checkout --`），还原前后 sha12 都是 `504f6ff23db4`（MATCH=True）。
 **像素复核**：改完之后同一张页面量到 `solid`/`3px`/`rgb(143, 95, 168)`（last_words）、
@@ -11680,3 +11680,107 @@ speech／vote／last_words 三处的 computed `border-left-color` 全是 `rgba(0
 **那一格的补量**（16:06:37Z，同一张页面，负结果登记、不立新尺子）：`li.flagged` 不是第二处被顶掉的声明——
 它的 background 算出 `rgb(253, 243, 230)`，同一行（元素 id 为 `e21`，类名是 speech 加 flagged）的左边条仍是 speech 那根的 `rgb(138, 166, 193)`；
 `li.death` 的 background 也算出 `rgb(253, 239, 239)`，它的条是 `rgba(0, 0, 0, 0)`，与上面那句"它没有颜色规则"一致。
+
+### #88 平安夜在给人看的两份产物里留痕：读侧推导，不新增事件（**06:22Z** 落笔）
+
+**这一片的起点是 `#87` 的第三处发现**：女巫用药救下的那一夜，公开产物里一个字都没有。
+`rules.NightResolution.peace` 那一格算出来之后在产品链上曾零读者，只有测试读它，所以"昨晚没人死"这件事
+九个座位谁都读不到。`#87` 当时没有修，理由是修法若走"新增一条公告事件"会挪动 seq、逼金样本重钉、
+并改变模型读到的输入分布——那是改处理，不是修句子。
+
+**处置（按 2026-10-02 起的「自行处理」定夺）**：不新增事件，改走读侧推导。平安夜不是一个新事实，
+它是三条**已经公开**的事实的合取——那一夜开了头（有一条 `night_*` 的 PHASE 行）、天亮到了
+（有一条 `phase="day_speech"` 的 PHASE 行）、且没有任何一条带 `night_*` 相位的 `death` 行。
+三条都在日志里，所以判据可以在读的时候算，不需要往真相源里添任何东西：seq 不动、金样本不重钉、
+模型 prompt 的输入分布不变。代价是这一格从此有了两处口径（写侧的 `res.deaths` 与读侧的
+`peaceful_nights`），所以同时把写侧那格零读者的别名删掉，只留一处定义。
+
+**实现**（三处，都在 `src/wolfengine/`）：`events.py` 末尾的 `is_dawn(e)`、
+`peaceful_nights(events) -> set[int]`、`PEACE_ZH`（那句人话）——三个名字与 `#111`/`#113` 那一族
+"给人看的句子住在 events、两个渲染器共用"同形；`render_html.py` 在天亮那一行后面跟一行
+`<li class="peace">`，CSS 给它自己的 `border-left-color` 与底色（`#257`/`#258` 那两轮的判据：
+投给人看的那一份要能分辨，DOM 属性不算）；`render_live.py` 不另起一行——句子跟在
+"天亮了，第N天开始"那一行走，因为法官就是在那一刻说这句话的。两块屏幕念同一句，摆法按介质分开。
+
+**判据读的是 `events` 不是 `evs`**：那一夜倒没倒人不该由当前视图滤掉了什么决定。观众模式滤掉的是
+私有事件，而一夜里倒下那个人，他的死因行可能是私有的（女巫救人与毒药的可见性就是私有的），
+按 `evs` 算会把上帝视角里明明倒了人的一夜在观众页上念成平安夜。
+
+**金样本读数**（`data/` 里那一份，只读不改）：`peaceful_nights == {1}`，第 2 夜倒了两个
+（`night_seer` 那两枚 `death`），所以"恰有一次"是量出来的而不是推出来的。第 1 夜那一枚
+`visibility=[5]` 的「今晚3号倒在了狼刀下。」是女巫私有行、且紧接一条 `act=save`，3 号在第 1 天
+还能发言——这一枚差点让我宣布出一个假平安夜，所以正反用例都住在 `tests/test_night_guards.py`
+（那一本由五条长到十条，五枚新增全是这一夜的判据：开了头没写死、写了死、白昼死不算、
+只有发牌行不算、没到天亮不算）。
+
+#### 三组电池（预注册写在脚本里，跑完不改）
+
+`tests/test_wiring.py` 整本一跑：基线 06:18:28Z `121 passed`、红名册空。
+
+* K11 在 `render_html.py` 末尾追加一格**嵌套**的 `def peaceful_nights(` → `4 failed, 117 passed`，
+  点名 `test_the_two_views_share_one_definition_of_each_viewing_rule[peaceful_nights]` = CAUGHT。
+* K12 同理 `def is_dawn(` → `4 failed, 117 passed`，点名同一格参数化的 `[is_dawn]` = CAUGHT。
+* K13 反面那具：只把 `def peaceful_nights(events)` 的字样写进一行**注释** → `1 failed, 120 passed`，
+  点名的还是那一格 = CAUGHT。这条读数量的是已知弱点，不是缺陷：那一格谓词是整文件子串比对
+  （`tests/test_wiring.py` 里那一格把整本文件的字符串拿来比，不是 AST），文本喂得绿。登记、不立新尺。
+* 还原走内存里的原始字节，前后 sha12 都是 `c304e61ea429`；还原后再测 `121 passed`、红名册空。
+* 那三具各有 3 枚额外红（`test_no_named_helper_in_the_engine_is_left_without_a_reader`、
+  `test_every_module_level_engine_helper_is_called_by_the_product_or_is_a_manual_exit`、
+  `test_no_engine_function_declares_a_parameter_nobody_reads`）：刀自己那格 `_knife_*` helper
+  是个没人调的函数，红来自刀不是来自被改的判据，所以 CAUGHT 只按点名的那一格判，额外红单独归因。
+
+渲染层两本一跑（`test_render_html.py` + `test_render_live.py`）：基线 `79 passed in 0.44s`。
+
+* K7b 把 `render_html.py:332` 的 `peaceful_nights(events)` 换成 `peaceful_nights(evs)` →
+  `1 failed, 78 passed`，红恰好落在 `test_a_privately_recorded_night_death_does_not_make_a_peaceful_night`；
+  还原 sha12 `c304e61ea429`。
+* K10b 同一形下在 `render_live.py:186` 把 `peaceful_nights(events)` 换成 `peaceful_nights(evs)` →
+  `1 failed, 78 passed`，红落在同名那条 live 用例；
+  还原 sha12 `e944cc5b3dde`。
+* 还原后复跑 `79 passed in 0.39s`。两具换的都是**读的那一格**而不是删句子——删句子会红在别处，
+  量不出这一格判据有没有牙。
+
+#### 写侧字节对照（同 seed 两棵树，`--mock --seed 262 --games 2`）
+
+这一具要证的不是"新代码能跑"，是**读侧推导没有改动任何一个产出的字节**。三件产物 × 两局，
+对照树是 `HEAD`（`f0703fa`）的 detached worktree，噪声键遮掉 `t_wall` 与 `started_utc` 两格，
+文件名按 `g00000262`/`g00000263` 归一。地板那一列是同一棵树跑两遍（base↔base2），用来证明
+"逐字相同"这个判据本身不是恒真。
+
+| 层 | g00000262 | g00000263 |
+| --- | --- | --- |
+| jsonl 行数 | 地板 SAME · 工作树 SAME · 71 | 地板 SAME · 工作树 SAME · 89 |
+| jsonl seq 列 sha12 | `f6a3def2e78f` 三趟相同 | `d9c063167280` 三趟相同 |
+| jsonl 遮噪后 sha12 | `65e64402209e` 三趟相同 | `c1ac3e99d94f` 三趟相同 |
+| audit stdout sha12 | `3176b0afbbed` 三趟相同 | `e1d37c2cb2d5` 三趟相同 |
+| export HTML | 改动 4 行 = 新增 2 + 删除 2 | 同左 |
+| `watch --once` 那一帧 | 57 行 → 57 行，新增 1 删除 1 | 77 行 → 77 行，新增 1 删除 1 |
+
+HTML 那 4 行：新增的两行一行是 `ul.chron li.peace{...}` 那条 CSS 规则、一行是 `<li class="peace">`，
+把这两形从新行里摘掉之后与旧行**逐字相等**（两局都是 `True`），且"只有删除没有新增的行 = 0"。
+直播那一帧同理：`base含平安夜=0 new含平安夜=1`、`摘掉平安夜插入后与旧帧逐字相等 = True`，
+含平安夜那一行就是 `[e18] 法官：天亮了，第1天开始。`，行数一格没多。两棵树的加载点各自打印过
+`module.__file__` 并断言落在自己那棵树里。
+
+`/tmp/bytecheck262.sh` 那一份被推翻了三次才修对：文件名里嵌的 UTC 时刻与 HTML 里的局号不匹配、
+遮噪正则瞄着一个不存在的 `ts` 键（真实键名是 `t_wall` 与 `started_utc`）、`set -e` 在计数为 0 时
+自杀在 `git worktree remove` 之前，留下一个还登记着的 `/private/tmp/base262wt`。更要紧的是它的
+`.frame` 层量的其实是 `replay`——`render_chronicle_file` 打的是逐字实录，按设计不含派生句，
+所以它报"改动=0"见证的是另一件事。上面那一行 `watch --once` 是补的那一格，两件事分开记。
+
+**字段层的账**：`rules.py::NightResolution.peace` 那一格删掉之后，`#172` 那把尺的今值由 292 格字段/
+14 格零读者变到 291/13，测试也不点它名的那三格不变。两个数是在 `HEAD`（`f0703fa`）的 detached worktree 上用
+**同一把尺**（`_field_defs_and_reads()` 传不同的 roots）现量出来的，不是从旧 docstring 抄的；
+`tests/test_wiring.py` 那段闸门自己的说明原本还带着"那棵树比现在多两格"这种比较句，
+我改这一格的同时把它的"现在"从 295 挪到 291，那句话就当场上变成假话——已经改写成把两个数都钉在
+`#172` 那天的树上、删掉比较。`FIELD_TRIAGE` 由 14 行减到 13 行（六格"留"＋七格"待判"），
+删字段与删登记行必须同一趟落，否则 `test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_disposition` 自己变红。
+
+**计数跟着动**：`docs/views.md` 那句「下表 9 行 = 12 个函数名」由 `#218` 那道三向对账闸门当场复算
+（这一片往里加的是 `is_dawn` 与 `peaceful_nights` 两行、三个名字）；渲染层用例 79 条 =
+`test_render_html.py` 40 ＋ `test_render_live.py` 39，由 `#44` 那道条数闸门钉住。
+
+**没动的格子与为什么**：`#88` 只接了"给人看的两块屏幕"。`wolf audit` 的机器侧读数里平安夜那一格
+仍然没有——加它要新立一条读数并给它自己的分母，而这一片的票面只问"人看不见这件事"，按票面收口，
+不顺手扩。`wolf replay` 的实录也没动：那一个出口从头到尾只做一件事，把落盘的那几行逐字搬屏，
+派生句进实录会让"实录"这个词失去含义。整量套件的跑次读数记在这一片的提交说明里，不抄第二遍。

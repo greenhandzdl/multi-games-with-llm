@@ -32,7 +32,7 @@ import pytest
 
 from wolfengine import render_live
 from wolfengine.compress import render_line
-from wolfengine.events import EventLog, Kind, LogDamage
+from wolfengine.events import PUBLIC, Event, EventLog, Kind, LogDamage
 
 from live_frame import frame_text
 
@@ -282,6 +282,56 @@ def test_the_frame_is_the_same_text_for_the_same_log(gold):
     b = frame_text(events, meta)
     assert a == b
     assert not re.search(r"\b20\d\d-\d\d-\d\d \d\d:\d\d", a)
+
+
+def test_the_frame_announces_a_peaceful_night_once(gold):
+    """`#88` 的第二块屏幕：终端直播要念出"这一夜无人倒下"，只念一次。
+
+    金样本第 1 夜无人倒下、第 2 夜倒了两个（`night_seer` 那两枚 `death`），所以"恰有一次"是量出来的。
+    两块屏幕共用一句（句子住在 `events.PEACE_ZH`，与 `#111` 的死因译文、`#113` 的票型结算同族）；摆法按
+    介质分开：页面上是一行有颜色的 `li.peace`，终端里跟着"天亮了"那一行走——法官就是在那一刻说这句话的。
+    """
+    _, events, meta = gold
+    for doc in (frame_text(events, meta), frame_text(events, meta, god=True)):
+        rows = [l for l in doc.splitlines() if l.strip()]
+        assert sum("平安夜" in l for l in rows) == 1, doc.count("平安夜")
+        peace = next(i for i, l in enumerate(rows) if "平安夜" in l)
+        assert "天亮了，第1天开始" in rows[peace], rows[peace - 1:peace + 2]
+
+
+def _one_night(private_death: bool) -> list[Event]:
+    """一夜三行的合成桌：天黑宣告 →（只有 5 号看得见的那一枚倒人）→「天亮了」。
+
+    与 `test_render_html.py` 里同一张桌子的同一量法：金样本和 data/ 的 19 枚夜间死讯全是公开落盘
+    （2026-10-03T05:40Z 现读），所以"读 `events` 还是读 `evs`"在真日志上是等价变异，这一格只能靠
+    喂进来的事件作证。
+    """
+    rows = [Event(seq=1, kind=Kind.PHASE, day=1, phase="night_wolf",
+                  visibility=PUBLIC, payload={})]
+    if private_death:
+        rows.append(Event(seq=2, kind=Kind.DEATH, day=1, phase="night_witch",
+                          visibility=frozenset({5}), actor=5,
+                          payload={"seat": 4, "cause": "poison"}))
+    rows.append(Event(seq=3 if private_death else 2, kind=Kind.PHASE, day=1,
+                      phase="day_speech", visibility=PUBLIC, payload={}))
+    return rows
+
+
+def test_a_privately_recorded_night_death_does_not_make_a_peaceful_night():
+    """直播这一侧的同一句话：观众不知道那一夜倒了人，不等于那一夜没人倒。
+
+    改读 `evs` 那一具刀在这一块屏幕上同样是等价变异，这一条是它的落点。反面那一形（真的没人倒）
+    同桌量，两个视图都得念出来。
+    """
+    for god in (False, True):
+        doc = frame_text(_one_night(True), {}, god=god)
+        rows = [l for l in doc.splitlines() if l.strip()]
+        assert sum("平安夜" in l for l in rows) == 0, f"god={god}：那一夜有人倒下，屏幕却说着平安夜"
+
+    for god in (False, True):
+        doc = frame_text(_one_night(False), {}, god=god)
+        rows = [l for l in doc.splitlines() if l.strip()]
+        assert sum("平安夜" in l for l in rows) == 1, f"god={god}：这一夜没人倒，屏幕上没有那一行"
 
 
 def test_the_frame_never_prints_the_endpoint_host(gold):

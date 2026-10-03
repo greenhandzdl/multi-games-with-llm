@@ -249,6 +249,9 @@ VIEWING_RULES: dict[str, tuple[str, list[str]]] = {
     "provenance": ("render_html", []),
     "provenance_line": ("render_html", ["render_live"]),
     "voting_waves": ("events", ["render_html", "metrics"]),
+    # 平安夜那一行由日志推出来，两块屏幕共用同一份推导：写侧那个布尔已经在 `#88` 删掉了。
+    "is_dawn": ("events", ["render_html", "render_live"]),
+    "peaceful_nights": ("events", ["render_html", "render_live"]),
 }
 
 
@@ -1243,10 +1246,6 @@ FIELD_TRIAGE: dict[str, str] = {
         "改的是 audit 的超额判定、不动发出去的字节",
     "config.py::RegionBudget.c_private": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C3' 那一格，见 src/wolfengine/metrics.py",
     "config.py::RegionBudget.c_task": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C4' 那一格，见 src/wolfengine/metrics.py",
-    "rules.py::NightResolution.peace":
-        "待判：这一格已经有票了——#88 问的是『平安夜要不要在公开产物里留痕』，那是处置变更不是清理，"
-        "见 src/wolfengine/rules.py。`#176` 量过删它的顶号代价：点 `src/wolfengine/rules.py` 行号的引用"
-        "共 3 处，全在第 146 行那格注解的下游，另见 docs/iterations.md 里 `#88` 那一节",
     "state.py::GameState.hunter_seat":
         "待判：`src/wolfengine/game.py` 发牌时算出并写进状态，之后没人读（猎人那一枪走的是别的路径，"
         "见 src/wolfengine/phases.py）——接进产物还是删掉是决定，见 src/wolfengine/state.py。"
@@ -1287,10 +1286,10 @@ FIELD_VERDICTS = ("删", "搬", "接", "留", "待判")
 
 def test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_disposition():
     """`#172`：`#81`→`#166` 那一族数过函数、方法、类、导入、模块级常量，唯独没数过**类体里
-    带注解的字段**。本条自己数：295 格字段、14 格零生产读者（其中 4 格连测试也不点它名，那是
-    下面八格"待判"里的四格）。`#172` 那份不共用这把尺的复算当时报 24 格（08:14:58Z 那棵树比
-    现在多两格），多的 7 格正是这具尺多认的那两形：`row["名字"]` 式的落盘回读与 src 自己那两张
-    INERT 表；`#174` 与 `#175` 各删掉一格，把当时的 298/17 变成了现在这一份，见 docs/iterations.md。
+    带注解的字段**。本条自己数：291 格字段、13 格零生产读者（其中 3 格连测试也不点它名，那是
+    下面七格"待判"里的三格）。`#172` 那份不共用这把尺的复算当时报 24 格（08:14:58Z 那一版树上
+    的数），多的 7 格正是这具尺多认的那两形：`row["名字"]` 式的落盘回读与 src 自己那两张
+    INERT 表；`#174` 与 `#175` 各删掉一格、`#88` 又删掉一格，298/17 是 `#172` 那天那棵树的读数，见 docs/iterations.md。
 
     本条不要它们都"有读者"，只要**每一格都有一条登记过的处置**：名册与本条数的零读者两侧相等
     （多一格＝新长出来没登记，少一格＝登记的那格已不在树上）、处置词必须是那五个之一、落点路径
@@ -3166,7 +3165,7 @@ def test_every_stored_fact_value_has_a_word_in_the_table_that_renders_it():
     坏法不同：`compress.py:36` 那张 `CAUSE_ZH` 缺格时回退成「死亡」，把"怎么死的"整个抹平——而死因
     决定猎人能不能开枪，这一行既给人看也喂模型；`compress.py:54` 的 `TEAM_ZH` 缺格时原样打印，
     英文阵营名直接进「X阵营获胜」；`compress.py:53` 的 `VERDICT_ZH` 同形，验不了的那一格在法官私发
-    那一行里变成英文。写侧没有护栏兜着：`rules.py:206` 那格的 `cause` 是从一个 `dict[int, str]` 里
+    那一行里变成英文。写侧没有护栏兜着：`rules.py:205` 那格的 `cause` 是从一个 `dict[int, str]` 里
     取的，而这一行行尾原先挂着的那枚对类型检查器的除外标记已被 `#226` 摘掉（`4281543` 那一版还在）——它的收件人从来没在这个仓库跑过。
 
     口径不是拿表名配的。`TEAM_ZH` 名字像 `roles.py:17` 的 `Team`，下标其实是 `state.py:32` 的

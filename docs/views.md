@@ -10,7 +10,7 @@
 一份判定改一次就够；真流式和缓冲式只差观感不差功能——UI 的逻辑是"日志多了一条就重画"，那么
 M0 量出什么都不用改这块代码。**把风险变成非风险**。
 
-代价是这些规则只能有一份定义，于是 `tests/test_wiring.py` 直接扫源码钉住（下表 8 行 = 10 个函数名，
+代价是这些规则只能有一份定义，于是 `tests/test_wiring.py` 直接扫源码钉住（下表 9 行 = 12 个函数名，
 `test_the_two_views_share_one_definition_of_each_viewing_rule` 一条参数化用例钉一个；那两个数与这张
 名册由 `tests/test_doc_citations.py` 逐条对账，往表里加一行就得把这句跟着改）：
 
@@ -24,6 +24,7 @@ M0 量出什么都不用改这块代码。**把风险变成非风险**。
 | `provenance` | `render_html.py` | 这份文件是哪一版写的、坐在哪张板上 |
 | `provenance_line` | `render_html.py` | 那四格拼出来的**纯文本**那一串：`render_live.py` import 它、`cli.py` 走 `render_html.`；页面要逐格转义 HTML，读的是上面那格列表 |
 | `voting_waves` | `events.py` | 一轮投票从哪到哪（复盘的格子与指标的 mandate 共用，见下） |
+| `is_dawn` / `peaceful_nights` | `events.py` | 哪一夜算「没人倒下」，那一行念给谁听——两块屏幕共用同一份从日志推出来的读数（`#88`） |
 
 `render_live.py` 全部 import，不许另起一份。两份定义意味着两块屏幕描述的不是同一局游戏。
 
@@ -266,7 +267,7 @@ rich 有两条坑，都各有一条测试钉着：
 
 ## 这些守卫是怎么验的
 
-渲染层 73 条用例（`test_render_html.py` 36 + `test_render_live.py` 37）里，每条都被"把被保护的
+渲染层 79 条用例（`test_render_html.py` 40 + `test_render_live.py` 39）里，每条都被"把被保护的
 分支改坏"验过一次它会真的红，改完再按 sha256 校验还原成字节相同的文件。这张表记的是**哪一具刀归
 哪条用例盯**；某一轮跑出来的判决读数（具名红用例、判词、超时秒数）逐轮记在 `docs/iterations.md`
 〈表头没写「变异」的那张账表搬进这一份〉与〈另外三本手册页里的逐片电池账搬进这一份〉两节。
@@ -295,6 +296,7 @@ rich 有两条坑，都各有一条测试钉着：
 | 直播旁边再写一份 `role_zh`（两份观众口径） | W1 → `...share_one_definition_of_each_viewing_rule[role_zh]`（数 `def` 那一侧抓住） |
 | `render_live.py` 不再 import `role_zh`，改成旁边一个 lambda，词留在注释里 | W2 → 同一条 `[role_zh]`。**这一具是改断言方式的理由**：旧的子串判断对它照样绿 |
 | `metrics.py` 不用 `events.voting_waves`，自己切一份波 | W3 → `...share_one_definition_of_each_viewing_rule[voting_waves]`（消费者那一侧，owner 是 `events.py` 不是 `render_html.py`） |
+| 平安夜那一行改由**本视图过滤后的**行去推（`evs` 顶掉 `events`） | K7、K10 → 两块屏幕各一条 `test_a_privately_recorded_night_death_does_not_make_a_peaceful_night`。这两具在真日志上是等价变异（金样本与 `data/` 的私有夜倒 0 枚），补了合成桌才抓住 |
 | `speech_too_long:{len}` 改名成 `speech_long` | T2 → `test_wiring.py::test_the_over_long_flag_the_gate_writes_is_the_one_the_renderer_reads`（改 `legality` 一侧） |
 | 超长不记 flag / 渲染分支删掉 | T3、T5 → 同上那条 + `test_render_html.py::test_the_over_long_marker_needs_its_own_flag_and_prints_no_length` |
 | `>` 写成 `>=`（到线即超长）/ 只留前缀不留长度 | T1、T4 → 接缝那条（边界断言读 `legality.SPEECH_SOFT_LIMIT` 现算，不写死 141） |

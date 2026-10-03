@@ -3238,7 +3238,7 @@ def _dangling_member_cites(corpus: dict[str, str], roster: dict[str, set[str]],
     混成一个数就会像那次一样对不上账。
 
     形状取"整条坐在反引号里"的那一形（`BACKTICK` 已经界定了跨度，跨度内部再找 `类.成员`），
-    于是 `rules.NightResolution.peace` 这种**带模块前缀**的点名也扫得到——这一支不是可有可无的加宽：
+    于是 `rules.NightResolution.peace`（那一格已随 `#88` 删掉）这种**带模块前缀**的点名也扫得到——这一支不是可有可无的加宽：
     本片第一跑抓到的两处假话（README 的⛔清单与归档里那一处）点的是 `rules` 里一具从来没有存在过
     的类，名字抄错了（真名是 `NightResolution`，`peace` 就住在它上），只看末两段那一档就会把它
     当成噪声放过。三种落空分得开，是因为处置不一样：

@@ -137,7 +137,6 @@ class NightResolution:
     # House-rule rejections and impossible inputs, kept as strings because they are the
     # raw material for the M2/M3 first-attempt illegal-action rate.
     blocked: list[str] = field(default_factory=list)
-    peace: bool = False  # 平安夜
 
     @property
     def dead_seats(self) -> list[int]:
@@ -204,7 +203,6 @@ def resolve_night(state: GameState, plan: NightPlan) -> NightResolution:
 
     for seat in sorted(dying):
         res.deaths.append(Death(seat=seat, day=day, night=day, cause=dying[seat]))
-    res.peace = not res.deaths
 
     # --- seer ------------------------------------------------------------------
     check = plan.seer_check

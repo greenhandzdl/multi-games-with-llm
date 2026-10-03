@@ -106,15 +106,15 @@ def test_deal_is_seed_deterministic_and_role_accurate():
 class TestNight:
     def test_knife_without_save_kills(self):
         res = resolve_night(mk_state(BASE), NightPlan(wolf_kill=5))
-        assert res.dead_seats == [5] and res.deaths[0].cause == "wolf_kill" and not res.peace
+        assert res.dead_seats == [5] and res.deaths[0].cause == "wolf_kill"
 
     def test_knife_solved_by_save_is_peace(self):
         res = resolve_night(mk_state(BASE), NightPlan(wolf_kill=5, witch_save=True))
-        assert res.deaths == [] and res.used_save and res.peace
+        assert res.deaths == [] and res.used_save
 
     def test_empty_knife_is_peace(self):
         res = resolve_night(mk_state(BASE), NightPlan(wolf_kill=None))
-        assert res.peace and res.dead_seats == []
+        assert res.dead_seats == []
 
     def test_knife_and_poison_on_different_seats_double_death(self):
         res = resolve_night(mk_state(BASE), NightPlan(wolf_kill=5, witch_poison=1))
@@ -171,12 +171,14 @@ class TestNight:
         """毒那一侧的兜底和刀那一侧不是同一条代码，所以要单独钉。
 
         钉的不只是"blocked 里多了一句话"，是那句话之后这一晚的形状：没有死亡、`used_poison`
-        不成立、`peace` 成立。少了后半截，一次幻觉目标在日志里会读成"女巫下手了但没人死"。
+        不成立——这两格今天就是"平安夜"的全部证据（`#88` 删掉的那个布尔本来就是 `not deaths`
+        的别名，理由见 `docs/iterations.md` 里 `#88` 那一节）。少了后半截，一次幻觉目标在日志里
+        会读成"女巫下手了但没人死"。
         """
         st = mk_state(BASE, dead=(5,))
         res = resolve_night(st, NightPlan(witch_poison=5))
         assert "invalid_poison_target:5" in res.blocked
-        assert res.deaths == [] and not res.used_poison and res.peace
+        assert res.deaths == [] and not res.used_poison
 
     def test_same_knife_same_poison_belongs_to_the_poison(self):
         """同刀同毒算谁杀的：房规允许双药同晚时，救不活那一口人（毒优先）。

@@ -32,8 +32,8 @@ from typing import Any, Iterable
 from . import roles
 from .belief import build_belief
 from .compress import cause_text, render_line
-from .events import (Event, EventLog, Kind, empty_notice, meta_notice, roster_notice,
-                     seq_notice, torn_notice, voting_waves)
+from .events import (Event, EventLog, Kind, PEACE_ZH, empty_notice, is_dawn, meta_notice,
+                     peaceful_nights, roster_notice, seq_notice, torn_notice, voting_waves)
 from .info import eid
 
 IMPOSSIBLE = "不可能感知"
@@ -60,7 +60,7 @@ h1{font-size:1.3em;margin:0 0 .2em}h2{font-size:1.05em;margin:1.6em 0 .4em;
 ul.chron{list-style:none;margin:0;padding:0}
 ul.chron li{padding:1px 0 1px .5em;border-left:3px solid transparent}
 ul.chron li.speech{border-left-color:#8aa6c1}ul.chron li.vote{border-left-color:#c1b08a}
-li.death{background:#fdefef}li.flagged{background:#fdf3e6}ul.chron li.last_words{border-left-color:#8f5fa8;background:#f6eefa;font-style:italic}
+li.death{background:#fdefef}li.flagged{background:#fdf3e6}ul.chron li.last_words{border-left-color:#8f5fa8;background:#f6eefa;font-style:italic}ul.chron li.peace{border-left-color:#86ad8b;background:#f1f7f2}
 .mind{display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:.88em}
 .mind section{border:1px solid #ddd6c6;border-radius:6px;padding:6px 10px;background:#fff}
 .mind h3{font-size:1em;margin:.2em 0}
@@ -120,13 +120,13 @@ def markers(e: Event) -> str:
     return " " + " ".join(out) if out else ""
 
 
-def _line(e: Event) -> str:
+def _line(e: Event, *, peace: bool = False) -> str:
     text = render_line(e)
     cls = e.kind if e.kind in ("speech", "vote", "death", "last_words") else ""
     if event_flags(e):
         cls = (cls + " flagged").strip()
-    return (f'<li id="{_esc(eid(e.seq))}" class="{_esc(cls)}">'
-            f'{_esc(text)}{markers(e)}</li>')
+    row = f'<li id="{_esc(eid(e.seq))}" class="{_esc(cls)}">{_esc(text)}{markers(e)}</li>'
+    return row + (f'<li class="peace">{_esc(PEACE_ZH)}</li>' if peace else "")
 
 
 def roles_by_seat(events: list[Event]) -> dict[int, str]:
@@ -329,12 +329,12 @@ def _reveal_section(events: list[Event]) -> str:
 def render(events: list[Event], meta: dict[str, Any], *, god: bool = False,
            torn: Iterable[str] = ()) -> str:
     evs = shown_events(events, god=god)
-    by_day: dict[int, list[Event]] = {}
+    peace, by_day = peaceful_nights(events), {}  # events 不是 evs：那一夜倒没倒人不该由视图决定
     for e in evs:
         by_day.setdefault(e.day, []).append(e)
     sections = [_board(evs, god=god), _axis(evs)]
     for day in sorted(by_day):
-        body = "".join(_line(e) for e in by_day[day])
+        body = "".join(_line(e, peace=is_dawn(e) and day in peace) for e in by_day[day])
         sections.append(f'<h2>第{day}天</h2><ul class="chron">{body}</ul>'
                         + _vote_blocks(day, by_day[day]))
     sections.append(_reveal_section(events))

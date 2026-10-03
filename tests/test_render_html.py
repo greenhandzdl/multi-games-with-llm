@@ -640,6 +640,77 @@ def test_a_last_words_line_gets_its_own_colour_rule():
     assert "last_words" in _style_rule_names(), sorted(_style_rule_names())
 
 
+def test_a_peaceful_night_is_announced_in_both_views(pair):
+    """`#88`：女巫用药救下的那一夜要在页面上留一行，两个视图各一行。
+
+    金样本第 1 夜就是平安夜（`seq 11` 天黑 → `seq 18` 天亮，中间没有 `death`），第 2 夜倒了两个，
+    所以"恰有一条"这一格在两个视图里都是量出来的、不是挑出来的。
+    """
+    for doc in pair:
+        found = doc.count('class="peace"')
+        assert found == 1, f"平安夜那一行的条数不对：{found}"
+        assert "平安夜" in doc
+
+
+def test_the_peaceful_night_line_sits_between_dawn_and_the_first_speech(pair):
+    """那一行坐在哪一格里是它意义的一部分：它说的是"这一夜"，所以必须在「天亮了」之后、
+    第 1 天第一段发言之前。放在日子开头会把夜里的事前到发牌之前，放在末尾会读成"这一天没人死"。
+    """
+    spectator, _ = pair
+    dawn = spectator.index('id="e18"')
+    first_speech = spectator.index('id="e19"')
+    peace = spectator.index('class="peace"')
+    assert dawn < peace < first_speech, (dawn, peace, first_speech)
+
+
+def test_a_peaceful_night_line_gets_its_own_colour_rule():
+    """`#257` 给遗言那一格立过的同一把尺，这一轮轮到平安夜：`class="peace"` 住在 DOM 属性里，
+    把复盘页投给人看时读者看不到属性，只看得到颜色。
+
+    三向对账那三条闸门都救不了这条规则——`peace` 同时被上面那条数条数的断言读过，所以"被测试读过"
+    就能免掉"被样式上色"。这一条是它唯一的读者，刀也就下在这一格。
+    """
+    assert "peace" in _style_rule_names(), sorted(_style_rule_names())
+
+
+def _one_night(private_death: bool) -> list[Event]:
+    """一夜三行的合成桌：天黑宣告 →（只有 5 号看得见的那一枚倒人）→「天亮了」。
+
+    平安夜那一格在两份日志上都量不出"读 `events` 还是读 `evs`"的差别：金样本第 2 夜的两枚夜间死讯
+    （`seq 46`／`seq 47`）visibility 都是 `all`，data/ 里按这个口径数出的 19 枚也是 0 枚私有
+    （2026-10-03T05:40Z 现读），观众筛完全文等于没筛。要让那一格有证人只能自己造一张桌——
+    与 `弃票` 那一列、〔发言超长〕那个标记同一困境，载体同样是直接喂进来的事件。
+    """
+    rows = [Event(seq=1, kind=Kind.PHASE, day=1, phase="night_wolf",
+                  visibility=PUBLIC, payload={})]
+    if private_death:
+        rows.append(Event(seq=2, kind=Kind.DEATH, day=1, phase="night_witch",
+                          visibility=frozenset({5}), actor=5,
+                          payload={"seat": 4, "cause": "poison"}))
+    rows.append(Event(seq=3 if private_death else 2, kind=Kind.PHASE, day=1,
+                      phase="day_speech", visibility=PUBLIC, payload={}))
+    return rows
+
+
+def test_a_privately_recorded_night_death_does_not_make_a_peaceful_night():
+    """「这一夜无人倒下」讲的是事实，不是"观众知道什么"——所以两个视图都得闭嘴。
+
+    观众看不见那枚 `visibility=[5]` 的倒人。若渲染层按本视图能见的行去推平安夜，观众页会对同一夜
+    给出两句相反的话：正文里没有死讯，页面上写着平安夜，而那一夜确实有人倒了。改读 `evs` 那一具刀
+    在金样本上是等价变异（上面那条合成桌的量法解释了为什么），这一条是它唯一的落点。
+
+    正反两形同桌量的：真的没人倒的那一夜，两个视图都得念出来——否则一个永不印平安夜的渲染器也能绿。
+    """
+    for god in (False, True):
+        doc = render_html.render(_one_night(True), {}, god=god)
+        assert doc.count('class="peace"') == 0, f"god={god}：那一夜有人倒下，页面却写着平安夜"
+        assert "平安夜" not in doc
+
+    for god in (False, True):
+        doc = render_html.render(_one_night(False), {}, god=god)
+        assert doc.count('class="peace"') == 1, f"god={god}：这一夜没人倒，页面上却没有那一行"
+
+
 def test_a_kind_colour_bar_rule_is_strong_enough_to_land():
     """一根分类色条的规则必须压得过那条 shorthand，否则它是看不见的墨。
 

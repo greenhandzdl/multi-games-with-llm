@@ -481,3 +481,51 @@ def roster_notice(meta: dict[str, Any]) -> str:
         return ""
     return (f"桌边坐着一个真人（actor_kinds={kinds}）：他答的那几席不经过端点，"
             "这一屏不是九个模型自玩的那一局")
+
+
+# `roster_notice` 上面那段话解释了为什么这一族句子住在文件末尾：`idempotency_key` 的早退（`events.py:327`）
+# 与 `LogDamage` 的外裹（`events.py:405`）被 docs/iterations.md 按行号点着，插在中途会顶号；下面三格同样在末尾。
+def is_dawn(e: Event) -> bool:
+    """那条「天亮了」的宣告：一天在白昼那一侧的第一个脚印。
+
+    两块给人看的屏幕把平安夜那一行插在它后面，所以"哪一行是它"只能有一个答案（`#111` 的死因译文、
+    `#113` 的票型结算都是同一个理由：一句话有两个作者，就会有第一个版本还活着的那天）。
+    `Kind.PHASE` 那一格是必要的：白天的发言、平票宣告都在 `day_speech`/`day_vote` 上写正文，
+    只有法官那条宣告是 `phase` 事件。
+    """
+    return e.kind == Kind.PHASE and e.phase == "day_speech"
+
+
+def peaceful_nights(events: Iterable[Event]) -> set[int]:
+    """哪些天的夜里没人倒下。三件事都要在日志里，缺一件就不算。
+
+    * **夜开过张**：`Kind.PHASE` 那条天黑宣告，是 `phases.run_night` 写下的第一笔。发牌行的 `phase`
+      也是 `night_wolf`，但它不证明夜开始过，所以只认这一条。
+    * **白天到来了**：同一天的 `is_dawn`。没有它，"没有死事件"可能只是这一夜被席位 deadline 砍掉，
+      把一次中断读成一次平安夜是**误判**方向，代价比漏一行公告大。
+    * **这一夜没有 `death`**：只数夜里-phase 那几枚。白天的 exile 和猎人的枪不是这一格的对象——
+      金样本第 1 天正是"夜里没人倒、白天投死一个"那一形。
+
+    为什么算在读侧而不是 `rules.NightResolution` 上：那个布尔住在已经结束的返回值里，渲染时拿不到；
+    而这三条腿的证物（两条 `phase` 宣告、`death`）visibility 全是 `all`，所以这一格不需要新的落盘
+    字段，也就不需要动 `seq`（`#88` 量的正是那笔代价：新增一条公告事件会把金样本整本顶重钉，
+    并改变模型读到的输入分布）。
+    """
+    opened: set[int] = set()
+    mornings: set[int] = set()
+    fallen: set[int] = set()
+    for e in events:
+        night = e.phase.startswith("night_")
+        if e.kind == Kind.PHASE:
+            if night:
+                opened.add(e.day)
+            elif is_dawn(e):
+                mornings.add(e.day)
+        elif e.kind == Kind.DEATH and night:
+            fallen.add(e.day)
+    return (opened & mornings) - fallen
+
+
+PEACE_ZH = "平安夜：这一夜无人倒下。"
+# 这一格唯一的人话：两块屏幕共用它，所以它跟着判据住在同一个模块里，而不是各自抄一遍。
+

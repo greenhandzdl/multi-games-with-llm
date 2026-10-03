@@ -18,11 +18,11 @@ from __future__ import annotations
 
 import random
 
-from wolfengine import game, phases
+from wolfengine import events, game, phases
 from wolfengine.agent import Agent
 from wolfengine.actors import MockActor, Proposal, TurnContext
 from wolfengine.config import Config
-from wolfengine.events import Kind
+from wolfengine.events import PUBLIC, Event, Kind
 from wolfengine.schema import Action
 from wolfengine.state import Phase
 
@@ -101,7 +101,7 @@ async def test_a_witch_with_one_potion_left_is_still_asked(tmp_path):
     res = await phases.run_night(table)
 
     assert _night_turns_for(log, WITCH) == 1
-    assert res.used_save and res.peace, res
+    assert res.used_save and res.deaths == [], res
     assert any(e.kind == Kind.NOTICE for e in log.all()), "问了却没告诉她倒了谁"
 
 
@@ -162,3 +162,66 @@ async def test_a_real_check_still_reaches_the_seer_channel(tmp_path):
     assert len(reported) == 1 and reported[0].payload["target"] == 6, reported
     assert reported[0].actor == SEER, reported[0]
     assert table.blocked == [], table.blocked
+
+
+# ------------------------------------------------------- 平安夜在**读侧**有没有证人（#88）
+def _ev(seq: int, kind: str, *, day: int, phase: str, **payload) -> Event:
+    return Event(seq=seq, kind=kind, day=day, phase=phase, visibility=PUBLIC, payload=payload)
+
+
+NIGHT_OPEN = {"seq": 3, "kind": Kind.PHASE, "day": 1, "phase": "night_wolf",
+              "payload": {"text": "天黑请闭眼。狼人请睁眼。"}}
+DAWN = {"seq": 4, "kind": Kind.PHASE, "day": 1, "phase": "day_speech",
+        "payload": {"text": "天亮了，第1天开始。"}}
+
+
+def test_a_night_that_opened_and_wrote_no_death_is_a_peaceful_night():
+    """`#88` 要的那一格：夜里没人倒下这件事，读侧要能自己算出来。
+
+    写侧原来挂着一格 `rules.NightResolution.peace`，它就是 `not res.deaths` 的别名、零生产读者，
+    这一轮已删——何况那个布尔住在这一局已经结束之后的返回值里，渲染时早就不在了。现在它读日志：
+    天黑那一行开过张、这一天的夜里-phase 没有 `death`，就是平安夜。
+    """
+    evs = [_ev(1, Kind.GAME_START, day=1, phase="night_wolf"),
+           _ev(**NIGHT_OPEN), _ev(**DAWN)]
+    assert events.peaceful_nights(evs) == {1}
+
+
+def test_a_night_that_wrote_a_death_is_not_peaceful():
+    evs = [_ev(1, Kind.GAME_START, day=1, phase="night_wolf"), _ev(**NIGHT_OPEN),
+           _ev(5, Kind.DEATH, day=1, phase="night_seer", seat=3, cause="wolf_kill"),
+           _ev(**DAWN)]
+    assert events.peaceful_nights(evs) == set()
+
+
+def test_a_daytime_death_does_not_take_away_a_peaceful_night():
+    """白天投出去的那一票不算夜里的死者：金样本第 1 天正是这一格（`seq 38` 是 `day_vote` 的 exile，
+    而那一夜无人倒下），所以这条不是假想形状。"""
+    evs = [_ev(1, Kind.GAME_START, day=1, phase="night_wolf"), _ev(**NIGHT_OPEN),
+           _ev(38, Kind.DEATH, day=1, phase="day_vote", seat=1, cause="exiled"),
+           _ev(**DAWN)]
+    assert events.peaceful_nights(evs) == {1}
+
+
+def test_the_deal_rows_alone_do_not_attest_a_night():
+    """反面那一格：发牌行的 `phase` 也是 `night_wolf`，但那一夜从没开始过。
+
+    判据只认 `Kind.PHASE` 那条天黑宣告（`phases.run_night` 的第一笔），所以"没有死事件"不会被
+    读成"没人倒下"。这是**误判方向**的对照：宁可漏一行公告，不许给一个没打过的夜发合格证。
+    本机 6 本真日志里每一天都有天黑行（04:53:36Z 现量），所以这一格是给判据严格性配的夹具，
+    不是产品链上已知的形状。
+    """
+    evs = [_ev(1, Kind.GAME_START, day=1, phase="night_wolf"),
+           _ev(2, Kind.DEAL, day=1, phase="night_wolf", role="wolf"),
+           _ev(**DAWN)]
+    assert events.peaceful_nights(evs) == set()
+
+
+def test_a_night_that_never_reached_dawn_is_not_announced():
+    """天黑行开了、夜里没写死者、但白天从没到来（席位 deadline 到点的那一局）：不说。
+
+    句子是给"天亮了"那句让座的，所以让座的那一头没有天亮时，两个出口都不印它。
+    """
+    evs = [_ev(1, Kind.GAME_START, day=1, phase="night_wolf"), _ev(**NIGHT_OPEN)]
+    assert events.peaceful_nights(evs) == set()
+

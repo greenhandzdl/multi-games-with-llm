@@ -35,7 +35,7 @@ from rich.table import Table
 from rich.text import Text
 
 from .compress import render_line
-from .events import Event, EventLog, Kind, empty_notice, meta_notice, roster_notice, seq_notice
+from .events import Event, EventLog, Kind, PEACE_ZH, empty_notice, is_dawn, meta_notice, peaceful_nights, roster_notice, seq_notice
 from .render_html import (event_flags, game_over_event, markers, mind_pairs, provenance_line,
                           role_zh, roles_by_seat, seats_of, shown_events)
 
@@ -183,7 +183,7 @@ def draw(console: Console, events: list[Event], meta: dict[str, Any], *,
 
     evs = shown_events(events, god=god)
     over = game_over_event(events)
-    by_day: dict[int, list[Event]] = {}
+    peace, by_day = peaceful_nights(events), {}  # events 不是 evs：那一夜倒没倒人不该由视图决定
     for e in evs:
         by_day.setdefault(e.day, []).append(e)
 
@@ -205,7 +205,7 @@ def draw(console: Console, events: list[Event], meta: dict[str, Any], *,
     for day in sorted(by_day):
         line(f"── 第{day}天 ──", style="bold")
         for e in by_day[day]:
-            line(render_line(e) + markers(e),
+            line(render_line(e) + markers(e) + (" " + PEACE_ZH if is_dawn(e) and day in peace else ""),
                  style="red" if e.kind == Kind.DEATH else ("yellow" if event_flags(e) else ""))
 
     if reveal_seat is not None:
