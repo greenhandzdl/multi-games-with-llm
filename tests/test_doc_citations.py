@@ -3901,3 +3901,103 @@ def test_the_manual_explains_where_a_plan_pointer_points():
         "手册里再没有一句话同时写出 plan 指针的形状和它为什么指不到东西（格式 文件:行 原句）——"
         "那 257 枚指针就失去了唯一的去处说明，GitHub 上的读者只会看见一节点不开的数字。"
         "要么把那句话留在原处，要么搬到另一本人册页里，别只删不补")
+
+
+# --------------------------------------------------------------- 截断式 data/ 证据路径
+# 手册页里以反引号点出的 `data/…` 路径有两种身份：读者敲得出来的落点（配方），和读者点不开的证据
+# （已经跑过的那一局）。前者写在围栏里，后者只可能写成半截——把整串抄全会让人以为那是随仓库发的东西。
+# 这一片只管后者那一形：带省略号的 `data/` 路径必须在同一句里交代它为什么点不开。逐本今值、ASCII `...`
+# 那一支的零读者、以及"整串抄全的未入库路径"这条已知边界都记在归档的 `#271`。
+DATA_CITE = re.compile(r"`(data/[^\n`]*…[^\n`]*)`")
+DATA_UNPUBLISHED = re.compile(r"不入库|不进版本库|gitignore|本机留存|自己重生成|点不开")
+
+
+def _undeclared_data_citations(pages: dict[str, str]) -> list[tuple[str, int, str, str]]:
+    """点不开却没在同一句里交代的截断式 `data/` 证据路径（格式 文件:行 路径 原句）。"""
+    rows: list[tuple[str, int, str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for page, text in pages.items():
+        lines = text.splitlines()
+        for idx, line in enumerate(lines):
+            for hit in DATA_CITE.finditer(line):
+                sentence = _cited_sentence(lines, idx, hit.start())
+                if DATA_UNPUBLISHED.search(sentence) or (page, sentence) in seen:
+                    continue
+                seen.add((page, sentence))
+                rows.append((page, idx + 1, hit.group(1), sentence.strip()))
+    return rows
+
+
+def _data_declares(pages: dict[str, str]) -> list[tuple[str, int, str]]:
+    """同时点到 `data/` 与"这一族不随仓库走"的那句话（格式 文件:行 原句）。
+
+    「不入库」三个字单独出现不算：手册里那些「电池脚本是一次性工件、不入库」说的是变异脚本，
+    给不了产物路径的去处。取法按行不按命中——`#271` 的 K7 量过"按句去重"那一支没有读者，摘掉它
+    整套 0 红，所以这里不留一个只会被将来的换行骗到的分支。
+    """
+    rows: list[tuple[str, int, str]] = []
+    for page, text in pages.items():
+        lines = text.splitlines()
+        for idx, line in enumerate(lines):
+            if "data/" not in line:
+                continue
+            if not DATA_UNPUBLISHED.search(line):
+                continue
+            rows.append((page, idx + 1, _cited_sentence(lines, idx, line.index("data/")).strip()))
+    return rows
+
+
+def test_a_truncated_data_path_is_endorsed_only_by_its_own_sentence():
+    pages = {
+        "declared.md": "`data/real-20260924/…g00000301`（那一局在本机，`data/` 不入库）的 day-1 轮有两条发言。\n",
+        "undeclared.md": "`data/real-20260924/…g00000301` 的 day-1 轮有两条发言。\n",
+        "whole-path.md": "`data/real-20260924/20260924T153509Z_g00000301.jsonl` 的 day-1 轮有两条发言。\n",
+        "neighbour.md": "`data/x/…y` 的 day-1 轮有两条发言。\n`data/` 整目录不入库，读者点不开。\n",
+        "twice.md": "同一局改动前后各读一次：`data/x/…y` 读 0.0089、`data/x/…y` 读 0.0134。\n",
+    }
+    rows = _undeclared_data_citations(pages)
+    assert [(r[0], r[1]) for r in rows] == [("undeclared.md", 1), ("neighbour.md", 1), ("twice.md", 1)], \
+        f"只有同一句自己交代了的才算过关，且同一句里重复点到的只登记一次：{rows}"
+
+
+def test_a_declaration_about_battery_scripts_is_not_a_declaration_about_data():
+    pages = {
+        "manual.md": "`data/` 不进版本库，批次也得自己重生成。\n"
+                     "`data/` 整目录 gitignored，本机留存。\n"
+                     "三族的电池脚本都是一次性工件、不入库。\n"
+                     "`data/calibration.json` 是那一目录里唯一的例外。\n",
+        "other.md": "同一批里 `data/plumbing/A-vs-B.md` 由读者自己重跑得到，仓库里没有现成产物。\n"
+                    "`data` 目录里剩下的那些产物不入库。\n",
+    }
+    rows = _data_declares(pages)
+    assert [(r[0], r[1]) for r in rows] == [("manual.md", 1), ("manual.md", 2)], f"{rows}"
+
+
+def test_every_truncated_data_path_in_the_manual_says_why_a_reader_cannot_open_it():
+    """`docs/metrics.md` 那枚 `data/real-20260924/…g00000301` 是唯一的真缺陷，也是这条闸门第一次开火的证人。
+
+    它拿一次本机产物的读数（改动前后 `collapse_round` 两个数）当"真日志上这不是假想敌"的依据，而这一仓库
+    是公开的：`data/` 整目录在 `.gitignore` 里，文件名又被省略号截掉，读者既打不开也补不全，连"自己重采一
+    局"那条退路都指不到（真端点那三局要端点才有）。同一页 510 行确实写了 `data/` 不进版本库，但那是 181 行
+    之外的另一节——`#270` 立的正是同一句才作数的规矩，这里不给自己留"整页沾光"的口子。
+    """
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    rows = _undeclared_data_citations(pages)
+    assert not rows, (
+        "手册页里有截断式的 `data/` 证据路径没在同一句交代读者为什么点不开（格式 文件:行 路径 原句）："
+        f"{[(r[0], r[1], r[2]) for r in rows]}——要么补一句去处，要么把这一格换成读者自己重生成得到的东西")
+
+
+def test_the_manual_still_says_that_data_artifacts_do_not_ship():
+    """三本手册页各有一句「`data/` 不随仓库走」，今天没有任何东西钉着它们。
+
+    `#270` 之后重数一遍另一族：plan 指针的去处说明被钉住了，产物证据的去处说明还散在四处。一句普通的
+    README 精简就能把「`data/` 不进版本库」连同它上面那条 ✅ 一起摘掉，读者于是会去 GitHub 找一个根本不在
+    那里的目录，或者把本机的读数当成随发布走的东西核对。地板取 2 不是取 1：今天有 4 句，逐本账见归档
+    `#271`，留一句的余量是为了让"搬家"不被误判成"删掉"。
+    """
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    rows = _data_declares(pages)
+    assert len(rows) >= 2, (
+        f"手册里同时点到 `data/` 和不入库的那句话只剩 {len(rows)} 句，整本都不再声明产物目录不随仓库发布："
+        f"{[(r[0], r[1]) for r in rows]}")
