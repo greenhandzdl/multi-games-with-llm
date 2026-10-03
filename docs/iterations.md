@@ -12450,3 +12450,62 @@ sha256（RESTORE-CHECK `dirty=NONE`，涉及 7 本文件），整套测试的产
 （`8322e877f789`，v2）、`census267/knife267v2.json`（`c187ac34ac61`，上面那张表的来源）、
 `census267/raw/`（v2 每趟的原始 stdout+stderr 一本一个，共 56 本，与台账里 56 个 run 一一对应，
 由目录内 glob 现数）。
+
+## `#269`：`m3_gate` 少算那一向有了证人，四具刀里三具有牙
+
+**票面**（`#267` 末尾登记的那格）：整套只有两枚断言读 `fallback_rate`，两枚今天两边都是 0，所以
+audit **少算**这一向没有证人。这一片补一枚读数非零的对账证人
+（`test_audit_reports_a_nonzero_fallback_rate_when_the_engine_answered_for_seats`，落在
+tests/test_live_path.py），并按屋里规矩给那一格计数下四具刀。那两枚既有断言与
+`src/wolfengine/metrics.py:592` 里那行 `fallback_rate` 的算术一个字没动。
+
+**夹具现量**（`census269/probe269.py` 在干净树上的回显）：一局 76 次调用里写侧计数器 37、audit 的
+`n_turns` 39、`fallback_rate` 0.9487、`refused_turns` 37，`fallback_copy_check` 报
+`{'n_compared': 39, 'divergent': 0}`。分子既不是全部轮（39）也不是零轮，两头都不写死成常数；
+`metrics.decisions()` 数出来的 39 与按"`result` 里有 `fallback` 键"筛出的 39 是同一批，而文件里
+全部事件是 63——分母换错的那一具刀下面就着这一格能红。
+
+**选择面**：四本文件（test_live_path、test_cli、test_m3_gate、test_golden_game）在干净树是
+209 passed、零既有红。下面每一具刀的红名单都只在这 209 条里点的名，整套那两个数另说。
+
+| 刀 | 下在哪一格 | 选择面 | 红名单 |
+| --- | --- | --- | --- |
+| `K_zero` | 那个分子整枚换成 0（少算） | 1 红 | 只有新证人，报"读数还是 0，这一条就白写" |
+| `K_wide` | 分母 `turns` 从决策轮换成全部事件（顶宽） | 3 红 | 新证人 + `test_audit_counts_match_the_log_it_was_handed`（`assert 104 == 68`）+ `test_m3_locates_the_single_retry_and_says_which_rung_cleared_it` |
+| `K_resultzero` | 写侧 `result` 那份标记换成 0 | 2 红 | 新证人（`assert 0.9487 == 0.0`）+ `test_an_invented_citation_is_refused_and_the_refusal_is_kept_verbatim`（`assert 0 == 1`） |
+| `K_copy` | 分子改读另一份拷贝 | 0 红 | 登记为等价变异，读法见下 |
+
+**整套的两趟**（树是 `69cb89d` 那一版、只多这一条新用例；共驻负载下只取计数不取秒数）：`K_zero`
+那趟把新用例 deselect 掉，收 1214 passed、1 deselected、FAILED 名册为空——这一向今天确实只有
+这一枚证人；`K_copy` 那趟带着它跑，收 1215 passed、FAILED 名册为空。干净树带着新用例的提交门
+也是 1215 passed。
+
+**`K_copy` 为什么算等价变异、而不是"没抓到就放过"**：两份标记同出一个表达式——
+`src/wolfengine/agent.py:363` 那一份和 `src/wolfengine/agent.py:380` 那一份都写 `outcome.fell_back`，
+只要两处一起落盘，读哪一份都给同一个数。把两份驱动分开的用例确实有：
+`tests/test_payload_shape.py:271` 造的那条 `flipped` 记录，但它只交给 `fallback_copy_check` 那一只手，
+没有交给 `m3_gate`。于是失效方向分得很干净：**一份单独损坏**由 `K_resultzero` 管（红两枚），
+**两份不一致**由 `fallback_copy_check` 那一格管（有账）、**分子读哪一份**在整套尺度上不可分辨——
+所以这一具不给补断言（没有主张要修的那格不补断言）。
+
+**我脚本里的一处 bug**：四具刀的表第一版写成 `("文件", ("旧", "新"))`，外层多括一层，于是
+`fname, old, new = KNIVES[kid]` 对三具 metrics 刀全部 `ValueError: not enough values to unpack`，
+只有写法不同的 `K_resultzero` 跑了起来。修好分组之前那三具压根没落过刀；这一趟的回显里
+`KNIFE=… LANDED sha … -> …` 与 `RESTORE OK` 逐具成对出现，才算"刀真的落了、也真的还原了"。
+
+**没动的格子与为什么**：`src/` 一个字节没动——四具刀每趟都按原始字节还原并比 sha256 前十二位，
+`metrics.py` 每趟回到 `82d192df8a1f`、`agent.py` 回到 `5918460d0c6b`；`docs/metrics.md` 只补了一句：
+那一页原本写着"`m3_gate.fallback_rate` 已经拥有那个数"，却在非零一侧没有任何东西替它背书，现在
+点名了这枚证人。README 与其余各页没动，本文件只有末尾追加。
+
+**闸门逮到的一处自述**：新用例的 docstring 第一版指着 golden 那枚 0 对 0 的断言写成"把同一个键钉成
+`(0.0, 0, 0, 0, 0)`"，行号闸门当场报「这句话没写出可核对的名字」——代词不是名字，句子里没留下
+能与被点那一行对账的 token。把那个键点名（`fallback_rate` 就写在被指的同一行上）之后
+`test_doc_citations.py` 单跑 103 passed、整套提交门 1215 passed（都是这一版树的读数）。
+
+**park**：工具与逐字日志在项目记忆目录 `census269/`，不在仓库。sha256 前十二位：
+`census269/knife269.py`（`721beb3d576f`，四具刀，含锚点唯一性预检与按字节还原）、
+`census269/probe269.py`（`d1d7ea305dd2`，只读探针）、`census269/run269full.sh`（`8d7f8d09674f`，
+三趟全量的编排）、`census269/knife269.log`（`adcc6195612e`，选择面第一趟：三具 unpack 崩溃 +
+`K_resultzero` 的逐字名册）、`census269/knife269b.log`（`6dcd2ba22c7c`，修好分组后剩下三具的选择面）、
+`census269/knife269full.log`（`d398ddf3bfd0`，上面那三趟全量的逐字回显）。

@@ -558,6 +558,41 @@ async def test_a_degraded_game_records_the_verdict_in_the_log_not_only_in_ram(ke
     assert g.degraded_game is True, "reader and writer must agree on the same bytes"
 
 
+async def test_audit_reports_a_nonzero_fallback_rate_when_the_engine_answered_for_seats(
+        key, tmp_path):
+    """`fallback_rate` 的孪生对账今天只在 0 上成立，audit **少算**这一向一条证人都没有。
+
+    `tests/test_cli.py:423` 那条孪生对账比的是 `m3_gate` 里的 `fallback_rate` 与从原始行重算的数。
+    `tests/test_golden_game.py:787` 把 `fallback_rate` 连同四个兄弟钉成 `(0.0, 0, 0, 0, 0)`。两枚今天
+    两边都是 0，所以把 `metrics.py` 里那个分子整枚换成 `0` 之后没有一条会红（`#269` 的 `K_zero`，跑的
+    是摘掉这一条之后的整套）。这一条把同一句对账搬到一局多数座位都被引擎替答的桌上，读数必须
+    **非零**——否则它退化成那两枚已经存在过的 0 对 0。
+
+    桩每相都回 `{"act":"check","target":2}`：只有预言家查验那一相过得了闸门，其余决策轮被拒到
+    fallback。分子因此既不是"全部轮"也不是"零轮"，两头都不写死成常数。三个来源两两不同源才算对账：
+    `res.fallbacks` 是写侧留在内存里的计数器，audit 那一格读的是落盘的 `payload.meta` 那份标记，
+    这里的重算读的是同一行的 `result` 那份。
+    """
+    cfg = Config()
+    cfg.degraded_game_fallbacks = 0
+    res, _ = await _play(
+        lambda r: httpx.Response(200, json=_chat_body('{"act":"check","target":2}')),
+        tmp_path, cfg=cfg)
+    assert res.fallbacks > 0, "夹具失效：这一局一次代打都没有，下面的对账就成了 0 对 0"
+    stats = _audit(res.path)
+    gate = stats["m3_gate"]
+    lines = [json.loads(l) for l in Path(res.path).read_text(encoding="utf-8").splitlines()
+             if json.loads(l)["seq"] != 0]
+    turns = [e for e in lines if "fallback" in e["result"]]
+    assert gate["n_turns"] == len(turns), \
+        "分母要由落盘的决策轮决定：audit 数出来的轮和文件里的轮不是同一批，比率就没有共同分母"
+    assert gate["fallback_rate"] > 0, f"读数还是 0，这一条就白写：{gate}"
+    assert gate["fallback_rate"] == round(
+        sum(1 for e in turns if e["result"].get("fallback")) / len(turns), 4)
+    assert gate["fallback_rate"] == round(res.fallbacks / gate["n_turns"], 4), \
+        "写侧计数器与读侧落盘标记必须给同一个比，不同就说明有一侧漏数了代打轮"
+
+
 async def test_a_clean_game_records_the_verdict_as_false_rather_than_omitting_it(key, tmp_path):
     """一局没退化，也要在日志里说"没退化"，而不是什么都不写。
 

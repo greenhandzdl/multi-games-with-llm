@@ -117,7 +117,10 @@ mock（seed 1–30，`tests/test_day_cap.py` 的那个桌）在上限 6 下最�
 判定走，让后来人"用今天的默认值去复核昨天的判定"就是预先声明的反面——同一句话也是下一节那把尺子
 （`meta.regions`）落盘的理由。
 `audit` 只多这一个布尔键、不多一个 fallback 计数——`m3_gate.fallback_rate` 已经拥有那个数，
-同一份文件里两份口径就是当初 `act`/`action` 那类错误的形状。
+同一份文件里两份口径就是当初 `act`/`action` 那类错误的形状。这个数在**非零**那一侧也有对账：
+`test_audit_reports_a_nonzero_fallback_rate_when_the_engine_answered_for_seats` 拿一局多数座位被
+引擎替答的日志，要求 audit 的率、写侧留在内存里的计数器、从原始行重算的率给同一个数——只在 0 上
+成立的对账说不出"少算"，所以那一局的分子必须由落盘的标记决定，而不是两边都是零。
 
 > 复现：`wolf audit <file> | jq '{degraded_game, fallbacks: .m3_gate.fallback_rate}'`
 > ——判定和它所依据的率并排打印，两者不一致就是这一格写歪了。
