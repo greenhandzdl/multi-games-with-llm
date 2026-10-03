@@ -11566,7 +11566,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   **63 格**，只数简单赋值是 **1 格**，两形的差就是那 62 格解包成员（`cfg, state, log, agent, …` 那种——
   测试靠解包拿桌、只用其中两三样是通行写法，判它会把测试全打成红）。14:13:18Z 拿 `git archive`（那一刻
   的提交就是 `c88e25c`）抽出的原始字节复量同一对数：63 与 1，一字未动。
-* 那唯一的一格是 `tests/test_wiring.py:2693` 的 `pr`——整局回合链那条用例把 `assemble.assemble` 的
+* 那唯一的一格是 `tests/test_wiring.py:2701` 的 `pr`——整局回合链那条用例把 `assemble.assemble` 的
   产物赋给它，然后一次都不读。按失效方向它不是死代码：这一格坏掉时不会崩、也不会红，坏的是
   "装配器把合法动作与证据编号交给了这一席"这件事从此无人证。所以处置是**补断言**，不是删那一行。
 * 补之前先量这两条今天成不成立（14:03:15Z 现读）：`pr.legal_acts` 是
@@ -11832,7 +11832,7 @@ HTML 那 4 行：新增的两行一行是 `ul.chron li.peace{...}` 那条 CSS �
 登记的处置也是 11 行（留 6 格＋待判 5 格），其中连测试也不点它名的只剩一格——
 `assemble.py::Prompt.legal_targets`，名册里那一行在 `tests/test_wiring.py:1255`。钉住名册与名单相等的
 是 `test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_disposition`，
-它的谓词就是 `tests/test_wiring.py:1292` 那一行 `assert sorted(dead) == sorted(FIELD_TRIAGE)`。
+它的谓词就是 `tests/test_wiring.py:1300` 那一行 `assert sorted(dead) == sorted(FIELD_TRIAGE)`。
 
 **三具刀**（每具跑 `tests/test_wiring.py` 整本；干净树基线 07:10:40Z `121 passed`、红名册空，刀脚本落盘 06:48:06Z）：
 
@@ -11910,9 +11910,9 @@ target 会到模型眼前，所以这一删没有把它顶成假话。
 （归档涨到 16，其余三组一字未动）。多的那一枚正是 `#261` 那一段自己添的：它为了指认 `assigned_act`
 的出处点了 `src/wolfengine/assemble.py:189`，那一行 `assigned = legal.assigned_act` 就是它落的点。
 也就是说"今日重量是 17"这句话被写下它的那只手改成了 18。重钉只是把腐烂推迟一片，与 `#188`、`#220`
-同一个病，所以这一片把数从名册里整个拿走：`tests/test_wiring.py:3608` 的 `PINNED_IN_TRIAGE` 不许
+同一个病，所以这一片把数从名册里整个拿走：`tests/test_wiring.py:3616` 的 `PINNED_IN_TRIAGE` 不许
 "枚数"与"第 N 行"两种形状进处置行，五格【待判】改成点名配方 `_renumber_price()`
-（`tests/test_wiring.py:3624`，`corpus` 按手册/归档/tests/scripts 四组、`anchor` 由调用方现推）。
+（`tests/test_wiring.py:3632`，`corpus` 按手册/归档/tests/scripts 四组、`anchor` 由调用方现推）。
 
 **手册那一组今天是 0 枚，这不是尺坏了**：`#217` 之后手册页不再按行号互指，价全部住在归档那一侧——
 07:33:47Z 那张表里四个文件的"手册"列都是 0。这一格 0 有出处，所以它不进判据；判据只要求每一格【待判】
@@ -11929,7 +11929,7 @@ target 会到模型眼前，所以这一删没有把它顶成假话。
 | `info.py::Percept.at_seq` | 34 | 5 | 0 | 5 | 0 | 0 | 5 |
 | `schema.py::ParseOutcome.raw_used` | 188 | 15 | 0 | 10 | 5 | 0 | 8 |
 
-锚点是那一格今天被尺读到的行，由 `tests/test_wiring.py:3645` 的 `_field_anchor` 从 `roster` 现推、不抄；
+锚点是那一格今天被尺读到的行，由 `tests/test_wiring.py:3653` 的 `_field_anchor` 从 `roster` 现推、不抄；
 "下游"只数 `points` 里号在 `anchor` 之后的那些——上游的引用不会被一次删除顶号，把两向混在一个合计里，
 价就答不了"删这一格要动几处"这一个问题。成对形 `NN/NN` 的两枚都计（`#223` 那一格补的牙）。
 
@@ -11970,7 +11970,7 @@ K1 到 K4 都点着预期那一具，没有额外红。K5 的等价是有对象�
 ### #263 行号闸门不再让"整个文件都有的那个词"给错号背书：今值只点 2 枚，逐条读原文后两枚都是错号（**08:04:01Z** 落笔）
 
 **票面**：`#262` 往 `test_wiring.py` 名册那几行中间插了一行，把归档里点它的号顶偏一格，而闸门放它绿了。那一句写的是
-`assert sorted(dead) == sorted(FIELD_TRIAGE)`，被顶到的那一行（`test_wiring.py:1292` 上面那一格）也有 `assert`，
+`assert sorted(dead) == sorted(FIELD_TRIAGE)`，被顶到的那一行（`test_wiring.py:1300` 上面那一格）也有 `assert`，
 于是那一枚词单独给错号背了书（07:32:14Z 现量）。`_bad_line_cites` 的判据是"证据池里任意一枚词在被点那一行出现过"，
 所以一个在目标文件里到处都在的词，就成了一枚免检的号。
 
@@ -12101,3 +12101,60 @@ helper 自己那条正控制是 `test_the_cascade_helper_names_a_shadowed_declar
 "观众换成作者桌"没顺手把 `#260` 那把 parked 尺删掉——真产物观众仍是唯一能回答"批次里有没有一条规则从没被任何
 一局触发"的口径，作者桌答不了那一问，所以尺子留在记忆目录里而不是仓库里；`#263` 那句
 「`#260` 的 shorthand 普查要重测才有资格登记」由这两片落地，`#263` 本身在 `33897f7db`。
+
+### #265 名册里最后五格【待判】按失效方向定夺：三格留、各配一具只动读者那一格的刀（**09:03:20Z** 落笔）
+
+**票面**：`FIELD_TRIAGE` 自 `#262` 起不再抄顶号代价，五格【待判】剩下的问题只有一个——该不该动。定夺的规矩
+是**按失效方向，不按便宜程度**：删除若会把一条真断言拆成 AttributeError、或把一处跳过变成没人接的异常，
+那是变坏而不是清理。三格判留的每一格都配了一具刀，动的是**只有读者能看见**的那一格（写入侧的值，不是声明本身），
+判据照旧是"该选集里只红那条证人"。
+
+**三具刀**（同一趟，08:57:36Z 收尾；每具 PREFLIGHT 先证锚点全文件唯一、落盘后先证 sha 变了再信判定、
+`finally` 逐字还原并按 sha 复核）：
+
+| 刀 | 动的那一格 | 选集与基线 | 红了的证人 | 判定 |
+| --- | --- | --- | --- | --- |
+| K1 | `raw_used=cand` 改成整段原文 | `tests/test_schema.py` 51 passed | `TestRung0::test_trailing_prose_after_close_brace_is_dropped` | CAUGHT 1 红 |
+| K2 | `legal_acts=legal.acts` 改成空 tuple | 那条整局回合链用例，1 passed | `test_a_full_turn_round_trip_needs_no_endpoint`（报 `('accuse', ())`） | CAUGHT 1 红 |
+| K3 | 落进构造的 `at_seq=cut` 改成零 | `tests/test_vote_wave.py` ＋ `tests/test_info_isolation.py` 42 passed | `test_vote_wave.py` 那两条 | CAUGHT 2 红 |
+
+**按名字归属 ≠ 证人（这一片量出来的新读数）**：字段尺把 `at_seq` 的测试侧读者数成六枚，其中
+`tests/test_info_isolation.py:221` 那一枚坐在生成式的**过滤条件**上——板上末行的序号是 16 而选票从 17 起，
+所以 `b.seq <= mine.at_seq` 今天就是空集、`all(...)` 空转，K3 把时点顶成零它照样绿。这是 `#222` 那一族
+「无声通过」在断言层的另一形：取数面是空集的断言不读任何东西。另开工单处理那一条，本片的证人名单只算
+`tests/test_vote_wave.py` 那两条。
+
+**两格判删（动作在紧随的下一次提交，那片带自己的 RED-first 读数）**：
+`assemble.py::Prompt.legal_targets` 生产侧与测试侧都是零枚，它过去只靠"与 `legal_acts` 成对"撑着，
+而那一半今天有了真读者、这一半没有，配对论据被读数拆掉；`batch.py::BatchResult.rows` 归给它的三枚测试读者
+读的是**落盘清单里的那个键**（`man["rows"]`、`doc["rows"]`），而 `src/wolfengine/batch.py` 写那一格用的是同一
+函数里的局部变量，删字段一格都不碰清单——同名替付账，不是读者。
+
+**#157 结案（处置类自 2026-10-02 起归我定夺）**：`#261` 之后 `PublicState` 已不在树上，而
+`assemble._region_b()` 的入参今天正是 `Percept`（`src/wolfengine/assemble.py:114` 那一行）——Region B 已经
+是从一份按席位可见性切出来的投影渲染的，`info.percept_for` 里 `visible_to(seat)` 是唯一那道门，
+真人那一屏另有 `#124` 的金丝雀。再造一个"无 role 的公共投影"对象是给已有两处读数的形状加第三份抄本，
+而 `#159`、`#161`、`#201` 那一族立的规矩正是双写要收回。所以渲染链不改，这条不再挂着等人。
+
+**#114 那一半也解了**：`raw_used` 曾判"要不要进产物链由载荷普查说了算"。今测：真正上产物链的原文由
+`src/wolfengine/llm.py` 的响应字典落盘，`raw_used` 只是它的一个切片；K1 证明"哪一个候选被用"这件事除了这格
+没有别的断言面。所以它不进产物链，也不必再等普查。
+
+**没动的格子与为什么**：六格 `RegionBudget` 照旧是"登记下来的留"（`REGION_CAP_KEYS` 按算出来的键回读，
+本尺看不见那一形，限界第二条管着它）；手册页一个字没改（这一片全在 tests 与归档）；`legal_targets` 与
+`rows` 那名册两行照旧【待判】并照旧点名 `_renumber_price()`——它们是下一次提交的动作，分开才看得出
+哪一格是被哪把尺判的。
+
+**顶号账**：`tests/test_wiring.py` 净长八行（09:01:08Z 由 `git diff -U0` 现量：五处 hunk，各自 +0/+3/+1/+0/+4），
+于是归档里按行号点名这一本的七枚指针一起顶号（1292→1300 两枚、2693→2701、3608→3616、3624→3632、
+3645→3653）；被点那一行逐枚现读核对（`assert sorted(dead)`、`pr = assemble.assemble(`、
+`PINNED_IN_TRIAGE = re.compile`、`def _renumber_price(`、`def _field_anchor(`）。`#263` 里那句
+「五格【待判】字段的处置一个字没改」与「`#157`／`#114` 的下半场没被这片顶开」从这一片起是历史；
+`#176` 那节的「`Percept.at_seq` 同理」与「`ParseOutcome.raw_used` 那 3 处」两句记的是当时的价，
+今值由 `_renumber_price()` 现量。
+
+**整套**：09:11:41Z 那一趟 `1214 passed in 382.50s`，`FAILED` 行数为零；收尾时 `uptime` 的三个 load averages
+是 50.71、61.85、44.64，所以这一跑的秒数不与别的趟比（共驻负载，`#141` 那一族）。它只回答一个问题——
+改了名册与归档有没有碰坏别的用例；`git diff --numstat src/` 为空，一个 src 字节没动，所以"不该碰坏"
+这一句有出处而不是推测。工具与逐字日志 park 在记忆目录 `census265/`（`knife265.py` `542629b419ff`、
+`knife265.out` `163655d774bb`、两本闸门的输出 `89b7be8bc459` 与 `d63cc5644cb4`）。

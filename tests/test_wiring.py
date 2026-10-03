@@ -1246,12 +1246,12 @@ FIELD_TRIAGE: dict[str, str] = {
     "config.py::RegionBudget.c_private": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C3' 那一格，见 src/wolfengine/metrics.py",
     "config.py::RegionBudget.c_task": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C4' 那一格，见 src/wolfengine/metrics.py",
     "assemble.py::Prompt.legal_acts":
-        "待判：`src/wolfengine/assemble.py` 里 `Prompt` 构造时写入，而落盘那格走的是同文件 "
-        "`payload_for_log` 的白名单、不含它；`src/wolfengine/schema.py` 里同名的那一格是**函数参数**"
-        "不是这一具（`#156` 记过的同名替付账搬到字段层），见 src/wolfengine/assemble.py。"
-        "`#175` 当年据以留它的那笔顶号代价不许抄在这里：锚点行与要一起顶号的枚数由本文件末尾的 "
-        "`_renumber_price()` 现量，口径与它的牙一起由 `test_the_renumber_price_is_recomputable_"
-        "and_tells_upstream_from_downstream` 钉住，见 src/wolfengine/assemble.py",
+        "留：生产链不读它、落盘那格走的是同文件 `payload_for_log` 的白名单，但有一条真断言按名字读它——"
+        "`tests/test_wiring.py` 里 `test_a_full_turn_round_trip_needs_no_endpoint` 那句 `pr.legal_acts`，"
+        "它问的是『模型这一轮选的动作，是不是这一席被给过的那些』，除这格之外没有别的取数面。"
+        "`#265` 下刀证过这条证人独占：把写入改成空tuple，整套只红那一条。`src/wolfengine/schema.py` "
+        "里同名的那一格是**函数参数**不是这一具（`#156` 记过的同名替付账搬到字段层）。失效方向：删它"
+        "不会让产物变坏，是把那条断言拆成 AttributeError——那是拆证人，不是清死码，见 src/wolfengine/assemble.py",
     "assemble.py::Prompt.legal_targets":
         "待判：同 `legal_acts`，成对写入、零读者、不在落盘白名单里，代价也与它同一笔（同一个文件的 "
         "同一份顶号账，同样由 `_renumber_price()` 现量），见 src/wolfengine/assemble.py",
@@ -1261,23 +1261,27 @@ FIELD_TRIAGE: dict[str, str] = {
         "`#176` 当年把它判成全名册里最贵的一格——那个价不许抄在这里：`#262` 量到抄本已经对不上，"
         "归档那一片每落地一次它就涨一次。今值由 `_renumber_price()` 现量，见 src/wolfengine/batch.py",
     "info.py::Percept.at_seq":
-        "待判：`src/wolfengine/metrics.py` 与 `src/wolfengine/agent.py` 里那两处 `at_seq=` 都是 "
-        "`percept_for` 的**入参**（定义在 `src/wolfengine/info.py`），不是这格的读者——同名替付账，见 info.py。"
-        "`#176` 量过：删得动，但它记的是这份投影切到哪一局面，留不留与 #157 那族「视图该由什么渲染」"
-        "是同一个决定；顶号代价由 `_renumber_price()` 现量、不抄在这里，见 src/wolfengine/info.py",
+        "留：`tests/test_vote_wave.py` 里 `test_every_voter_is_asked_about_the_world_at_the_moment_the_phase_opened` "
+        "与 `test_the_pk_revote_gets_its_own_cut_after_the_first_tally_goes_public` 两条把它当证人读——它记的正是"
+        "这份投影切到哪一局面。`#265` 下刀证过：把落进构造的那一格改成零，两本选集里只红这两条。"
+        "`src/wolfengine/metrics.py` 与 `src/wolfengine/agent.py` 里那两处 `at_seq=` 都是 `percept_for` 的**入参**"
+        "（定义在 `src/wolfengine/info.py`）不是这格的读者——同名替付账。失效方向：这格在 `Percept` 的构造里"
+        "没有默认值，摘掉声明会让每一处构造当场 TypeError，而上面那两条会先失去取数面。`#157` 那一族"
+        "已按『渲染链没变』结案，不再卡着这一格，见 src/wolfengine/info.py",
     "schema.py::ParseOutcome.raw_used":
-        "待判：`src/wolfengine/schema.py` 里两处写入（`raw_used=cand`）、零读者——它是『最后发出去的是"
-        "哪一个候选』的出处格，要不要进产物链由 `#114` 那张载荷普查说了算，见 src/wolfengine/schema.py。"
-        "那两处写入还能按行内收掉、不移动任何行，所以卡着它的只剩普查那条决定；`#176` 抄过的那笔顶号"
-        "枚数由 `_renumber_price()` 现量，见 src/wolfengine/schema.py",
+        "留：它的读者只有一条，而那一条是这格的专属证人——`tests/test_schema.py` 里 "
+        "`TestRung0::test_trailing_prose_after_close_brace_is_dropped` 断的是**落进解析的那一串长什么样**，"
+        "`rung` 只说第几梯成功、不说被用的那一串里有没有尾随散文。`#265` 下刀证过：把写入的那一格从候选切片"
+        "换成整段原文，那一本只红这一条。`#114` 那张载荷普查不再卡着它：真正上产物链的原文由 "
+        "`src/wolfengine/llm.py` 的响应字典落盘，这格只是它的一个切片，所以它不需要进产物链，见 src/wolfengine/schema.py",
 }
 FIELD_VERDICTS = ("删", "搬", "接", "留", "待判")
 
 
 def test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_disposition():
     """`#172`：`#81`→`#166` 那一族数过函数、方法、类、导入、模块级常量，唯独没数过**类体里
-    带注解的字段**。本条自己数：289 格字段、11 格零生产读者（其中 1 格连测试也不点它名，那是
-    下面五格"待判"里的一格）。`#172` 那份不共用这把尺的复算当时报 24 格（08:14:58Z 那一版树上
+    带注解的字段**。本条自己数：289 格字段、11 格零生产读者（其中连测试也不点它名的那一格就坐在
+    下面【待判】那一族里）。`#172` 那份不共用这把尺的复算当时报 24 格（08:14:58Z 那一版树上
     的数），多的 7 格正是这具尺多认的那两形：`row["名字"]` 式的落盘回读与 src 自己那两张
     INERT 表；`#174`、`#175`、`#88` 各删掉一格、`#261` 又删掉两格，298/17 是 `#172` 那天那棵树的读数，见 docs/iterations.md。
 
@@ -1286,6 +1290,10 @@ def test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_dispos
     必须存在。词表这一格是必要的：`#156` 的规矩里"生产链和测试都不读的不许标留"在那一层能立，
     是因为方法层没有"按算出来的键回读"这一形；这一层有（见上面那六格 `RegionBudget`），所以
     先把"必须表态"钉住，哪一格表态错了由下面那条夹具与限界第二条管。
+
+    `#265` 收的一格口径：标"留"的三格各自配了一具只改**读者能看见的那一格**的刀，判据是
+    "该选集里只红那一条断言"。按名字归属的读数不许直接当证人用——`tests/test_info_isolation.py`
+    里那句 `b.seq <= mine.at_seq` 也读了这格，可它的过滤集合今天是空的，把时点顶成零它照样绿。
     """
     roster, dead, _ = _field_defs_and_reads()
     assert len(roster) >= 250, f"字段只数到 {len(roster)} 格，多半是收集坏了"
