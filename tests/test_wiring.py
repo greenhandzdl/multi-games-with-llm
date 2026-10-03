@@ -1249,26 +1249,27 @@ FIELD_TRIAGE: dict[str, str] = {
         "待判：`src/wolfengine/assemble.py` 里 `Prompt` 构造时写入，而落盘那格走的是同文件 "
         "`payload_for_log` 的白名单、不含它；`src/wolfengine/schema.py` 里同名的那一格是**函数参数**"
         "不是这一具（`#156` 记过的同名替付账搬到字段层），见 src/wolfengine/assemble.py。"
-        "`#175` 量过删它的代价：注解占第 63、64 行、写入占第 300、301 行，手册里 11 处点这个文件行号"
-        "的引用有 10 处落在下游要一起顶号（只有第 57 行那一处在前头，不动），所以这一格留在待判不是"
-        "因为没查，是因为顶号比留它贵，见 src/wolfengine/assemble.py",
+        "`#175` 当年据以留它的那笔顶号代价不许抄在这里：锚点行与要一起顶号的枚数由本文件末尾的 "
+        "`_renumber_price()` 现量，口径与它的牙一起由 `test_the_renumber_price_is_recomputable_"
+        "and_tells_upstream_from_downstream` 钉住，见 src/wolfengine/assemble.py",
     "assemble.py::Prompt.legal_targets":
-        "待判：同 `legal_acts`，成对写入、零读者、不在落盘白名单里，代价也与它同一笔（同一份顶号账），见 src/wolfengine/assemble.py",
+        "待判：同 `legal_acts`，成对写入、零读者、不在落盘白名单里，代价也与它同一笔（同一个文件的 "
+        "同一份顶号账，同样由 `_renumber_price()` 现量），见 src/wolfengine/assemble.py",
     "batch.py::BatchResult.rows":
         "待判：落盘那一格 `\"rows\"` 写的是同函数里的**局部变量**（`src/wolfengine/batch.py` 里 "
         "`\"n_logs\": len(rows), \"rows\": rows`），字段这一份是它的第二份抄本且没人回读，见 src/wolfengine/batch.py。"
-        "`#176` 量过删它的顶号代价，是全名册里最贵的一格：点 `src/wolfengine/batch.py` 行号的引用共 22 处"
-        "（手册 17 处、tests 5 处），最小的那处落在第 90 行，全在第 66 行这格注解的下游，见 src/wolfengine/batch.py",
+        "`#176` 当年把它判成全名册里最贵的一格——那个价不许抄在这里：`#262` 量到抄本已经对不上，"
+        "归档那一片每落地一次它就涨一次。今值由 `_renumber_price()` 现量，见 src/wolfengine/batch.py",
     "info.py::Percept.at_seq":
         "待判：`src/wolfengine/metrics.py` 与 `src/wolfengine/agent.py` 里那两处 `at_seq=` 都是 "
         "`percept_for` 的**入参**（定义在 `src/wolfengine/info.py`），不是这格的读者——同名替付账，见 info.py。"
-        "`#176` 量过的代价：点这个文件行号的引用共 3 处，全在第 34 行那格注解的下游；删得动，但它记的是"
-        "这份投影切到哪一局面，留不留与 #157 那族「视图该由什么渲染」是同一个决定，见 src/wolfengine/info.py",
+        "`#176` 量过：删得动，但它记的是这份投影切到哪一局面，留不留与 #157 那族「视图该由什么渲染」"
+        "是同一个决定；顶号代价由 `_renumber_price()` 现量、不抄在这里，见 src/wolfengine/info.py",
     "schema.py::ParseOutcome.raw_used":
         "待判：`src/wolfengine/schema.py` 里两处写入（`raw_used=cand`）、零读者——它是『最后发出去的是"
         "哪一个候选』的出处格，要不要进产物链由 `#114` 那张载荷普查说了算，见 src/wolfengine/schema.py。"
-        "`#176` 量过的代价：点这个文件行号的引用共 3 处、都在第 188 行下游，那两处写入还能按行内收掉不移动"
-        "任何行，所以卡着它的只剩普查那条决定，见 src/wolfengine/schema.py",
+        "那两处写入还能按行内收掉、不移动任何行，所以卡着它的只剩普查那条决定；`#176` 抄过的那笔顶号"
+        "枚数由 `_renumber_price()` 现量，见 src/wolfengine/schema.py",
 }
 FIELD_VERDICTS = ("删", "搬", "接", "留", "待判")
 
@@ -3600,3 +3601,104 @@ def test_the_local_name_ruler_fires_once_and_spares_the_carved_out_shapes(tmp_pa
     assert sorted(got) == ["dead", "unused_ctx", "unused_err", "unused_loop", "unused_wal"], (
         f"每一形该红的只有 `dead`/`unused_*` 那五枚；解包成员、下划线、类属性、闭包读、增广赋值、"
         f"裸注解、与参数同名，以及 `for`/`with`/`except`/`:=` 的活样本各钉一次不红。实际报出：{got}")
+
+
+# --------------------------------------------------------------------------- #262：顶号代价
+# 名册那一格里不许抄"下一次提交就会顶成新数"的那一族（`#262`）。两种形状：枚数、行号。
+PINNED_IN_TRIAGE = re.compile(r"\d+ 处|第 \d+[、和与\d]* ?行")
+RENUMBER_GROUPS = ("手册", "归档", "tests", "scripts")
+
+
+def _renumber_corpus() -> dict[str, list[Path]]:
+    """按 `#262` 的口径分成四组的语料：手册页（README 与 `docs/` 里除归档那本）、归档自己、
+    测试、脚本。分成组是因为旧名册抄的正是"手册"那一组，而今天那组对这些文件是 0 枚。"""
+    docs = sorted(Path("docs").glob("*.md"))
+    return {
+        "手册": [f for f in docs if f.name != "iterations.md"] + [Path("README.md")],
+        "归档": [Path("docs/iterations.md")],
+        "tests": sorted(f for f in Path("tests").rglob("*.py") if "__pycache__" not in f.parts),
+        "scripts": sorted(Path("scripts").rglob("*.py")),
+    }
+
+
+def _renumber_price(stem: str, anchor: int, corpus: dict[str, list[Path]]) -> dict[str, int]:
+    """删掉 `stem.py` 里那一格字段要一起顶号的引用枚数：按组点清、并单列"落在锚点之后"的那些。
+
+    行号正则从 `test_doc_citations` 里 import 而不是在这里抄第二份——`#153` 那一课：判据的
+    第二份实现会把正控制变成自我测试。延迟 import 是因为那本反过来要从这里读 `VIEWING_RULES`，
+    两本互相点名，只有调用时才需要对方在场。
+    """
+    from test_doc_citations import LINE_CITE
+    points: list[tuple[str, int]] = []
+    for label, files in corpus.items():
+        for f in files:
+            for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+                for m in LINE_CITE.finditer(line):
+                    if m.group(1).rsplit("/", 1)[-1] == stem + ".py":
+                        points += [(label, int(g)) for g in (m.group(2), m.group(3)) if g]
+    out = {g: sum(1 for lbl, _ in points if lbl == g) for g in RENUMBER_GROUPS}
+    out["合计"] = len(points)
+    out["下游"] = sum(1 for _, ln in points if ln > anchor)
+    return out
+
+
+def _field_anchor(key: str, roster) -> tuple[str, int]:
+    """名册那一格对应的 `文件名(不带后缀)` 与它今天在那棵树上的注解行——从尺的 roster 现推，不抄。"""
+    stem = Path(key.split("::", 1)[0]).stem
+    return stem, min(roster[key][2])
+
+
+def test_no_triage_row_pins_a_renumber_price_the_next_commit_would_rot():
+    """`#262`：`#175`/`#176` 那几行"待判"各自抄着一笔顶号代价，而这个数字家族**没有任何一把尺在看**
+    ——上面那条名册闸门只核对处置词与落点路径存在。
+
+    今测（07:25:49Z 那一趟现量，下面那张表是同一条命令印的）那几笔全部对不上，而且不是
+    "数错了"，是**口径先腐烂**：
+    归档每落地一片就要多长几枚按行号点这些文件的引用，而手册页自 `#217` 起不再按行号互指，
+    今天"手册"那一组对 assemble/batch/info/schema 四个文件都是 0 枚。抄在名册里的价，下一次提交
+    就是历史——与 `#188`、`#220` 那一族同一个病。
+
+    收法不是重钉四个更新的数（那只是把腐烂推迟一片），是**不许名册抄数**：代价由 `_renumber_price()`
+    现量，它自己有没有牙由下面紧跟着那一条负责。
+    """
+    pinned = [f"{k} 抄了〈{PINNED_IN_TRIAGE.search(v).group(0)}〉"
+              for k, v in sorted(FIELD_TRIAGE.items()) if PINNED_IN_TRIAGE.search(v)]
+    assert not pinned, (f"这些处置行抄了会随下一次提交腐烂的行号或枚数，改成点名现量的配方：{pinned}")
+    naked = [k for k, v in FIELD_TRIAGE.items()
+             if v.startswith("待判") and "_renumber_price" not in v]
+    assert not naked, (f"这些【待判】行还拿一个没有出处的价在撑决定，要点名 `_renumber_price()`："
+                       f"{naked}")
+
+
+def test_the_renumber_price_is_recomputable_and_tells_upstream_from_downstream(tmp_path):
+    """`#262` 那把尺自己的账：夹具钉住"上游不算下游算"，真树钉住每一格待判都量得出非零的价。
+
+    为"该分支报出来"那一格配夹具是 `#254` 那一课：一条只扫真树的判据在锚点推错方向时照样绿。
+    这里给两枚引用，一枚落在锚点之前、一枚在之后，判据只许把后者计进"下游"。
+    """
+    doc = tmp_path / "notes.md"
+    # 夹具里的引用形状按运行时拼装：`test_doc_citations` 也扫 tests/ 的源码，
+    # 文件名紧跟冒号再跟数字的那一形写死在这里，它就替夹具自己报一枚"文件不存在"。
+    board, card, at = "board.py", "card.py", ":"
+    doc.write_text(f"上面 `{board}{at}3` 在前头，`{board}{at}9` 与 `{board}{at}11/12` 在下游。\n"
+                   f"隔壁文件的 `{card}{at}40` 不算这一格的账。\n", encoding="utf-8")
+    got = _renumber_price("board", 5, {"手册": [], "归档": [doc], "tests": [], "scripts": []})
+    assert got == {"手册": 0, "归档": 4, "tests": 0, "scripts": 0, "合计": 4, "下游": 3}, got
+
+    roster, dead, _ = _field_defs_and_reads()
+    pending = sorted(k for k, v in FIELD_TRIAGE.items() if v.startswith("待判"))
+    assert pending == sorted(set(pending) & set(dead)), (
+        f"名册里【待判】的那些格今天不在零读者名单上：{sorted(set(pending) - set(dead))}")
+    prices = {}
+    for key in pending:
+        stem, anchor = _field_anchor(key, roster)
+        price = _renumber_price(stem, anchor, _renumber_corpus())
+        assert price["合计"] >= 1 and price["下游"] >= 1, (
+            f"{key} 锚点 {anchor} 量出 {price}——一格都顶不了号的【待判】要么是这把尺坏了，"
+            f"要么这笔价早就不该再撑着不删")
+        prices[key] = (anchor, price["合计"], price["手册"], price["归档"],
+                       price["tests"], price["scripts"], price["下游"])
+    print("\n#262 顶号代价现量（锚点 / 合计 = 手册+归档+tests+scripts / 其中下游）：")
+    for key, (anchor, total, m, a, tt, s, down) in sorted(prices.items()):
+        print(f"  {key:<38} 锚点 {anchor:>4} 合计 {total:>3}（手册 {m} · 归档 {a} · "
+              f"tests {tt} · scripts {s}）下游 {down}")
