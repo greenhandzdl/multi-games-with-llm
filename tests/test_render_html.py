@@ -559,9 +559,12 @@ def _rule_names(css_body: str) -> set[str]:
             for m in _IN_SELECTOR.finditer(head.group(1))}
 
 
+def _style_css() -> str:
+    return _STYLE_BLOCK.search(Path(render_html.__file__).read_text(encoding="utf-8")).group(1)
+
+
 def _style_rule_names() -> set[str]:
-    src = Path(render_html.__file__).read_text(encoding="utf-8")
-    return _rule_names(_STYLE_BLOCK.search(src).group(1))
+    return _rule_names(_style_css())
 
 
 def _markup_readers() -> set[str]:
@@ -744,3 +747,216 @@ def test_the_class_scanners_are_not_blind(emitted):
     assert "mind" in emitted and "dead" in emitted, sorted(emitted)
     assert len(emitted) >= 18 and len(_style_rule_names()) >= 11 and len(_markup_readers()) >= 6, \
         (sorted(emitted), sorted(_style_rule_names()), sorted(_markup_readers()))
+
+
+# ------------------------------------------------- 看不见的墨：整张样式表的层叠判据（#260）
+
+_CSS_SIDES = ("top", "right", "bottom", "left")
+_CSS_BOX = {"margin": tuple(f"margin-{s}" for s in _CSS_SIDES),
+            "padding": tuple(f"padding-{s}" for s in _CSS_SIDES)}
+_CSS_LONGHAND: dict[str, tuple[str, ...]] = {
+    "font": ("font-style", "font-variant", "font-weight", "font-stretch",
+             "font-size", "line-height", "font-family"),
+    "background": ("background-image", "background-position", "background-size",
+                   "background-repeat", "background-attachment", "background-origin",
+                   "background-clip", "background-color"),
+    "border": tuple(f"border-{s}-{k}" for s in _CSS_SIDES for k in ("width", "style", "color")),
+}
+for _side in _CSS_SIDES:
+    _CSS_LONGHAND[f"border-{_side}"] = tuple(
+        f"border-{_side}-{k}" for k in ("width", "style", "color"))
+# 出现即中止：这几形的层叠算法（!important 的优先、@media 的条件、子选择器的锚）这一格都不会算，
+# 静默按后代选择器算会产出假 DEAD 或假绿，所以宁可让用例红在这里要求扩它。
+_CSS_EXOTIC = ("!important", "@media", "@supports", ":not", ":hover", ":focus", "::",
+               ">", "+", "~")
+
+
+@dataclasses.dataclass(frozen=True)
+class _Decl:
+    """一条声明：选择器 + 属性 + 它在源序里的位置 + 它真正占的槽位名。"""
+
+    order: int
+    line: int
+    selector: str
+    prop: str
+    value: str
+    spec: tuple[int, int, int]
+    parts: tuple[tuple[str, frozenset[str]], ...]
+    slots: tuple[str, ...]
+
+    def __str__(self) -> str:
+        return f"行 {self.line} `{self.selector}` {self.prop}:{self.value} spec={self.spec}"
+
+
+def _slots_for(prop: str, value: str) -> tuple[str, ...]:
+    """一条声明占的槽位名。shorthand 展开成它的 longhand，盒模型按 1-4 个值分配四边。
+
+    槽位只按**属性名**认，不带值——否则两条给同一个槽位不同值的声明会被算成各占各的，
+    顶掉这一格就永远量不出来（#258 那三条色条正是这么没的）。
+    """
+    sides = _CSS_BOX.get(prop)
+    if sides is None:
+        return _CSS_LONGHAND.get(prop, (prop,))
+    given = value.split()
+    if len(given) == 1:
+        given = given * 4
+    elif len(given) == 2:
+        given = given * 2
+    elif len(given) == 3:
+        given = [given[0], given[1], given[2], given[1]]
+    return sides[:len(given)]
+
+
+def _css_decls(css: str) -> list[_Decl]:
+    for exotic in _CSS_EXOTIC:
+        assert exotic not in css, f"这一格不会算 {exotic!r}——扩它，别猜"
+    decls: list[_Decl] = []
+    offset = 0
+    for chunk in css.split("}"):
+        if "{" in chunk:
+            head, body = chunk.split("{", 1)
+            line = css[:offset].count("\n") + 1
+            for selector in (s.strip() for s in re.split(r"[,\n]", head) if s.strip()):
+                compounds = selector.split()
+                spec = (0,
+                        sum(len(re.findall(r"[.#][\w-]+", c)) for c in compounds),
+                        sum(len(re.findall(r"(?<![\w.#-])[a-z][\w-]*(?![\w-])", c))
+                            for c in compounds))
+                parts = tuple((re.sub(r"[.#][\w-]+", "", c).strip() or "*",
+                               frozenset(re.findall(r"\.([\w-]+)", c)))
+                              for c in reversed(compounds))
+                for stmt in body.split(";"):
+                    if ":" in stmt.strip():
+                        prop, value = (p.strip() for p in stmt.split(":", 1))
+                        decls.append(_Decl(len(decls), line, selector, prop, value, spec, parts,
+                                           _slots_for(prop, value)))
+        offset += len(chunk) + 1
+    return decls
+
+
+def _page_elements(markup: str) -> list[tuple[str, frozenset[str], tuple]]:
+    """页面上的每一个元素，按 (标签, 类名集, 祖先链) 记——层叠判据的观众。
+
+    标签不闭合就中止：观众建在错树上时，"这条声明没人赢"这类读数毫无意义。
+    """
+    from html.parser import HTMLParser
+
+    class Collector(HTMLParser):
+        VOID = frozenset({"meta", "br", "hr", "img", "link", "input"})
+
+        def __init__(self) -> None:
+            super().__init__(convert_charrefs=True)
+            self.stack: list[tuple[str, frozenset[str]]] = []
+            self.nodes: list[tuple[str, frozenset[str], tuple]] = []
+            self.unbalanced = 0
+
+        def handle_starttag(self, tag, attrs):
+            classes = frozenset((dict(attrs).get("class") or "").split())
+            self.nodes.append((tag, classes, tuple(self.stack)))
+            self.stack.append((tag, classes))
+            if tag in self.VOID:
+                self.stack.pop()
+
+        def handle_endtag(self, tag):
+            if self.stack and self.stack[-1][0] == tag:
+                self.stack.pop()
+            else:
+                self.unbalanced += 1
+
+    col = Collector()
+    col.feed(markup)
+    assert col.unbalanced == 0 and not col.stack, "标签不闭合，观众不可信"
+    return col.nodes
+
+
+def _matches(parts: tuple, node: tuple) -> bool:
+    """后代选择器能不能落在这个元素上。"""
+    tag, classes, ancestors = node
+    want_tag, want_classes = parts[0]
+    if want_tag not in (tag, "*") or not want_classes <= classes:
+        return False
+    slot = len(ancestors) - 1
+    for want_tag, want_classes in parts[1:]:
+        while slot >= 0 and not (want_tag in (ancestors[slot][0], "*")
+                                 and want_classes <= ancestors[slot][1]):
+            slot -= 1
+        if slot < 0:
+            return False
+        slot -= 1
+    return True
+
+
+def _cascade(css: str, nodes: list[tuple]) -> tuple[list[_Decl], list[_Decl], list, int]:
+    """返回 (全部声明, 没有元素的声明, 一个槽位都没赢下的声明+赢家的名单, 被争抢的槽位数)。
+
+    DEAD 只在**真元素**上判。普查的第一版给每条选择器额外造一个无对手的合成元素，
+    于是预-#258 那棵树上的三条色条全被合成元素救活、报成 DEAD=0——那一格假负是这条签名存在的原因。
+    """
+    decls = _css_decls(css)
+    hits = {d.order: [n for n in nodes if _matches(d.parts, n)] for d in decls}
+    winners: set[int] = set()
+    contested = 0
+    for node in nodes:
+        per_slot: dict[str, list[_Decl]] = {}
+        for decl in decls:
+            if _matches(decl.parts, node):
+                for slot in decl.slots:
+                    per_slot.setdefault(slot, []).append(decl)
+        for group in per_slot.values():
+            if len(group) > 1:
+                contested += 1
+            winners.add(max(group, key=lambda d: (d.spec, d.order)).order)
+    dead = []
+    for decl in decls:
+        if not hits[decl.order] or decl.order in winners:
+            continue
+        beaten: set[str] = set()
+        for node in hits[decl.order]:
+            for slot in decl.slots:
+                group = [x for x in decls if slot in x.slots and _matches(x.parts, node)]
+                top = max((x.spec, x.order) for x in group)
+                beaten.update(str(x) for x in group if (x.spec, x.order) == top and x is not decl)
+        dead.append((decl, sorted(beaten)))
+    return decls, [d for d in decls if not hits[d.order]], dead, contested
+
+
+def test_every_declaration_in_the_shell_stylesheet_wins_a_slot_somewhere(pair):
+    """样式表里每一条声明都必须在真页面上至少赢下一个槽位，否则它就是看不见的墨。
+
+    #258 的判据（投给人看的那一份要能分辨，DOM 属性不算）只钉住了 `border-left-color` 一根条子，
+    而顶掉它的机制——shorthand 展开成 longhand 后按特异度取胜——在整张表上通用。#260 的普查把这把尺
+    在真产物上量过一遍，今值 DEAD=0；观众换成随仓库走的作者桌（`test_golden_game` 的两张页面）后
+    覆盖不变：出厂样式表的每一条声明都落得到真元素上，它点名的每一个类名都在页面上出现。
+    正面控制两路：同一把尺在预-#258 那棵树（`6933868dc`）上报 DEAD=3，点名的正是那三条色条；
+    仓库里常驻的那一路见下一条用例。
+
+    这一格只问"有没有一处能赢"，不问颜色对不对、粗细合不合设计——那两类判据不归它管。
+    """
+    nodes = [n for doc in pair for n in _page_elements(doc)]
+    decls, homeless, dead, contested = _cascade(_style_css(), nodes)
+    assert decls and nodes, "声明或元素一个都没有：判据失去对象了"
+    assert contested > 0, "没有任何槽位被两条声明争抢：这一格从没比过大小"
+    assert homeless == [], [str(d) for d in homeless]
+    assert dead == [], [(str(d), who) for d, who in dead]
+
+
+def test_the_cascade_helper_names_a_shadowed_declaration(pair):
+    """helper 的正控制：两种输法各往真样式表上栽一枚，必须点名被顶掉的那一条。
+
+    没有这一格，上一条的 `dead == []` 有可能只是因为 helper 永远返回空。两种形状都由 #258 量过：
+    跨规则的特异度压制，和同一个块里 shorthand 排在 longhand 之后把它重置（后者 #258 那把选择器
+    尺看不见，因为它只查带 `border-left-color` 的规则的选择器）。
+    """
+    css, nodes = _style_css(), _page_elements(pair[0])
+
+    _, _, dead, _ = _cascade(css + "\n.seat{background:#010203}", nodes)
+    shadowed = [d for d, _ in dead if d.selector == ".seat" and d.prop == "background"]
+    assert len(shadowed) == 1, [(str(d), who) for d, who in dead]
+
+    anchor = "ul.chron li{padding:1px 0 1px .5em;border-left:3px solid transparent}"
+    assert css.count(anchor) == 1, "同块那具正控制的锚点在出厂 CSS 里挪窝了，重坐它"
+    _, _, dead, _ = _cascade(css.replace(
+        anchor, "ul.chron li{padding:1px 0 1px .5em;border-left-color:#0f0e0d;"
+                "border-left:3px solid transparent}", 1), nodes)
+    reset = [d for d, _ in dead if d.value == "#0f0e0d"]
+    assert len(reset) == 1, [(str(d), who) for d, who in dead]
