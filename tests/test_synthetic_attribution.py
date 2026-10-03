@@ -15,7 +15,7 @@ mock 的约束在 §十一 第 287 行「必须真端点（mock 只会自证，�
 同类：一张表、一个函数，三个出口共用。
 
 还有一句假话在同一行里：note 硬编码「actor_kinds 含 mock/human」，而批次顶层的
-`actor_kinds` 只有 `["mock"]`/`["llm"]` 两种取值（`batch.py:207`），真人座位只活在局文件的
+`actor_kinds` 只有 `["mock"]`/`["llm"]` 两种取值（`batch.py:206`），真人座位只活在局文件的
 页眉里。于是「含真人的那一批」被拒时，印出来的种类恰恰是 `['llm']` —— 句子自相矛盾，而计数
 仍然全对。这里的判据因此是**从触发拒绝的那些局身上取种类**，不是从 manifest。
 """
@@ -123,7 +123,7 @@ def _mock_batch(tmp_path):
 def _rehumanise(tmp_path, kinds: list[str]) -> None:
     """把局文件页眉的 `actor_kinds` 就地改掉，manifest 那一格**留着不动**。
 
-    留着才是要点：批次顶层的 `actor_kinds` 写不出真人（`batch.py:207` 只有 mock/llm 两种
+    留着才是要点：批次顶层的 `actor_kinds` 写不出真人（`batch.py:206` 只有 mock/llm 两种
     取值），所以这一格一旦成了依据的来源，印出来的句子就会说"本批 actor_kinds=['mock']"
     来解释一次由真人座位引起的拒绝。
     """

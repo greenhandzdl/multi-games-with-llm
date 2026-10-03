@@ -1252,14 +1252,6 @@ FIELD_TRIAGE: dict[str, str] = {
         "`#265` 下刀证过这条证人独占：把写入改成空tuple，整套只红那一条。`src/wolfengine/schema.py` "
         "里同名的那一格是**函数参数**不是这一具（`#156` 记过的同名替付账搬到字段层）。失效方向：删它"
         "不会让产物变坏，是把那条断言拆成 AttributeError——那是拆证人，不是清死码，见 src/wolfengine/assemble.py",
-    "assemble.py::Prompt.legal_targets":
-        "待判：同 `legal_acts`，成对写入、零读者、不在落盘白名单里，代价也与它同一笔（同一个文件的 "
-        "同一份顶号账，同样由 `_renumber_price()` 现量），见 src/wolfengine/assemble.py",
-    "batch.py::BatchResult.rows":
-        "待判：落盘那一格 `\"rows\"` 写的是同函数里的**局部变量**（`src/wolfengine/batch.py` 里 "
-        "`\"n_logs\": len(rows), \"rows\": rows`），字段这一份是它的第二份抄本且没人回读，见 src/wolfengine/batch.py。"
-        "`#176` 当年把它判成全名册里最贵的一格——那个价不许抄在这里：`#262` 量到抄本已经对不上，"
-        "归档那一片每落地一次它就涨一次。今值由 `_renumber_price()` 现量，见 src/wolfengine/batch.py",
     "info.py::Percept.at_seq":
         "留：`tests/test_vote_wave.py` 里 `test_every_voter_is_asked_about_the_world_at_the_moment_the_phase_opened` "
         "与 `test_the_pk_revote_gets_its_own_cut_after_the_first_tally_goes_public` 两条把它当证人读——它记的正是"
@@ -1280,10 +1272,12 @@ FIELD_VERDICTS = ("删", "搬", "接", "留", "待判")
 
 def test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_disposition():
     """`#172`：`#81`→`#166` 那一族数过函数、方法、类、导入、模块级常量，唯独没数过**类体里
-    带注解的字段**。本条自己数：289 格字段、11 格零生产读者（其中连测试也不点它名的那一格就坐在
-    下面【待判】那一族里）。`#172` 那份不共用这把尺的复算当时报 24 格（08:14:58Z 那一版树上
+    带注解的字段**。本条自己数：287 格字段、9 格零生产读者（九格的处置今天全是"留"，名册里
+    【待判】那一族是空的——那一支的取样集合由名册给出，它空掉时本条的相等断言仍然成立，
+    而下面那条现价的尺就在空集合上绿，牙由它的夹具那一格负责）。`#172` 那份不共用这把尺的复算当时报 24 格（08:14:58Z 那一版树上
     的数），多的 7 格正是这具尺多认的那两形：`row["名字"]` 式的落盘回读与 src 自己那两张
-    INERT 表；`#174`、`#175`、`#88` 各删掉一格、`#261` 又删掉两格，298/17 是 `#172` 那天那棵树的读数，见 docs/iterations.md。
+    INERT 表；`#174`、`#175`、`#88` 各删掉一格、`#261` 又删掉两格、`#265` 再把名册最后两格
+    【待判】删掉，298/17 是 `#172` 那天那棵树的读数，见 docs/iterations.md。
 
     本条不要它们都"有读者"，只要**每一格都有一条登记过的处置**：名册与本条数的零读者两侧相等
     （多一格＝新长出来没登记，少一格＝登记的那格已不在树上）、处置词必须是那五个之一、落点路径
@@ -3101,7 +3095,7 @@ def test_every_phase_has_a_task_sentence_and_a_viewer_label():
 
     两张表的下标处都带静默兜底，坏法不同：`render_live.py:126` 的 `_PHASE_ZH.get(last.phase, last.phase)`
     把英文相位名原样印进直播与复盘视图（整页人话里冒出一行 `day_pk_speech`），
-    `assemble.py:214` 的 `PHASE_TASK_ZH.get(phase, "轮到你了。")` 更糟——它给那一席一张没有任务的卡片，
+    `assemble.py:213` 的 `PHASE_TASK_ZH.get(phase, "轮到你了。")` 更糟——它给那一席一张没有任务的卡片，
     模型只能自己编一个动作。标签那一半不设豁免：视图对每一枚相位都得有词，缺的那一格当场印英文。
     """
     roster = {m.value for m in state.Phase}
@@ -3683,6 +3677,10 @@ def test_the_renumber_price_is_recomputable_and_tells_upstream_from_downstream(t
 
     为"该分支报出来"那一格配夹具是 `#254` 那一课：一条只扫真树的判据在锚点推错方向时照样绿。
     这里给两枚引用，一枚落在锚点之前、一枚在之后，判据只许把后者计进"下游"。
+
+    `#265` 的口径：真树那一段取样的集合由名册里以"待判"开头的行给出，名册空掉那一族时它印的
+    是一行表头加零条（09:22:11Z 那一趟就是这样），上面 `naked` 那一格同在空集上绿。这不是结论，
+    是这一支今天的取样面——牙在上面那条夹具断言里，名册里再出现【待判】行时取样集合就不是空的。
     """
     doc = tmp_path / "notes.md"
     # 夹具里的引用形状按运行时拼装：`test_doc_citations` 也扫 tests/ 的源码，

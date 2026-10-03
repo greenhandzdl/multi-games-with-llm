@@ -61,7 +61,6 @@ class Prompt:
     # what the model was told to do, so the legality gate can check `act` against it
     assigned_act: str | None = None
     legal_acts: tuple[str, ...] = ()
-    legal_targets: tuple[int, ...] = ()
 
 
 B2_CAP_START = WINDOW_BOUNDARIES[-1]
@@ -298,7 +297,6 @@ def assemble(
         shrink=shrink,
         assigned_act=assigned,
         legal_acts=legal.acts,
-        legal_targets=tuple(sorted(legal.targets)),
     )
 
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import random
 import time
-from dataclasses import dataclass, field, fields as dc_fields, replace
+from dataclasses import dataclass, fields as dc_fields, replace
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Mapping, Sequence
 
@@ -63,7 +63,6 @@ class BatchResult:
     n_logs: int
     terminal: str
     canary: dict[str, Any]
-    rows: list[dict[str, Any]] = field(default_factory=list)
 
 
 def apply_overrides(cfg: Config, overrides: Mapping[str, Any]) -> Config:
@@ -228,7 +227,7 @@ async def run_batch(arms: Sequence[Arm], *, games: int, seed0: int,
         (out / "drift.md").write_text(_drift_md(man, out), encoding="utf-8")
     emit_gate(out, [a.name for a in arms], rows)
     return BatchResult(out_dir=out, pair_keys=pair_keys, n_logs=len(rows),
-                       terminal=terminal, canary=man["canary"], rows=rows)
+                       terminal=terminal, canary=man["canary"])
 
 
 def _mock_table(cfg: Config, seed: int) -> dict[int, MockActor]:

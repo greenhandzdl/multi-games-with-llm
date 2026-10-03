@@ -502,7 +502,7 @@ def _stub_batch(tmp_path, *, games: int, mock: bool = False, finish: str | None 
     """一臂（`--configs A`）跑完整批次：`mock=True` 是替身桌，否则九座由桩判官回答。
 
     单臂不是省事：M3★ 判的是"这一臂的桌子塌不塌缩"，它天生就是一臂一个判定。两臂的形状
-    在这里反而是错的——那会先把批次推进 `compare` 的"恰好两个配置臂"那道门（batch.py:493）。
+    在这里反而是错的——那会先把批次推进 `compare` 的"恰好两个配置臂"那道门（batch.py:492）。
     """
     import asyncio
 
