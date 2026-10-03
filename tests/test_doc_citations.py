@@ -3825,3 +3825,79 @@ def test_a_pointer_endorsed_only_by_a_word_the_whole_file_repeats_is_bad():
     assert len(bad) == 1, f"两枚号里报出 {len(bad)} 枚（要的是只报错位那一枚）：{bad}"
     assert bad[0][2].endswith(f":{n - 1}"), bad[0]
     assert "钝词" in bad[0][3], bad[0]
+
+
+# --------------------------------------------------------------- plan §N 指针族
+# 全语料的 `plan §…` 指针指向引擎之外的一份规划笔记：它不随仓库发布，所以在 GitHub 上点不开。手册里
+# 那一族唯一的去处说明今天没有任何东西在读——一次普通的 README 精简就能把它删掉而整套仍绿。这一片立
+# "手册必须有一句话同时给出指针形状与它指不到东西的原因"，不是"每枚指针都要自带解释"：后者今天就不
+# 成立（手册 35 枚指针里绝大多数光秃秃），硬写会把闸门写成常红。逐本今值与刀账记在归档的 `#270`。
+PLAN_SHAPE = re.compile(r"(?:plan|计划)\s*§\s*(?:[0-9一二三四五六七八九十]+|N)")
+PLAN_POINTER = re.compile(r"(?:plan|计划)\s*§\s*[0-9一二三四五六七八九十]+")
+PLAN_ORIGIN = re.compile(r"不随仓库发布|仓库之外|引擎之外|点不开")
+
+
+def _plan_pointers(pages: dict[str, str]) -> int:
+    """带号的 plan 指针枚数：`§` 后面得真的写出一枚节号（阿拉伯数字或中文数词）。
+
+    标签字母表是量出来的（`#270`）：全语料 257 枚只用到 `0-9` 与 `一…十`，所以 `百千〇甲乙` 这类
+    今天没有读者的分支不写进来。`§N` 那一支只在 `PLAN_SHAPE` 里——手册里给这一族立规矩的那句话写的
+    就是占位形，只认数字的判据会看不见它，而它正是这条闸门要找的那句解释。
+    """
+    return sum(len(PLAN_POINTER.findall(text)) for text in pages.values())
+
+
+def _plan_explainers(pages: dict[str, str]) -> list[tuple[str, int, str]]:
+    """同一句里既给出这一族形状、又给出它为什么指不到东西的那些句（格式 文件:行 原句）。
+
+    句子窗口用 `_cited_sentence`——`#223` 那族指针闸门的同一份定义，这里不重造第二份：邻居句里恰好
+    出现的「点不开」不能给上一句的指针背书。同一句里几枚指针只登记一次。
+    """
+    rows: list[tuple[str, int, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for page, text in pages.items():
+        lines = text.splitlines()
+        for idx, line in enumerate(lines):
+            for hit in PLAN_SHAPE.finditer(line):
+                sentence = _cited_sentence(lines, idx, hit.start())
+                if PLAN_ORIGIN.search(sentence) and (page, sentence) not in seen:
+                    seen.add((page, sentence))
+                    rows.append((page, idx + 1, sentence.strip()))
+    return rows
+
+
+def test_plan_pointer_counting_takes_a_numbered_label_and_skips_the_placeholder():
+    pages = {"a.md": "\n".join([
+        "判据抄自 plan §十 M3★，口径另见 计划 §十一 与 plan §143。",
+        "本族的写法约定记作 `plan §N`，它不指任何一节。",
+        "plan 第十一节不带 § 号，不算这一族。",
+    ])}
+    n = _plan_pointers(pages)
+    assert n == 3, f"三枚带号指针进账、占位符与不带 § 的写法不进账，现数到 {n}：{pages['a.md']}"
+
+
+def test_a_plan_pointer_is_explained_only_in_the_sentence_that_says_where_it_points():
+    pages = {
+        "explained.md": "代码与文档里那些 `plan §N` 的编号指向引擎之外的一份规划笔记，它不随仓库发布。\n"
+                        "所以在 GitHub 上点不开，要核对得回到代码与测试。\n",
+        "pointer-only.md": "这一格的判据抄自 plan §十 M3★。\n",
+        "origin-only.md": "评审给的那个链接点不开。\n",
+        "neighbour.md": "这一格抄自 plan §143。\n它的口径另有出处，那本笔记在 GitHub 上点不开。\n",
+        "twice.md": "plan §8 与 plan §5 都抄自那一页，它不随仓库发布。\n",
+    }
+    rows = _plan_explainers(pages)
+    assert [(r[0], r[1]) for r in rows] == [("explained.md", 1), ("twice.md", 1)], \
+        f"只有同一句里既给出形状又给出原因的那两句算解释：{rows}"
+
+
+def test_the_manual_explains_where_a_plan_pointer_points():
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    n = _plan_pointers(pages)
+    assert n >= 20, (
+        f"手册里只扫到 {n} 枚 plan 指针，多半是扫法坏了（今值与逐本账见归档 `#270`）——"
+        "这一格是下面那条的语料证人：指针族要是扫空，'有没有解释'就成了一句空转的话")
+    rows = _plan_explainers(pages)
+    assert rows, (
+        "手册里再没有一句话同时写出 plan 指针的形状和它为什么指不到东西（格式 文件:行 原句）——"
+        "那 257 枚指针就失去了唯一的去处说明，GitHub 上的读者只会看见一节点不开的数字。"
+        "要么把那句话留在原处，要么搬到另一本人册页里，别只删不补")
