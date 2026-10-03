@@ -2548,7 +2548,7 @@ seq 101 vote_result  {"summary": "票型：3号2票。弃票1人。3号被投票
 
 根因只有一处：`game.play` 收尾写的是 `winner=winner or "draw"`，把"没有阵营获胜"压成了阵营键空间里的
 一个字符串，渲染器因此无从分辨平局和狼赢。修法**不是**给渲染器加一张 `"draw" → "平局"` 的表（那是给一个
-不该存在的值找翻译），而是让它回到 `null`：写侧 `src/wolfengine/game.py:227`（`winner=winner` 那一行，上面 226 是 `log.append(Kind.GAME_OVER,`），`compress.py:93` 补
+不该存在的值找翻译），而是让它回到 `null`：写侧 `src/wolfengine/game.py:226`（`winner=winner` 那一行，上面 225 是 `log.append(Kind.GAME_OVER,`），`compress.py:93` 补
 `camp is None` 那一支，`render_live.py:221` 那格改成 `or '无'`。"哪些终局算获胜"这件事仓库里**早就有唯一
 来源**——`metrics.DECISIVE`（`src/wolfengine/metrics.py:250`，batch 的分母就是拿它筛的），它 key 在
 `terminal` 上，所以 `winner` 里不需要任何占位符。事件 schema 那行注释（`src/wolfengine/events.py:82`）
@@ -2859,10 +2859,10 @@ baseline（任何刀之前）`rc=0 red=[]`；`/tmp/mut90.py` 第二跑 `total=7 
 局号各自标出，因为按文件顺序读它们是**递减再增**的，不是一列升序），离 20000 还差四倍，
 所以这三局本来也撞不上；要紧的是**"它撞不上"这件事从来不是判据给的**，是计数没接上给的。
 
-修法是把计数从**真正在答题的那只 `LLM`** 身上取：`src/wolfengine/game.py:163` 的 `counters` 按 `id` 去重
-（九座共用一只 `LLM`，不去重就是把同一份账记九遍），`src/wolfengine/game.py:176` 的 `spent()` 求和。
-〔预算耗尽〕那条公告里的数字跟着变成真数（`src/wolfengine/game.py:197`），汇总行的 `completion=` 也是
-（`src/wolfengine/game.py:236`）。墙钟那一半不受影响，它本来就不读 `llm`。
+修法是把计数从**真正在答题的那只 `LLM`** 身上取：`src/wolfengine/game.py:162` 的 `counters` 按 `id` 去重
+（九座共用一只 `LLM`，不去重就是把同一份账记九遍），`src/wolfengine/game.py:175` 的 `spent()` 求和。
+〔预算耗尽〕那条公告里的数字跟着变成真数（`src/wolfengine/game.py:196`），汇总行的 `completion=` 也是
+（`src/wolfengine/game.py:235`）。墙钟那一半不受影响，它本来就不读 `llm`。
 
 两条用例在 `tests/test_live_path.py`（`#93` 那一段）：一条钉"汇总行印的数 == 文件里 Σ 的数"（先断言
 `recorded > 0`，否则这条断言是空的），一条钉"上限 100 在出货路径上真的把桌子停下、`winner` 是 `None`、
@@ -3935,7 +3935,7 @@ RED 01:19:55Z（两条先红：读者闸门报的就是 `['action', 'folded_days
 | `agent.py:306` | `asyncio.wait_for` 与 httpx 的 connect 超时同时响 | 抢先进 `except` 的是前者 |
 
 于是 `is_upstream_error` 那条分类**到不了**：`EndpointUnavailable`（`llm.py:178`）与
-`aborted_endpoint`（`game.py:211`）在这形状下不可达，`max_retries_total` 那一整格预算也没人花。
+`aborted_endpoint`（`game.py:210`）在这形状下不可达，`max_retries_total` 那一整格预算也没人花。
 `transport.py:146` 那句 "the alternative is a full transcript" 写的正是这一具，而它在修之前只是一句
 注释，不是被量过的行为。
 
@@ -4875,7 +4875,7 @@ L2 那一具要单记一笔：**第一跑的预期写的是 1 条，实测 4 条
 
 `#130` 那格的目标是"落了盘没人读"，这一片是同一族里的另一格：`deal.teammates`。
 
-写侧一直是通的。`game.py:131` 给每只狼落一份不含自己的队友名册（`teammates=[x for x in wolves
+写侧一直是通的。`game.py:130` 给每只狼落一份不含自己的队友名册（`teammates=[x for x in wolves
 if x != seat] if role == "wolf" else []`），`events.py:68` 的形状表也把 `teammates` 这格声明了，
 `info.py:70` 甚至备着一个 `Percept.teammates()` 专门读它。断的是最后一段：`compress.py` 的 DEAL
 分支只印到
@@ -4950,7 +4950,7 @@ V1 与 V2 打中的是同一条用例的两条腿（`test_the_deal_line_says_who
 
 #### 这一片没有动的
 
-`state.py:129` 的 `teammates_of` 还在原地，而且它和 `Percept.teammates()` **不是同一个判据**：
+`state.py:127` 的 `teammates_of` 还在原地，而且它和 `Percept.teammates()` **不是同一个判据**：
 前者按 `alive_seats` 过滤（死狼不算队友），后者念的是发牌那一刻写下的名册（死了也还在名单上）。
 卡片印的是后者——那句"你的队友是"说的是发牌，不是当前存活。两份实现谁该活下来是 `#81` 那族
 "没有读者的具名函数"的账（`teammates_of` 目前只有 `tests/test_rules.py` 三个读者），不在这里顺
@@ -8059,8 +8059,8 @@ L4 那具的预注册是在第一跑之后补的第三格：把 `inert` 摘成�
   在别的类里也叫 `warn` 会一起被放过。现测（08:21:23Z）这一形在本仓库只覆盖 `tokens.warn` 与
   `tokens.force_compact` 两格，`Config` 与 `TokenBudget` 之外没有第三个同名叶子。
 - 字段**删掉之后**的产物变化不在本片：本尺只保证"每一格零读者字段都有一条表态过的处置、且处置
-  落点真实"，不保证删它是安全的。11 格"待判"里最贵的三格（`hunter_seat`、`assigned_target`、
-  `raw_used`）要动的是产物链的读数，另立票。
+  落点真实"，不保证删它是安全的。那本名册里最贵的三格"待判"（`hunter_seat`、`assigned_target`、
+  `raw_used`）要动的是产物链的读数，另立票——前两格后来由 `#261` 删掉，`raw_used` 此刻仍在那本名册里。
 
 #### 本节自己撞上的那格计数闸门
 
@@ -8514,7 +8514,7 @@ README 里 `tests/test_cli.py` 那一行：被计数闸门认出来的那个数�
 
 #### 六格的现数读数
 
-* `board`（`game.py:100` 写）：**接线了**——`cli.py:369` 那串键名多了它，`tests/test_cli.py:470` 两条下标读钉住它。
+* `board`（`game.py:99` 写）：**接线了**——`cli.py:369` 那串键名多了它，`tests/test_cli.py:470` 两条下标读钉住它。
 * `reproducibility_note`（当时写在 `game.py` 的第 115 行，`#181` 把这一格删掉了）：扫面里除写它自己那一次，**零出现**。
 * `created_utc`（`batch.py:210`）、`pair_keys`（`batch.py:211`）、`n_logs`（`batch.py:222`）：同上，只剩写它们的那一行。
 * `rows`（`batch.py:222`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:288` 读清单里那一格；`tests/test_wiring.py::test_every_real_settlement_renders_the_very_sentence_it_was_written_with` 读的是另一份文档的 `rows`）——不是缺陷。
@@ -10210,7 +10210,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   「先红一条再登记」。刀之前先还掉一笔尺子债：普查里最贵的一格是**配对口径**——`TEAM_ZH` 的下标空间是 `Winner`，
   不是同名的 `Team`(`roles.py:17`)，按表名去配对会报缺词 god 与 villager、死词 good，两格假缺词加一格假死词，
   而这三格压根不是那张表读的东西。闸门按「渲染它的那一行用的是哪枚取值」配，不按表名配。
-* 收集器自己的一形 bug 是红出来的，不是想出来的：`_literal_values`(`tests/test_wiring.py:384`) 只遍历
+* 收集器自己的一形 bug 是红出来的，不是想出来的：`_literal_values`(`tests/test_wiring.py:383`) 只遍历
   `ast.parse` 结果的模块层时，`schema.py:52` 那一格看不见，因为那枚 Literal 住在类体里。01:52:26Z 那趟报的是
   「既不是模块级的 Literal 别名，也不是某字段注解里嵌的 Literal」，改成走整棵树之后 01:53:03Z 两具都绿。
   这一笔要分清：那次红是**尺子红**，不是缺陷红。
@@ -10229,7 +10229,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   K4 把出厂默认 style 改成 quiet → 两红，红在后一具闸门的最后一支；
   K5 把收集器收回只扫模块层 → 两红，红字正是那条「既不是模块级的 Literal 别名」，它是正控制，证明「认两形」那一格不是装饰。
   逐把还原都逐字节比过哈希（「RESTORED sha match: True」），跑完 `git status` 只剩我自己那两处改动。
-* 顶号一处，还是那具行号闸门替我记的账：`_literal_values`(`tests/test_wiring.py:384`) 那处收拢长了九行，把归档里
+* 顶号一处，还是那具行号闸门替我记的账：`_literal_values`(`tests/test_wiring.py:383`) 那处收拢长了九行，把归档里
   指着 `rows = doc["rows"]` 的号从 2030 顶到 2039（本文件第 8519 行那处已随代码改口）。它在五把刀里每次都跟着红，
   因为它是被我插的那九行动的、不是被刀动的——判 CAUGHT 时点名的始终是另一具，两红里得先扣掉它。
 * 文档对齐这一趟是**负结果**（02:05:36Z 现测）：五张表名加上「人话表」这个词，在 README 与 docs/ 的非归档页里各
@@ -10461,7 +10461,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 * RED 05:01:05Z：1 failed，报文点名 `('views.md', 298, <那一格>, 0)`，括号里就是主人条数。错的那一形
   在这里只描述、不贴出来。
 * 处置＝两格都写回点得到的样子：`views.md` 的 294 行补上基础名（和上一行是同一条参数化用例的另一格，
-  `tests/test_wiring.py:271` 的 `test_the_two_views_share_one_definition_of_each_viewing_rule`），
+  `tests/test_wiring.py:270` 的 `test_the_two_views_share_one_definition_of_each_viewing_rule`），
   `views.md` 的 298 行换成单数那一形（主人是
   `tests/test_render_html.py:302` 的 `test_the_over_long_marker_needs_its_own_flag_and_prints_no_length`）。
   两处都是行内改，那一页一行没增没减——`views.md` 被按行号点过，插行会顶号。
@@ -11245,7 +11245,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 
 * 接 `#237` 剩下那张工作单里的一档。src 侧那 63 格先按"证人住在哪个进程"分了四档：子进程 9、真人 tty 6、真端点 2、进程内 46；进程内那一档再扣掉 `#236`/`#237` 已经给过证人的两格，是 44 格待补。**这两个减法都是减法**：分档由 `#237` 那趟 NEVER 名册逐格读代码得出，扣掉的那两格靠时间戳（那两格在普查之后才被补上），不是把普查重跑了一遍。分档明细与那把尺子都不在仓库里（尺子那趟跑在 `/tmp/trace239/`，名册抄在本项目的记忆里），所以这张表不可从克隆复算——`#237` 末尾留下的"要不要把尺子收进仓库"那张票还欠着，这一片没替它决定。这一片只做 44 格里形状最硬的一族：体里是一枚 `raise` 的八格。
 
-* 八格的落点逐格点名（每格一枚冒号形指针，取词收在引用它自己的那一句里，句里写出的名字就是那一行原话里的词）。`batch.py:105` 那一格抛的是 `BadOverride`，话术是"不是嵌套表，不能再往下走"，它上面那一行的条件问 `cur` 有没有 `__dataclass_fields__`，这一格拒的是点分路径走到一个标量底下还要再往下钻。`batch.py:108` 是它的镜像，那一格抛 `BadOverride`、话术是"只能设叶子字段，不能整块替换"：叶子形状的命令瞄准一张嵌套表。`batch.py:169` 那一格抛 `BatchAborted`，句子是"没有配置臂"。`batch.py:171` 那一格抛同一枚 `BatchAborted`，句子是"配置臂重名"。`events.py:368` 那一格抛 `RuntimeError`，管的是 `write_meta()` 落在第一条 `append()` 之后。`events.py:370` 那一格抛 `FileExistsError`，句子说一个 game id 不可复用。`game.py:155` 那一格抛 `ValueError`，句子是 `play()` 既没有 `actors` 也没有 `transport`。`info.py:47` 那一格抛 `IsolationError`，句子说 Percept 的事件必须按 `seq` 排好。
+* 八格的落点逐格点名（每格一枚冒号形指针，取词收在引用它自己的那一句里，句里写出的名字就是那一行原话里的词）。`batch.py:105` 那一格抛的是 `BadOverride`，话术是"不是嵌套表，不能再往下走"，它上面那一行的条件问 `cur` 有没有 `__dataclass_fields__`，这一格拒的是点分路径走到一个标量底下还要再往下钻。`batch.py:108` 是它的镜像，那一格抛 `BadOverride`、话术是"只能设叶子字段，不能整块替换"：叶子形状的命令瞄准一张嵌套表。`batch.py:169` 那一格抛 `BatchAborted`，句子是"没有配置臂"。`batch.py:171` 那一格抛同一枚 `BatchAborted`，句子是"配置臂重名"。`events.py:368` 那一格抛 `RuntimeError`，管的是 `write_meta()` 落在第一条 `append()` 之后。`events.py:370` 那一格抛 `FileExistsError`，句子说一个 game id 不可复用。`game.py:154` 那一格抛 `ValueError`，句子是 `play()` 既没有 `actors` 也没有 `transport`。`info.py:47` 那一格抛 `IsolationError`，句子说 Percept 的事件必须按 `seq` 排好。
 
 * 两处**给人看的句子早就把其中一格当成定论**，这是这一片最该记的性质：`write_meta` 那两格拒绝在手册与归档里都被写过"它拒绝，理由是追加式"，而执行普查说那一格整套测试从没落到过。方向要说白——普查只否证"没走到"，它同时把"文档里那句已核对过的话"顶成了"没核对过"。
 
@@ -11566,7 +11566,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   **63 格**，只数简单赋值是 **1 格**，两形的差就是那 62 格解包成员（`cfg, state, log, agent, …` 那种——
   测试靠解包拿桌、只用其中两三样是通行写法，判它会把测试全打成红）。14:13:18Z 拿 `git archive`（那一刻
   的提交就是 `c88e25c`）抽出的原始字节复量同一对数：63 与 1，一字未动。
-* 那唯一的一格是 `tests/test_wiring.py:2703` 的 `pr`——整局回合链那条用例把 `assemble.assemble` 的
+* 那唯一的一格是 `tests/test_wiring.py:2692` 的 `pr`——整局回合链那条用例把 `assemble.assemble` 的
   产物赋给它，然后一次都不读。按失效方向它不是死代码：这一格坏掉时不会崩、也不会红，坏的是
   "装配器把合法动作与证据编号交给了这一席"这件事从此无人证。所以处置是**补断言**，不是删那一行。
 * 补之前先量这两条今天成不成立（14:03:15Z 现读）：`pr.legal_acts` 是
@@ -11784,3 +11784,111 @@ HTML 那 4 行：新增的两行一行是 `ul.chron li.peace{...}` 那条 CSS �
 仍然没有——加它要新立一条读数并给它自己的分母，而这一片的票面只问"人看不见这件事"，按票面收口，
 不顺手扩。`wolf replay` 的实录也没动：那一个出口从头到尾只做一件事，把落盘的那几行逐字搬屏，
 派生句进实录会让"实录"这个词失去含义。整量套件的跑次读数记在这一片的提交说明里，不抄第二遍。
+
+### #261 字段层那两格"待判"落了刀：`hunter_seat` 与 `assigned_target`（**07:09:40Z** 落笔）
+
+**票面**：`#172` 收尾时留下一句限界——这把尺只保证"每一格零读者字段都有一条表态过的处置、且处置落点
+真实"，不保证删它是安全的；名册里最贵的三格"待判"要动的是产物链的读数，另立票。这一片把其中两格删掉
+（`GameState.hunter_seat`、`LegalSet.assigned_target`），第三格 `ParseOutcome.raw_used` 没动，它钉在
+`#114` 那条产物链上。两格一起走不是图省事：被删掉的那一行名册原话是「所以这两格是同一个决定的两半：
+要么一起接进读数，要么一起删」，那一行在 `e30b1be01032` 那一版的 `tests/test_wiring.py` 里。
+
+**两格各自是谁的抄本**：
+
+* `hunter_seat`——"谁能在倒下时开枪"这一问早就有单一定义：`src/wolfengine/rules.py:235` 与
+  `src/wolfengine/rules.py:236` 那两行合起来是 `shoot_on_death` 能力加 `hunter_shoots_on` 死因名单。
+  发牌时另存的那一枚座位号从写入到删除没人读过；真在跑的那条路用的是另一份名单——
+  `src/wolfengine/state.py:95` 声明 `pending_shots`，`src/wolfengine/phases.py:328` 从它头一枚取座位，
+  `src/wolfengine/rules.py:46` 在 HUNTER_SHOT 相位核对 `pending_shots` 的头一枚是不是这一席。
+  所以这格的形状不是"没接上的读者"，是"同一个决定的第二份座位号、且没有一致性校验"——与 `#119`
+  那种"两份都有读者"的双写正相反，这一格一份都没人念。
+* `assigned_target`——`src/wolfengine/persona.py:91` 那个 `assign_speech_acts` 返回 `(act, target)`
+  一对，`src/wolfengine/phases.py:201` 只取 `assigned[seat][0]`，装进 `src/wolfengine/state.py:75`
+  声明的 `assigned_act`。全链路核对的是 act 那一半：`src/wolfengine/legality.py:85` 比的是
+  `assigned_act`，提示词卡片印的是 `src/wolfengine/assemble.py:189` 取出的 `assigned_act`，真人屏幕上
+  那句"法官指派本轮使用的动作"读的还是 `src/wolfengine/human.py:200` 的 `assigned_act`。
+  `target` 那一半在 `tests/test_rules.py:466` 解出来只为了断言它不是 `None`。
+
+**判据：按失效方向选"删"，不选"接"**。把 `target` 接进读数要先给它一个新的落盘键——那是产物字节的变化，
+而且接进去之后 M6 问的问题会变味：`src/wolfengine/metrics.py:1023` 那个 `m6_belief_action` 算的是
+模型自己点了谁，`src/wolfengine/metrics.py:1056` 那格 `stated_vs_engine_agreement` 之所以还算一个问题，
+正因为法官没替它点。把法官指派的 target 印到卡片上，这一格就从"信念与主张是否一致"塌成"抄没抄对答案"。
+`hunter_seat` 同理：接它要新立一份"发牌座位"的读数，而它答的那一问 `pending_shots` 已经答过。
+两格都删。
+
+**改动面**（六本，行数是两棵树各现量、sha12 是工作树那一侧）：
+
+| 文件 | 行数 | 内容 sha12 | 动了哪一格 |
+| --- | --- | --- | --- |
+| `src/wolfengine/state.py` | 133→131 | `67a28ddcfb75` | 两格声明 |
+| `src/wolfengine/game.py` | 238→237 | `010925034f36` | 构造时那一行 `hunter_seat=next(...)` |
+| `src/wolfengine/phases.py` | 344→344 | `420e1849f6fe` | `act = assigned[seat][0]`，`replace` 不再带 target |
+| `src/wolfengine/persona.py` | 156→156 | `48f821b4526a` | 三行注释，见下面那一格假话 |
+| `tests/test_rules.py` | 555→553 | `0c1f13501f76` | 夹具里 `role == "hunter"` 那一支 |
+| `tests/test_wiring.py` | 3613→3602 | `1b9f811e5ff6` | 夹具一行＋名册两行＋docstring 自计数 |
+
+**名册今值**（工作树现量，不是从"291 减两格"推出来的）：那把尺报 289 格字段声明、11 格零生产读者，
+登记的处置也是 11 行（留 6 格＋待判 5 格），其中连测试也不点它名的只剩一格——
+`assemble.py::Prompt.legal_targets`，名册里那一行在 `tests/test_wiring.py:1255`。钉住名册与名单相等的
+是 `test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_disposition`，
+它的谓词就是 `tests/test_wiring.py:1291` 那一行 `assert sorted(dead) == sorted(FIELD_TRIAGE)`。
+
+**三具刀**（每具跑 `tests/test_wiring.py` 整本；干净树基线 07:10:40Z `121 passed`、红名册空，刀脚本落盘 06:48:06Z）：
+
+| 刀 | 形状 | 读数 | 判定 |
+| --- | --- | --- | --- |
+| K1 | 只把 `hunter_seat` 的声明塞回 `state.py` 刚删掉的那一格，不塞写入点 | `1 failed, 120 passed`，FAILED 里只有名册那一格证人，红话点名 `state.py::GameState.hunter_seat` | CAUGHT |
+| K2 | 只把 `assigned_target` 的声明塞回同一本刚删掉的那一格 | `1 failed, 120 passed`，红话点名 `state.py::LegalSet.assigned_target` | CAUGHT |
+| K3 | 反面那具：声明＋名册行一起塞回去 | `121 passed` | MISSED |
+
+K3 那一格 MISSED 登记为这条判据的已知弱点，不是本片留下的缺陷：这把尺问"有没有人读过它"，
+而把名册行一起塞回去等于同时给了它一条处置，所以它天生看不见"这一格从来没被写过"那一形。
+要量"没人写过"得先枚举写入形状——那是 `#256` 在绑定层刚上过的一课，这一片不立半把尺。
+三具还原后都按 sha12 复核过（`67a28ddcfb75` 与 `1b9f811e5ff6`），刀脚本留在 `/tmp/knife261.py`、
+不进仓库。
+
+#### 写侧字节对照（同 seed 两棵树，`--mock --seed 261 --games 3`）
+
+删字段这一族真正的风险不在测试红不红，在**产物的字节动没动**。三件产物 × 三局，对照树是
+`e30b1be01032` 的 detached worktree，噪声键遮掉 `t_wall` 与 `started_utc` 两格，文件名按局号归一；
+地板那一列是同一棵旧树跑两遍（base↔base2），用来证明"逐字相同"这个判据本身不是恒真。
+
+| 层 | g00000261 | g00000262 | g00000263 |
+| --- | --- | --- | --- |
+| jsonl 行数 | 地板 SAME · 工作树 SAME · 66 | 地板 SAME · 工作树 SAME · 71 | 地板 SAME · 工作树 SAME · 89 |
+| jsonl seq 列 sha12 | `90e4927ff5e9` 三趟相同 | `f6a3def2e78f` 三趟相同 | `d9c063167280` 三趟相同 |
+| jsonl 遮噪后 sha12 | `c5c685f20957` 三趟相同 | `65e64402209e` 三趟相同 | `c1ac3e99d94f` 三趟相同 |
+| kind 名册 sha12 | `42c8b36a7df1` 三趟相同 | `d1fb7655ec97` 三趟相同 | `1109f7388c92` 三趟相同 |
+| audit stdout sha12 | `1784e3e4e889` 三趟相同 | `3176b0afbbed` 三趟相同 | `e1d37c2cb2d5` 三趟相同 |
+| export HTML | 改动 0 行 | 改动 0 行 | 改动 0 行 |
+| `replay` 那一帧 | 改动 0 行 | 改动 0 行 | 改动 0 行 |
+
+两棵树的加载点各自打印过 `module.__file__` 并断言落在自己那棵树里（旧树那一侧是
+`/private/tmp/base261wt/src/wolfengine/__init__.py`；三趟生成落盘 06:52:55Z、上表读数由 06:54:09Z
+那一趟只读复算）。猎人那一格在遮噪后的日志里现形：三局各
+`hunter` 字样 5/9/7 次、`target` 键 40/44/59 次，三趟计数一字不差——所以"两格都没读者"量的确实是
+**被写过但没人念**，不是"那条路根本没走到"（`#237` 那把执行普查尺的结论在这里当反面用）。
+g00000262 与 g00000263 的四层 sha12 与 `#88` 那一片在另一棵树上量到的逐字相同，这是同一件事的
+第二次独立复现。金样本那一份 `data/` 里的日志只读未改。
+
+诚实一句：第一趟脚本在**打印**猎人计数那一步崩了（`re.search(...).group` 撞上每个文件第一行的
+manifest——那一行没有 `kind` 键），三趟产物在它崩之前已经落盘，所以重算的只是对照、不是生成。
+
+**顺手捡回来的那句假话**：`src/wolfengine/persona.py:123` 那三行注释原先主张"把指派的 `target`
+排进 shuffle 顺序，才让 M6 那一格成为一个问题"。它当时就已经是假的——卡片只印 act、闸门只核对 act，
+`target` 到不了模型，也到不了读数；这一片删掉的不止一格字段，还有这句把"删掉的字段"说成"有作用的
+字段"的因果。
+
+**顶号的代价**：这一片改动顶掉 16 处下游行号引用——本文件 14 处（`game.py` 九处、
+`tests/test_wiring.py` 四处、`src/wolfengine/state.py` 一处，按 cite 逐枚现量），另外两本测试各一处，那两枚点 `game.py` 的号各自往上挪了一行
+（删掉构造那一行之后，下游的号会小一枚）。`#172` 那句限界里"三格待判"的原话被这一次改动顶成历史，
+按 `#158` 的规矩补了历史标记（「前两格后来由 `#261` 删掉」）而不是改数字。更要紧的一笔：**名册里
+"待判"那几行抄着的顶号代价已经漂了**——登记时 assemble 11 处、batch 22 处、info 3 处、schema 3 处，
+今日在同一棵工作树上重量是 17、38、5、15，而这个数字家族没有任何一把尺在看。另立 `#262` 重定价，
+不在本片顺手改抄本。
+
+**没动的格子与为什么**：`legal_acts`／`legal_targets` 那一对成对写入、同笔代价，删一留一会把
+`#205` 那条"两半一起走"的登记破掉，而它们各自的落盘白名单形状要另量；`BatchResult.rows` 要先把
+`#132` 那把按被下标对象数读者的尺对齐；`Percept.at_seq` 钉在 `#157` 那格待定的渲染归属上；
+`ParseOutcome.raw_used` 钉在 `#114` 的产物链上。`docs/metrics.md` 一个字没改：它从没主张过被指派的
+target 会到模型眼前，所以这一删没有把它顶成假话。

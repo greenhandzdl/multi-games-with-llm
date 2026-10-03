@@ -198,8 +198,8 @@ async def run_speeches(t: Table, *, speakers: list[int], pk: bool = False) -> No
     assigned = assign_speech_acts(t.state, speakers, t.agent.personas, beliefs, t.rng, t.cfg, legal)
     said: list[str] = []
     for seat in speakers:
-        act, target = assigned[seat]
-        ls = replace(legal[seat], assigned_act=act, assigned_target=target)
+        act = assigned[seat][0]
+        ls = replace(legal[seat], assigned_act=act)
         if t.state.abstain_streak.get(seat, 0) >= 2:
             # The forced-nomination pressure rides on the LegalSet rather than on the
             # persona, because personas are sampled once per game and mutating a shared

@@ -48,8 +48,6 @@ def mk_state(roles: dict[int, str], day: int = 1, house: HouseRules | None = Non
             st.witch_seat = seat
         elif role == "seer":
             st.seer_seat = seat
-        elif role == "hunter":
-            st.hunter_seat = seat
     return st
 
 

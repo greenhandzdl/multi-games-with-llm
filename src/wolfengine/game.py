@@ -84,7 +84,6 @@ def build_game(cfg: Config, deal_seed: int, game_id: str) -> tuple[GameState, di
         board=board, game_id=game_id, deal_seed=deal_seed, seats=seats_,
         witch_seat=next((s for s, r in deal.items() if r == "witch"), None),
         seer_seat=next((s for s, r in deal.items() if r == "seer"), None),
-        hunter_seat=next((s for s, r in deal.items() if r == "hunter"), None),
         phase=Phase.NIGHT_WOLF,
         speech_order=rules.speech_order(rng.order, sorted(deal)),
     )

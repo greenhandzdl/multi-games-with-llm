@@ -203,7 +203,7 @@ async def test_the_connect_phase_gets_its_own_bound_below_the_seat_deadline(monk
     `transport.py` 改前那一行用裸 float 传下去 = 四个阶段都是 45。于是本文件上面那条
     `test_an_unreachable_endpoint_is_the_endpoints_fault_not_the_models` 所承诺的分类根本到不了：
     `asyncio.wait_for` 与 httpx 的 connect 超时同时响，抢先进入 `except` 的是前者，
-    `EndpointUnavailable`（`llm.py:178`）与 `aborted_endpoint`（`game.py:211`）在这形状下不可达。
+    `EndpointUnavailable`（`llm.py:178`）与 `aborted_endpoint`（`game.py:210`）在这形状下不可达。
 
     7.5 是故意挑的：它既不是 45 的因数也不是任何一个"忘了改"能碰巧写出来的数。钉的是**接线**
     （connect 单独取新字段），不是那个字段的取值——取值由下一条管。

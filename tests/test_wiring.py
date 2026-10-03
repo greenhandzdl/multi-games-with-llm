@@ -50,7 +50,6 @@ def nine_seat_log(tmp_path) -> tuple[EventLog, state.GameState, dict[int, str]]:
         seats={s: state.SeatState(seat=s, role=deal[s]) for s in deal},
         witch_seat=next(s for s, r in deal.items() if r == "witch"),
         seer_seat=next(s for s, r in deal.items() if r == "seer"),
-        hunter_seat=next(s for s, r in deal.items() if r == "hunter"),
         phase=state.Phase.DAY_SPEECH,
         speech_order=rules.speech_order(rng, sorted(deal)),
     )
@@ -1246,16 +1245,6 @@ FIELD_TRIAGE: dict[str, str] = {
         "改的是 audit 的超额判定、不动发出去的字节",
     "config.py::RegionBudget.c_private": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C3' 那一格，见 src/wolfengine/metrics.py",
     "config.py::RegionBudget.c_task": "留：同 `a_hard`，`REGION_CAP_KEYS` 的 'C4' 那一格，见 src/wolfengine/metrics.py",
-    "state.py::GameState.hunter_seat":
-        "待判：`src/wolfengine/game.py` 发牌时算出并写进状态，之后没人读（猎人那一枪走的是别的路径，"
-        "见 src/wolfengine/phases.py）——接进产物还是删掉是决定，见 src/wolfengine/state.py。"
-        "`#176` 量过的代价很小：点 `src/wolfengine/state.py` 行号的引用全仓库只有 1 处、在第 92 行下游，"
-        "这一格留在待判不是因为删不动，是因为没有一条判据能替我决定猎人该不该在状态里留名",
-    "state.py::LegalSet.assigned_target":
-        "待判：`src/wolfengine/phases.py` 里 `replace(..., assigned_act=act, assigned_target=target)` "
-        "成对写，`#68` 只给 `assigned_act` 补了读者（服从率），target 那一半零读者，见 src/wolfengine/state.py。"
-        "`#176` 量过的代价与上一格同一笔账（同一个文件的同一个 1 处引用，它在第 76 行下游），"
-        "所以这两格是同一个决定的两半：要么一起接进读数，要么一起删，见 src/wolfengine/state.py",
     "assemble.py::Prompt.legal_acts":
         "待判：`src/wolfengine/assemble.py` 里 `Prompt` 构造时写入，而落盘那格走的是同文件 "
         "`payload_for_log` 的白名单、不含它；`src/wolfengine/schema.py` 里同名的那一格是**函数参数**"
@@ -1286,10 +1275,10 @@ FIELD_VERDICTS = ("删", "搬", "接", "留", "待判")
 
 def test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_disposition():
     """`#172`：`#81`→`#166` 那一族数过函数、方法、类、导入、模块级常量，唯独没数过**类体里
-    带注解的字段**。本条自己数：291 格字段、13 格零生产读者（其中 3 格连测试也不点它名，那是
-    下面七格"待判"里的三格）。`#172` 那份不共用这把尺的复算当时报 24 格（08:14:58Z 那一版树上
+    带注解的字段**。本条自己数：289 格字段、11 格零生产读者（其中 1 格连测试也不点它名，那是
+    下面五格"待判"里的一格）。`#172` 那份不共用这把尺的复算当时报 24 格（08:14:58Z 那一版树上
     的数），多的 7 格正是这具尺多认的那两形：`row["名字"]` 式的落盘回读与 src 自己那两张
-    INERT 表；`#174` 与 `#175` 各删掉一格、`#88` 又删掉一格，298/17 是 `#172` 那天那棵树的读数，见 docs/iterations.md。
+    INERT 表；`#174`、`#175`、`#88` 各删掉一格、`#261` 又删掉两格，298/17 是 `#172` 那天那棵树的读数，见 docs/iterations.md。
 
     本条不要它们都"有读者"，只要**每一格都有一条登记过的处置**：名册与本条数的零读者两侧相等
     （多一格＝新长出来没登记，少一格＝登记的那格已不在树上）、处置词必须是那五个之一、落点路径
@@ -2067,7 +2056,7 @@ def test_the_wolf_chat_line_shows_the_seat_being_point_at():
 
 
 def test_the_deal_line_says_who_is_on_your_team():
-    """形状表给 `deal` 声明了 `teammates`，写侧也在写（`game.py:131`），渲染层却只印到身份为止。
+    """形状表给 `deal` 声明了 `teammates`，写侧也在写（`game.py:130`），渲染层却只印到身份为止。
 
     这一格和 `#130` 那一格是同一种坏法：落盘了、没人念。区别在于这里的代价是牌桌上的一个事实——
     狼不知道自己跟谁一伙。实测 12 局 mock（`/tmp/probe133.py`，17:02Z）：74 次问狼里 12 次

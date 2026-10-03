@@ -73,7 +73,6 @@ class LegalSet:
     consumables: tuple[str, ...] = ()
     # day speech: the speech act the engine assigned, not chosen by the model (plan §7)
     assigned_act: str | None = None
-    assigned_target: int | None = None
     reason_if_empty: str = ""
 
 
@@ -89,7 +88,6 @@ class GameState:
     witch: WitchState = field(default_factory=WitchState)
     witch_seat: int | None = None
     seer_seat: int | None = None
-    hunter_seat: int | None = None
     # seat -> ("good"|"wolf") — the seer's own knowledge, mirrored by the engine so the
     # belief card can state it as fact. Not the truth the audience may want later.
     seer_results: dict[int, str] = field(default_factory=dict)

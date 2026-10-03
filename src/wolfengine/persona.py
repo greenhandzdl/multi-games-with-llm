@@ -119,9 +119,9 @@ def assign_speech_acts(
             ranked = b.top_suspects(k=len(targets)) if b else []
             pool = [t for t in targets]
             if ranked and p.suspicion_prior > 0.35:
-                # High-suspicion players get the engine's ranking; low-suspicion ones get
-                # a shuffle. That mix is the point: it makes stated_vs_engine_agreement
-                # (M6) a real question instead of a foregone copy.
+                # High-suspicion players get the engine's ranking, low-suspicion ones a
+                # shuffle. 今天这一枚 target 到不了模型：卡片只印指派的 act、闸门只核对 act，
+                # 所以 M6 量的是模型自己点了谁，不是法官替它点的那一个。
                 prefer = [t for t in ranked if t in pool][:2]
                 target = rng.choice(prefer) if prefer and rng.random() < 0.5 + 0.4 * p.suspicion_prior \
                     else rng.choice(pool)
