@@ -12336,3 +12336,117 @@ glob 现数）：
 （`76cf284a87e0`）与 `census266/g266f.txt`（`38159aad8d0a`，上面收尾那两趟各一本）、
 `census266/full266.txt`（`f5ad367b42c8`，上面 11:31 那一趟整套与那三本的逐字回显，含两次 `uptime`）与
 `census266/g266g.txt`（`a26256f36441`，最终树那一趟整套，同样含首尾两次 `uptime`）。
+
+## #267：线级事件看得穿 `for` 体，看不穿单行推导式——分辨率上限先量出来再谈缺陷
+
+**票面**：`#266` 收掉一枚"过滤今天匹配不到任何一项"的断言之后，问剩下还有没有同族。两种形状一起
+普查（只用 AST，不用行首正则）：A 是 `assert <聚合>(<带 if 的推导式>)`，B 是"整个 `for` 体只有
+断言"。A 的失效方向是过滤匹配 0 枚时 `all` 恒真、`any`/`sum` 恒假/零，那一句什么都没读；B 的失效
+方向是可迭代对象为空时那几条断言一次都没执行。
+
+**普查（`0008cdb86` 那一版，逐字回显在 `census267/census267b.out`）**：48 本 `tests/test_*.py`、
+73 枚候选，A 15 枚、B 58 枚；同函数里有一枚可能钉住非空的算 guarded 17 枚、UNGUARDED 56 枚；
+带 `if` 的推导式里有 2 枚坐在断言的**消息**侧（只有测试已经红了才求值，不算证人），取数面字符串
+全部可打印（seg-failures 0）。聚合词分布 `for×1` 50、`sum` 9、`for×2` 7、`len` 3、`sorted`/`any`/
+`tuple`/`for×3` 各 1；候选最多的三本按枚数排：`tests/test_cli.py` 里 14 枚、`tests/test_wiring.py` 里
+12 枚、`tests/test_render_html.py` 里 8 枚。
+
+**线级事件那一趟**：`sys.monitoring` 占 4 号工具位（3 与 4 在 3.14 里是留给自定义工具的，0/1/2/5
+分别是 debugger/coverage/profiler/optimizer），只跟踪 `tests/` 下的 code object，其余一律返回
+DISABLE 以免把开销算进读数。带插件的整套收 `1214 passed in 211.91s (0:03:31)`，插件收尾印
+`files=51 line-events=56412863 codes-disabled=55547`；逐字回显在 `census267/full267.txt`，计数
+副本在 `census267/exec267_full.json`。把两侧一接：**FILLS 71、VACUOUS-guarded 0、VACUOUS-unguarded
+0、NEVER-RAN 0、MSG-SIDE 2**。B 那一档单独复核过：58 枚的探针行**全部**落在与 `for` 头不同的行上
+（probes-on-distinct-lines=58、probes-equal-header-line=0），零执行计数的也是 0——所以"B 形状里没有
+一条空转的 assert-only 循环"这一句是量出来的负结果，不是推出来的。
+
+**分辨率上限（这一片最该记住的一格）**：接合里测试侧 A 那 13 枚也全算 FILLS，但那一栏**不能**当
+"有牙"读。PEP 709 把单行推导式内联之后，elt 的 `lineno` 就是那条 `assert` 的行号，于是一件都没活过
+过滤的推导式照样给那一行打事件——线级事件量到的是"这句走了"，不是"过滤留下了什么"。逐枚数过：测试侧
+13 枚里 12 枚的探针行就等于语句行；唯一那枚跨行的 `tests/test_cli.py:426`（`n_speech` 那一格），其推导式
+整条写在下一行的 427 上，探针行是 427，仍然在同一句之内、同样分不开幸存者。判据就是把两档的探针行形状并排列出来：
+B 的探针行与语句行不同（事件数才有意义），A 不是。凡是"同一行内部的最小偏移"才分得开的量，线级事件
+都给不出。
+
+**换刀**：A 的测试侧 13 枚逐条下三把过滤刀，各自单跑它自己的用例号（v1 共 52 趟 = 13 × 一次干净对照
+加三把刀），带 BoolOp 的那两枚再加两把（v2 共 56 趟）。
+K_off 把过滤条件换成 `False`（幸存者强制为 0 枚）、K_on 换成 `True`（过滤不排除任何一枚）、
+K_not 换成 `not (…)`（取反；可迭代对象为空时 K_not 与 K_off 同值，所以 K_not 红也证明今天至少
+一枚幸存者）。CAUGHT 按屋里老规矩：报出来的失败位置要落进**这一条** `assert` 的语句区间，不是
+"pytest 非零退出"。正控制 `tests/test_house_wired.py:53`（`VOTE_RESULT` 那一枚）的 K_off 是 CAUGHT。
+
+**v1 的归属判据是坏的（自己这一片的 bug，读数没错、分类全错）**：`caught()` 只认 `tests/<名>.py:行:`,
+而 `--tb=line` 打的是绝对路径，于是 13 枚**全部**被分成"无牙"——包括正控制那一枚明明红了。发现它
+的唯一证据就是正控制：正控制没红就先怀疑尺子。v2 改成在任意一行的任意位置匹配
+`<文件名>.py:<行>:<空格>`，并把每趟的原始回显逐趟落盘（`census267/raw/`）后再也不从摘要行反推归属。
+v2 重跑同一批 13 枚，逐条判定（`census267/knife267v2.json`，计数取自该台账现排）：
+
+```
+位置                                    聚合    K_off  K_on  K_not  判定                                行内名字
+tests/test_batch_paired.py:1169        sum     红      绿     红      有牙                            `games_a`
+tests/test_cli.py:419                  len     红      红     红      有牙                            `stats`
+tests/test_cli.py:424                  sum     绿      红     红      单向有牙（今日分子为 0）         `turns`
+tests/test_cli.py:426                  len     红      红     红      有牙                            `n_speech`
+tests/test_cli.py:435                  sum     绿      红     红      单向有牙                        `divergent`
+tests/test_doc_citations.py:212        sorted  红      绿     红      有牙（红是 IndexError 不是断言） `defined`
+tests/test_golden_game.py:527          sum     红      红     红      有牙                            `uncited`
+tests/test_golden_game.py:531          sum     绿      红     红      单向有牙                        `invented`
+tests/test_golden_game.py:532          sum     红      红     红      有牙                            `flags`
+tests/test_golden_game.py:779          sum     绿      红     红      单向有牙                        `by_phase_role`
+tests/test_house_wired.py:53           sum     红      红     红      有牙（正控制）                  `VOTE_RESULT`
+tests/test_human_seat.py:465           any     绿      绿     绿      短路遮蔽，由 K_id 对解除＝有牙   `ACT_SYNONYMS`
+tests/test_render_html.py:292          len     绿      红     红      单向有牙（`and` 那一侧无关）    `spectator`
+```
+
+最后一列不是装饰：这张表刚落盘时文档闸门红了两条，表内 13 枚指针有 12 枚报红——"位置 + 三把刀的色 +
+判定"这一行没写出被点那一行真有的名字，句子给不出可核对的标识符（`#108` 立的那条），剩下那一枚是靠
+邻居行漏进来的 `sorted` 蒙绿的。补的名字逐枚从 `git show 0008cdb:<文件>` 的原文里抄，不是随手挑的词。
+
+**为什么"单向有牙"不算缺陷**：那 4 枚的断言形如"某格是 0"或"某格是 0.0"。K_off 对它们天然无效
+（0 枚幸存者和"确实是 0"给同一个值），说话的是 K_on/K_not——两把都红，说明取数面今天非空、这个
+"0"是从非空样本里读出来的缺席，不是空集给的通行证。**只有 `tests/test_cli.py:424` 那一格不是这个
+形状**：它的分母 `turns` 非空（`tests/test_cli.py:417` 就按"`result` 里有 `fallback` 键"筛过），
+但分子今天 0 枚（K_not 红、报出 `assert 0.0 == 1.0`，即全体取反之后才是"全部"）。它是一枚孪生
+对账（audit 那个数 vs 从原始行重算的数），失效方向只剩一边：audit 多算会红，audit 少算今天看不见。
+再把范围说清楚：整套里读 `fallback_rate` 的断言只有两枚（`tests/test_cli.py:423` 与
+`tests/test_golden_game.py:787`，另一处 `tests/test_cli.py:520` 断言的是这个键**不在**），两枚今天
+都读 0——`docs/metrics.md` 里那一行却写着"`m3_gate.fallback_rate` 已经拥有那个数"。非零方向的证人
+一条没有，这一格登记为后续 `#269`：在已经能造出 truthy `result.fallback` 的那条链上
+（`tests/test_batch_paired.py:1527` 就在翻它）补一枚读数非零的对账证人，并按屋里规矩给 audit 的
+计数那一格下刀证明它抓得住。**这一片没动那两枚 `fallback_rate` 断言，也没动 `src/wolfengine/metrics.py:592`
+里那行除以 `n` 的算术**。
+
+**短路遮蔽（刀也有自己的盲区）**：`tests/test_human_seat.py:465` 是 `"probe" in card or any(...)`。
+三把过滤刀全绿——不是因为过滤没有幸存者（`src/wolfengine/schema.py:69` 那两张同义词就是 `probe`，
+按构造有 2 枚），而是因为左侧一真，右侧根本不求值。补的那一对刀专治这一形：K_id 把**另一个**操作数
+换成该 BoolOp 的单位元（`or`→`False`、`and`→`True`），K_id_off 再叠上 K_off。这一枚 K_id 绿、
+K_id_off 红，读法是"把左侧让开之后，同义词那一半今天确实成立、且至少要一枚幸存者才成立"——所以它
+不是缺陷，但**过滤刀单独跑会把它读成无牙**。`tests/test_render_html.py:292` 那一行的 `and` 左侧与
+过滤无关，右侧数的是 `spectator` 里带 `fallback` 的事件；K_id 与 K_id_off 在它身上都绿，读法就是
+"非空那一半由 K_not 那把红负责"。登记这条上限：任何只看过滤条款
+的刀，都看不见坐在短路后面的那一半；要么补单位元对，要么按 `or`/`and` 分档写判据。
+
+**我脚本里的 bug（这一片一共五处，都改在脚本上、没有一处改被测文件）**：`ast` 里没有 `TupleComp`
+（元组推导式不存在），照抄名单直接 `AttributeError`；`ast.get_source_segment` 不传源文本时返回
+`None`，于是所有可迭代对象打印成同一个占位串，`guarded` 被两个占位串互相匹配顶成 31 枚——诚实的
+数是 17；我自己那个 `seg()` 的三元表达式读了参数 `key[0]` 而不是全局 `KEY[0]`，被一层宽 `except`
+咽掉，哨兵改成 `<SEG-FAILED>` 之后才看得见；`ast.walk(sub.msg)` 里有 `ast.Load` 这类没有 `lineno`
+的节点，取属性前必须 `hasattr` 分流（这在本项目是第三次踩同一条）；插件里写了一行
+`assert-mode = plain (no rewriting) expected`，实际断言改写是**开着**的（`--tb=line` 打出了
+`assert 26 == 104` 这类解释），所以那个字段不能当任何一句的凭据、也不写进结论。
+
+**没动的格子与为什么**：`src/` 一个字节没动；五本被刀过的 tests 每趟之后立刻按原始字节还原并比
+sha256（RESTORE-CHECK `dirty=NONE`，涉及 7 本文件），整套测试的产物、手册五页、其余归档都没碰。
+本文件只有末尾追加。普查与接合脚本都是只读的，跑它们之前先确认没有别的测试进程在飞。
+
+**park**：工具与逐字日志都在项目记忆目录 `census267/`，不在仓库。sha256 前十二位：
+`census267/census267.py`（`f7940edb3da0`，普查器，含正/负控制与 `TEETH=PROVEN` 闸门）、
+`census267/census267b.out`（`2700e1281031`，上面普查那组读数的逐字回显）、`census267/census267.json`
+（`67dfbcaed07f`，73 行名册）、`census267/exec267_plugin.py`（`6af6f7143b3c`，`sys.monitoring`
+跟踪器）、`census267/exec267_full.json`（那一趟的 5,641 万条线事件计数）、`census267/join267.py`
+（`2f1192721dd5`，接合与分档规则写在它的文档串里）、`census267/full267.txt`（整套带插件那趟的逐字
+回显）、`census267/knife267.py`（`afe9c5c7a9af`，v1：归属判据坏的那一版）与 `census267/knife267.json`
+（`22e374fb812c`，v1 台账，留着当"正控制没红就该停手"的证物）、`census267/knife267b.py`
+（`8322e877f789`，v2）、`census267/knife267v2.json`（`c187ac34ac61`，上面那张表的来源）、
+`census267/raw/`（v2 每趟的原始 stdout+stderr 一本一个，共 56 本，与台账里 56 个 run 一一对应，
+由目录内 glob 现数）。
