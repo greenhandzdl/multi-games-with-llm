@@ -12241,3 +12241,98 @@ calibration、comparison、metrics、views）一个字没改——这一片动�
 名单逐字抄在 `docg265c.txt` 里）、`census265b/docg265g.txt`（`9956c7658275`）与
 `census265b/docg265h.txt`（`7de0682bae36`，填完下面那两格之后重跑的两趟）、
 `census265b/full265b.txt`（`cebc8ccc652e`，上面整套那一趟的逐字回显）。
+
+## #266：那一句只朝一个方向有牙，另一方向照样绿
+
+**票面前提量成一半**（不是"没有牙"）：`#265` 那一页记下 K3 把时点顶成零时那本照样绿，这一片把同一句放在
+两具方向相反的刀下各量一遍。顶宽那具（落进构造的 `at_seq=cut` 换成 `src[-1].seq if src else 0`）两本
+`3 failed, 39 passed`、整套 `3 failed, 1211 passed` 都点到那本用例；顶零那具两本 `2 failed, 40 passed`，
+名册里没有它。所以旧行那句的真实形状是**单向有牙**：它读得到时点被顶宽，读不到时点被顶零——板上末行 16
+与选票起点 17 之间那个空集只朝一边漏。
+
+**八具刀**（两趟电池，逐字日志 `census266/knife266.out` 与 `census266/knife266b.out`；每具 PREFLIGHT 先证
+锚点全文件唯一、落盘后先证 sha 变了再信判定、`finally` 逐字还原并按 sha 复核，两趟都以 `VERIFIED= True`
+收，还原后各跑一次两本正控制 `42 passed`）：
+
+| 刀 | 动的那一格 | 选集与基线 | 红了的证人 | 判定 |
+| --- | --- | --- | --- | --- |
+| K4（旧行） | 落进构造的 `at_seq=cut` 换成 `src[-1].seq if src else 0`（顶宽） | 两本 42 passed | `tests/test_info_isolation.py` 那条 ＋ `test_vote_wave.py` 两条 | CAUGHT 3 红 |
+| K5（旧行） | K4 ＋ 删掉旧行那一句（还有没有别人说同一件事） | 两本 42 passed | 只剩 `test_vote_wave.py` 两条 | CAUGHT 2 红——旧行是那一本唯一的证人 |
+| K6（旧行） | 落进构造的 `at_seq=cut` 换成零（顶零） | 两本 42 passed | 只剩 `test_vote_wave.py` 两条 | MISSED——那本在名册外 |
+| K4′（新行） | 同 K4 | 两本 42 passed | 那本 ＋ 那两条 | CAUGHT 3 红，整套同一份名单 `3 failed, 1211 passed` |
+| K5′（新行） | K4′ ＋ 删掉新行那一句 | 两本 42 passed | 只剩那两条 | CAUGHT 2 红 |
+| K7′（新行） | 同 K6 | 两本 42 passed | 那本 ＋ 那两条 | CAUGHT 3 红——MISSED→CAUGHT 就在 K6 与 K7′ 这一对 |
+| K8′（新行） | K7′ ＋ 删掉新行那一句 | 两本 42 passed | 只剩那两条 | CAUGHT 2 红 |
+| K9 | 过滤式里摘掉 `e.seq <= cut`，只留可见性 | 两本 42 passed | 那本 ＋ `test_vote_wave.py` 三条 | CAUGHT 4 红 |
+
+**换上去的是哪一句**：同一个物理行、行号不动，取数面从"过滤后的空集"换成直接比时点——
+`tests/test_info_isolation.py` 的 221 行现在是 `assert mine.at_seq == opened_at`，旁边那句 f-string 把
+切到的那一局面号打进出口。它读的是 `percept_for` **报告**出来的那一格，正好对上上面那两把动"报告"的刀。
+
+**两半各有一具刀点名**：那个 for 循环里有两句，一句读事件、一句读时点，这一片之后它们分开挂在名册上。
+K9 在这本用例里红的是**事件那一半**，`--tb=line` 逐字打到 `tests/test_info_isolation.py:220`，那一行的谓词是
+`assert not mine.by_kind(Kind.VOTE)`，报出来的一串是 `seat 1 saw ballots cast after it opened`（这一串逐字来自
+`census266/probe266c.out` 里 `--tb=line` 那一条，不是源码字面）；K4′ 与 K7′ 顶的是**报告出来的时点**那一半。
+把 221 换形没有把 220 的证人拆掉——这一条是这片唯一能证明"没顺手改坏另一半"的读数。
+
+**为什么必须行内改**：K5 那一趟的整套名册里第三条红不是行为证人，是行号闸门自己
+（`tests/test_doc_citations.py::test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_beside_it`）——
+那一行一删，`docs/iterations.md` 的 12123 行点着的号就落空了。这条红是"那一行被归档点名过"的凭证，所以
+这一片的约束是不换行号、不增减行数：现量工作树 `tests/test_info_isolation.py` 265 行、`git show 6d95f7e:` 那一版
+也是 265 行，`tests/test_wiring.py` 两侧都是 3710 行——`6d95f7e` 是这一片动手之前那一笔提交的短 SHA。
+
+**一枚红不归这具刀**：K7′ 的整套名册有第四条 `tests/test_loopback_endpoint.py::test_a_finished_batch_prints_its_line_and_exits_0`，
+两本选集里没有它。探针单独量过（`11:14:35Z`—`11:15:19Z` 那一趟，逐字在 `census266/probe266c.out`）：那本整本
+在同一具顶零刀下 `5 passed in 23.98s`、那一条在干净树上单跑 `1 passed in 7.78s`、还原后正控制
+`1 passed in 9.34s`。它不是这具刀的证人，而**原因没有证**——那一趟 `uptime` 的三个 load averages 是
+11.67、19.60、49.99（本机 8 个逻辑核），可我没做加压复现，就不把这条红记成共驻负载所致（同族先例 `#249`）。
+两趟整套的秒数只与条数一起读：K4′ 那一趟 575.23 秒、K7′ 那一趟 274.44 秒，名单分别 3 枚与 4 枚，
+`1211+3` 与 `1210+4` 都是 1214 条——与被刀之前的整套同数，因为这一片没增删用例。
+
+**名册那一行的句子跟着对账（`tests/test_wiring.py` 两处行内散文，行数与形状都不动）**：
+`info.py::Percept.at_seq` 那一行的"留"过去只挂 `#265` 那两具刀，现在补上这一片那一对方向的读数；字段尺那条
+docstring 里原先描述旧句形状的那一段，改成点名"坐在空集过滤上、顶零照样绿，`#266` 换成直接比时点之后那本进了
+名册"。两处都只动自己那一行。
+
+**闸门（这一片的语料面）**：归档写完之后第一趟两本文档闸门是 11:28:56Z 的 `1 failed, 110 passed in 5.14s`，
+唯一那条红是读数锚闸门（`tests/test_doc_citations.py::test_no_manual_line_leans_on_head_without_naming_a_commit`）
+抓的——不是别的句子，正是这一片新写那句：它把行数读数锚在一次没点名提交的 `git show` 上。那是
+`#151` 立的规矩，这一片第一遍就撞在自己那行上；处置全在句子上（同一行改成点名 `6d95f7e`），判据一行没动。
+补完是 11:30:34Z 的 `111 passed in 4.69s`，`FAILED` 行数为零。
+最后两段（闸门、整套与 park）落笔之后把同一组加宽到五本再跑，是 11:37:25Z 的 `1 failed, 275 passed in 11.56s`：
+红的还是那一条，另外 275 条全绿，而红的那一行是**描述**第一次那处错的句子——它把被描述的形状原样贴进了扫面，
+于是自己变成这道闸门要抓的那种行。这是 `#139` 那一族（描述形状不许贴原形），第二次的处置同样只在句子上：
+两处字样都换成不贴原形的写法。三本证人（字段尺所在的 `tests/test_wiring.py`、信息隔离、投票波）在归档落笔
+之后是 11:32:40Z 的 `165 passed in 6.99s`，与归档落笔之前那一趟（同一组三本）`165 passed in 39.88s` 同数。
+收尾两趟都是同一组五本：11:40:40Z `276 passed in 12.01s`（那一趟时 park 那格还差最后一本名册），补齐名册
+之后 11:42:46Z 又跑一遍得 `276 passed in 11.42s`，两趟 `FAILED` 行数都为零；逐字回显分别在
+`census266/g266e.txt` 与 `census266/g266f.txt`。这两趟读的都是 `src/` 与两本 tests 的最终形状——这一片在
+跑它们之前就没再动过那三本，跑完之后只动过本文件。
+
+**没动的格子与为什么**：这一片动三本——`tests/test_info_isolation.py` 只有那一句被换（`git diff -U0` 的 hunk
+头逐字是 `@@ -221 +221 @@`：删一枚、加一枚、序号不动），`tests/test_wiring.py` 只有上面那两处散文，本文件
+只有末尾追加。前两本的总行数与 `6d95f7e` 那一版逐本相等（265 对 265、3710 对 3710），所以没有任何旧行号被顶，
+上面那句"`docs/iterations.md` 的 12123 行"仍然落在它点的那一行上。`src/wolfengine/info.py` 一个字节没动：
+`0f7f2e3b58cf` 从两趟电池的 PREFLIGHT、RESTORE 到这一片的现量是同一枚，被刀的是副本不是树上的产品代码。
+那一本其余的句子逐字未变，220 那句（事件那一半）的证人在两片之间没有易手。名册里另外八格"留"没有回头看——
+它们各自的背书是自己的刀，这一片没量过它们就不动；手册五页一个字没改。
+
+**整套**：11:31:25Z 起、11:32:40Z 收尾那一趟 `1214 passed in 73.86s`，`FAILED` 行数为零、skipped 为零。
+条数与 `#265` 那页的整套同数（1214），因为这一片换的是一句断言的取数面，没增删用例。秒数只与 load 一起读：
+这一趟旁边是 4.24、5.25、19.79（本机 8 个逻辑核），电池里 K4 与 K4′ 那两趟同一具顶宽的刀分别报 281.16 秒与
+575.23 秒，名单都是 3 枚——所以这一片不比秒数，只比名单。归档全部落笔之后整套再跑一遍是最终树的那一趟：
+11:46:40Z 起、11:48:05Z 收的 `1214 passed in 85.01s`，`FAILED` 行数为零、skipped 为零，旁边是
+5.25、3.82、9.38，逐字回显在 `census266/g266g.txt`。
+
+**park**：工具与逐字日志都在项目记忆目录 `census266/`，不在仓库。sha256 前十二位逐本（共 14 本，由目录内
+glob 现数）：
+`census266/knife266.py`（`265e1e7c5ccf`）与 `census266/knife266.out`（`416064aad83a`，旧行那一趟：K4、K5、K6
+加基线与还原后的两本正控制）、`census266/knife266b.py`（`41dd7bfcfbcf`）与 `census266/knife266b.out`
+（`9feb07bc974f`，新行那一趟：K4′、K5′、K7′、K8′、K9 加基线与正控制）、`census266/probe266c.py`
+（`62267e328466`）与 `census266/probe266c.out`（`4b1074fadc82`，`--tb=line` 的归属那一条与三条单跑读数）、
+`census266/g266a.txt`（`46165a6971bf`，归档之前的三本证人）、`census266/g266b.txt`（`96456ef3d42e`，抓到我
+那句没点名提交的锚的那趟红）、`census266/g266c.txt`（`64ec17711550`，同一对书补完之后那趟绿）、
+`census266/g266d.txt`（`aea4a1cea52b`，抓到我那句"描述形状贴了原形"的那趟）、`census266/g266e.txt`
+（`76cf284a87e0`）与 `census266/g266f.txt`（`38159aad8d0a`，上面收尾那两趟各一本）、
+`census266/full266.txt`（`f5ad367b42c8`，上面 11:31 那一趟整套与那三本的逐字回显，含两次 `uptime`）与
+`census266/g266g.txt`（`a26256f36441`，最终树那一趟整套，同样含首尾两次 `uptime`）。

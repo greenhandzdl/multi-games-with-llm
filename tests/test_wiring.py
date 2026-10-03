@@ -1255,7 +1255,7 @@ FIELD_TRIAGE: dict[str, str] = {
     "info.py::Percept.at_seq":
         "留：`tests/test_vote_wave.py` 里 `test_every_voter_is_asked_about_the_world_at_the_moment_the_phase_opened` "
         "与 `test_the_pk_revote_gets_its_own_cut_after_the_first_tally_goes_public` 两条把它当证人读——它记的正是"
-        "这份投影切到哪一局面。`#265` 下刀证过：把落进构造的那一格改成零，两本选集里只红这两条。"
+        "这份投影切到哪一局面。`#265` 下刀证过：把落进构造的那一格改成零，两本选集里只红这两条；`#266` 把那一本里坐在空集过滤上的一句换成直接比时点后，同一具顶零的刀多红那本的一条。"
         "`src/wolfengine/metrics.py` 与 `src/wolfengine/agent.py` 里那两处 `at_seq=` 都是 `percept_for` 的**入参**"
         "（定义在 `src/wolfengine/info.py`）不是这格的读者——同名替付账。失效方向：这格在 `Percept` 的构造里"
         "没有默认值，摘掉声明会让每一处构造当场 TypeError，而上面那两条会先失去取数面。`#157` 那一族"
@@ -1287,7 +1287,7 @@ def test_the_field_layer_names_every_zero_reader_field_and_each_carries_a_dispos
 
     `#265` 收的一格口径：标"留"的三格各自配了一具只改**读者能看见的那一格**的刀，判据是
     "该选集里只红那一条断言"。按名字归属的读数不许直接当证人用——`tests/test_info_isolation.py`
-    里那句 `b.seq <= mine.at_seq` 也读了这格，可它的过滤集合今天是空的，把时点顶成零它照样绿。
+    里那一句坐在空集过滤上（把时点顶成零它照样绿）；`#266` 把它换成直接比时点，同一具刀下那本进了名册。
     """
     roster, dead, _ = _field_defs_and_reads()
     assert len(roster) >= 250, f"字段只数到 {len(roster)} 格，多半是收集坏了"

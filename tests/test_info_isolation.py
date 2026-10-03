@@ -218,7 +218,7 @@ def test_as_of_cuts_a_voters_world_before_the_ballots_land():
     for seat in ALL_SEATS:
         mine = info.percept_for(seat, events, at_seq=opened_at)
         assert not mine.by_kind(Kind.VOTE), f"seat {seat} saw ballots cast after it opened"
-        assert all(b.actor == seat for b in ballots if b.seq <= mine.at_seq)
+        assert mine.at_seq == opened_at, f"seat {seat} cut at e{mine.at_seq}, not the phase opening"
     # ...and once the round closes, they are public — the same cut must not over-filter.
     after = info.percept_for(6, events, at_seq=ballots[-1].seq)
     assert len(after.by_kind(Kind.VOTE)) == len(ALL_SEATS)
