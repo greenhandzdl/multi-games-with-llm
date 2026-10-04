@@ -4703,3 +4703,162 @@ def test_the_manual_promises_no_wall_clock_for_a_rerun():
         "手册里还有重跑指令带着墙钟上界（格式 文件:行 原文）："
         f"{[(b[0], b[1], b[2][:46]) for b in bad]}——墙钟跟着负载走，这一格抄不动；"
         "把那个界摘掉就行，句子剩下的部分照旧")
+
+
+# ------------------------------------------------------------ 名册的主人：第四向
+# `docs/views.md` 那张〈规则 / 唯一所有者 / 回答的问题〉表今天有两个读者：`#218` 那把尺
+# （`test_the_views_rule_table_claim_reconciles_with_its_table_and_the_roster`）读的是**第一格**——
+# 行数、名字数、名单与 `VIEWING_RULES` 的键集是否同一批；`tests/test_wiring.py` 的
+# `test_the_two_views_share_one_definition_of_each_viewing_rule` 读的是**代码**——全工程只有一处
+# `def 这个名字(`，而定义它的那本必须等于名册里的 owner。中间那一格没人读：把一枚规则从一本搬进另一本时
+# 代码与名册一起改，表里那一格留着旧模块名，两把尺照旧全绿——而那一格正是读者判断"这块逻辑归谁"的入口。
+# README 的〈界面层三条规则〉那一条更早就抄走了一份分布数（总数加"几枚住在哪本"），它连第一格那样的读者
+# 都没有。对账因此取三向：表的第二格 ⇄ 名册的 owner ⇄ 手册里那句分布数的数。
+# 两把尺的面都是 `_manual_pages()`（README ＋ `docs/*.md` 减归档，今值 5 本），并要求那种主张在整张面上
+# **恰好一处**——只钉一页的话，把同一张表或同一句话抄到第二本页上就没人报（`#277` 的 K10/K11 先把这一寸
+# 量成"绿着通过"，再把它换成会红）。
+# 今值（加宽后 `07:37:46Z` 重量）：那张表只在 `views.md` 有一本、分布句只在 README 有一处；表 9 行 12 枚、
+# owner 那一格逐格与名册一致（缺陷 0），名册按 owner 分两本 9 枚与 3 枚。
+
+ROSTER_SPLIT = re.compile(r"名册 (\d+) 枚，\s*((?:\d+ 枚住在 `[a-z_]+\.py`\s*、?\s*)+)")
+ROSTER_PART = re.compile(r"(\d+) 枚住在 `([a-z_]+)\.py`")
+
+
+def _roster_owner_counts(roster: dict) -> dict[str, int]:
+    """名册按 owner 数出来的分布：`{模块 stem: 枚数}`，数的是那本里有几枚规则。"""
+    counts: dict[str, int] = {}
+    for owner, _users in roster.values():
+        counts[owner] = counts.get(owner, 0) + 1
+    return counts
+
+
+def _owner_column_cells(text: str) -> list[tuple[str, str]]:
+    """那张表的 `(规则名, owner 格里的模块 stem)`：只读前两格，第三格里的反引号词不是规则名。
+
+    与 `_rule_table_measure` 同一寸规矩——第三格写着 `` `visibility` `` 这类被点名的字段，
+    读整行会把 owner 数出第二枚来。一格里有两枚 `.py` 时按"说不清"处置（返回空串交给判据报）。
+    """
+    lines = text.splitlines()
+    if RULE_TABLE_HEADER not in lines:
+        return []
+    out: list[tuple[str, str]] = []
+    for line in lines[lines.index(RULE_TABLE_HEADER) + 2:]:
+        if not line.startswith("|"):
+            break
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        stems = re.findall(r"`([a-z_]+)\.py`", cells[1] if len(cells) > 1 else "")
+        owner = stems[0] if len(stems) == 1 else ""
+        for name in RULE_TABLE_NAME.findall(cells[0]):
+            out.append((name, owner))
+    return out
+
+
+def _owner_column_defects(pages: dict[str, str], roster: dict) -> list[str]:
+    """表的第二格 ⇄ 名册的 owner：整张手册面上这种表只许有一本，逐格比，报的每一格都点名是哪一枚、两边各说了谁。
+
+    面按 `_manual_pages()` 给（README ＋ `docs/*.md` 减归档）：把那张表抄到第二本页上就是两句主张，
+    而"谁的主人"这种问题最多只能有一个答案——抄页那一形由 `#277` 的 K11 量过它的失效方向。
+    """
+    holders = sorted(name for name, text in pages.items() if RULE_TABLE_HEADER in text)
+    if len(holders) != 1:
+        return [f"「{RULE_TABLE_HEADER}」那张表被这些页点名：{holders}，"
+                f"手册面 {len(pages)} 本上要恰好一本才有东西可对账"]
+    page = holders[0]
+    cells = _owner_column_cells(pages[page])
+    if not cells:
+        return [f"找不到「{RULE_TABLE_HEADER}」那张表的 owner 格：判据的语料落空了，无东西可对账"]
+    bad: list[str] = []
+    for name, owner in cells:
+        if name not in roster:
+            bad.append(f"{page} 表里点名 `{name}`，`VIEWING_RULES` 里没有这一枚")
+        elif owner != roster[name][0]:
+            bad.append(f"{page} 的 `{name}` 那行写的主人是 {owner or '一格空缺'}，"
+                       f"名册与代码说的是 `{roster[name][0]}.py`")
+    return bad
+
+
+def _roster_split_defects(pages: dict[str, str], counts: dict[str, int]) -> list[str]:
+    """手册里那句分布数 ⇄ 名册数出来的分布：总数、点到的模块名单、每本几枚，三样分开报。"""
+    hits = [(name, found) for name, text in sorted(pages.items()) for found in ROSTER_SPLIT.findall(text)]
+    if len(hits) != 1:
+        return [f"「名册 N 枚，M 枚住在 …」那一句在手册面（{len(pages)} 本）上有 {len(hits)} 处"
+                f"（点名：[{'、'.join(n for n, _ in hits) or '无'}]），要恰好一处才有东西可对账"
+                f"（名册现数 {sum(counts.values())} 枚）"]
+    page, (total, parts) = hits[0]
+    named = {mod: int(n) for n, mod in ROSTER_PART.findall(parts)}
+    bad: list[str] = []
+    if int(total) != sum(counts.values()):
+        bad.append(f"{page} 那句写的总数是 {total}，名册现数 {sum(counts.values())} 枚")
+    if set(named) != set(counts):
+        bad.append(f"{page} 那句点到这些模块 {sorted(named)}，名册里的 owner 是 {sorted(counts)}")
+    for mod, n in sorted(named.items()):
+        if mod in counts and counts[mod] != n:
+            bad.append(f"{page} 那句里 `{mod}.py` 写 {n} 枚，名册数出来是 {counts[mod]} 枚")
+    return bad
+
+
+def test_the_views_rule_table_names_the_module_that_owns_each_rule():
+    """表的〈唯一所有者〉那一格要说的是真主人：与 `VIEWING_RULES` 的 owner 逐格对账，且那种表面上只许有一张。"""
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    defects = _owner_column_defects(pages, VIEWING_RULES)
+    assert not defects, f"〈唯一所有者〉那一格与名册不是一批：{defects}"
+
+
+def test_the_manuals_distribution_of_the_viewing_roster_matches_the_roster():
+    """手册抄走的那份分布数由名册现数：总数、每本几枚、两头的模块名单三样都要合。"""
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    defects = _roster_split_defects(pages, _roster_owner_counts(VIEWING_RULES))
+    assert not defects, f"手册那句名册分布数与名册对不上：{defects}"
+
+
+def test_the_roster_reconciler_fires_on_the_owner_cell_and_on_each_wrong_number():
+    """两把尺各钉自己的反面：合法那一形放过，搬了家没改格、数写歪、模块名单合不拢、跨页抄第二份都要点名。"""
+    roster = {"shown_events": ("render_html", []), "is_dawn": ("events", [])}
+    ok = ("| 规则 | 唯一所有者 | 回答的问题 |\n"
+          "|---|---|---|\n"
+          "| `shown_events` | `render_html.py` | 观众能看见哪些事件 |\n"
+          "| `is_dawn` | `events.py` | 哪一夜算没人倒下 |\n")
+    assert _owner_column_defects({"views.md": ok}, roster) == [], "合法的那一形一格都不许报"
+
+    moved = ok.replace("`is_dawn` | `events.py`", "`is_dawn` | `render_html.py`")
+    bad = _owner_column_defects({"views.md": moved}, roster)
+    assert len(bad) == 1 and "`is_dawn`" in bad[0] and "render_html" in bad[0] and "events" in bad[0], (
+        f"格子写错主人要点名是哪一枚、格子里写的与名册说的各是什么：{bad}")
+
+    stranger = ok.replace("`is_dawn` | `events.py`", "`night_waves` | `events.py`")
+    bad = _owner_column_defects({"views.md": stranger}, roster)
+    assert any("night_waves" in d for d in bad), f"表里点名了名册没有的要报出来：{bad}"
+
+    assert _owner_column_defects({"views.md": "这一页上没有那张表。"}, roster) != [], \
+        "语料落空要说一声，不能让判据在空集上假绿"
+
+    assert _owner_column_defects({"views.md": ok, "comparison.md": ok}, roster) != [], \
+        "同一张表抄到第二本页上就是两个主人，要报出来而不是各读各的"
+
+    counts = {"render_html": 2, "events": 1}
+    legal = "回答这几问的函数每枚只有一份定义；整本名册 3 枚，2 枚住在 `render_html.py`、1 枚住在 `events.py`"
+    assert _roster_split_defects({"README.md": legal}, counts) == [], "合法的那一句一格都不许报"
+
+    for twist, want in (("名册 3 枚", "名册 4 枚"), ("2 枚住在 `render_html.py`", "3 枚住在 `render_html.py`")):
+        bad = _roster_split_defects({"README.md": legal.replace(twist, want)}, counts)
+        assert bad, f"{want} 那种写歪的数必须报：{bad}"
+
+    single = legal.replace("2 枚住在 `render_html.py`、1 枚住在 `events.py`", "3 枚住在 `events.py`")
+    bad = _roster_split_defects({"README.md": single}, counts)
+    assert any("render_html" in d for d in bad), (
+        f"名册里有两本而句子只点一本，那本藏起来的要报出来：{bad}")
+
+    wrapped = legal.replace("；整本名册 3 枚，2 枚住在", "；整本名册 3 枚，\n   2 枚住在").replace(
+        "`render_html.py`、1 枚住在", "`render_html.py`、\n   1 枚住在")
+    assert _roster_split_defects({"README.md": wrapped}, counts) == [], \
+        "手册那一句要按行宽折行，换行加缩进不许把它读成缺席"
+
+    assert _roster_split_defects({"README.md": "这一页没有那句话。"}, counts) != [], \
+        "句子缺席也是缺陷，不是放过"
+
+    assert _roster_split_defects({"README.md": legal, "views.md": legal}, counts) != [], \
+        "同一句分布数抄到第二本手册页上就是两句主张，要报出有几处、分别在哪一本"
+
+    twice = legal + "\n" + legal
+    assert _roster_split_defects({"README.md": twice}, counts) != [], \
+        "同一页上有两份一模一样的分布数就是两句主张，要点名哪一份算数，不许各读各的"
