@@ -141,7 +141,7 @@ from pathlib import Path
 
 from conftest import git_history_is_shallow
 from test_wiring import VIEWING_RULES  # 名册住在它的主人那一本，不抄第二份
-from wolfengine import cli
+from wolfengine import cli, metrics  # 阈值表的主人：判据现读它，不抄第二份
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = sorted((ROOT / "docs").glob("*.md")) + [ROOT / "README.md"]
@@ -4075,3 +4075,178 @@ def test_the_manual_still_says_that_data_artifacts_do_not_ship():
     assert len(rows) >= 2, (
         f"手册里同时点到 `data/` 和不入库的那句话只剩 {len(rows)} 句，整本都不再声明产物目录不随仓库发布："
         f"{[(r[0], r[1]) for r in rows]}")
+
+
+# ---------------------------------------------------------------------------
+# `#273`：手册里手写的阈值与 `metrics.M3_GATE` 对账（`#45` 那本闸门的浮点那一半）
+
+ADJ_THRESHOLD = re.compile(r"([a-z_][a-z0-9_]{3,})\s*([<>]=?|==)\s*(\d+(?:\.\d+)?)")
+BARE_THRESHOLD = re.compile(r"([<>]=?|==)\s*(\d+\.\d+)(?![\d.])")
+IDENT_BEFORE = re.compile(r"([a-z_][a-z0-9_]{3,})\s*$")
+FLIP_OP = {"<": ">", ">": "<", "<=": ">=", ">=": "<=", "==": "!="}
+
+
+def _gate_table() -> dict[str, tuple[str, float]]:
+    """代码那一侧的阈值表现读一次。判据里不抄第二份——`#153` 立的"只住一处"搬到数上。"""
+    return {key: (op, float(val)) for key, (op, val) in metrics.M3_GATE.items()}
+
+
+def _paired_gate_names(pages: dict[str, str]) -> set[str]:
+    """手册里以「名字紧挨着自己的比较符和数」出现过、且与表一致的那几枚判据名。"""
+    table = _gate_table()
+    paired: set[str] = set()
+    for text in pages.values():
+        for line in text.splitlines():
+            for m in ADJ_THRESHOLD.finditer(line):
+                key, op, num = m.group(1), m.group(2), float(m.group(3))
+                if key in table and (op, num) == table[key]:
+                    paired.add(key)
+    return paired
+
+
+def _threshold_defects(pages: dict[str, str]) -> list[tuple[str, int, str, str, str]]:
+    """手册里「比较符 + 数」形状的阈值主张，逐条与表对账；返回 (页, 行, 写下的, 表里的, 方向)。
+
+    两形各管一个方向，合起来的红线是**不认没有主人的数**：
+
+    - 相邻形 `passivity_rate<0.4`：主人就写在比较符前面，于是方向和数值都得对表。只比数会放过
+      "符号抄反"那一张假合格证——`<` 的沉默桌和 `>` 的沉默桌是两个相反的结论。
+    - 裸形 `<0.35`：数单独出现时，按 `#272` 给 `§N` 指针立的"本句证人"规矩，同一句必须点名它是
+      **哪一枚**判据的阈值，而且比较符的方向也要和表一致。主人是拿这个数反查表得到的，不是"这句里
+      有没有别的判据名"：隔壁那句写着 `collapse_round` 不能给 `passivity_rate` 的数背书（`#108`、
+      `#263` 的钝词教训）。
+    - 相邻形的主人不在表里时（一个假键名配上表里的数）不当作相邻形放过，而是退回裸形那一支——
+      于是 `not_a_gate<0.4` 仍然要红，"名字看着像"不成为豁免。
+
+    两格登记成边界、不是漏网：
+
+    - 数不在表里就不归这一族。手册五本里带比较符的小数绝大多数是实测读数（`0.2037`、`4.4` 这一
+      类），它们的主人是日志和 `#45` 那本 `key=出厂值` 闸门；把这一支加宽到"任何小数"等于让尺子
+      去管表外的东西，代价是每一条散文都得先自证不是阈值。
+    - 裸形只收小数：整数比较（`> 1`、`== 0`、`< 6`）在手册里到处都是。表里 `context_overflows`
+      那一枚因此只能靠相邻形核对，这一条由〈每一条预注册判据〉那条用例钉住写法。
+
+    已知放过的一格：本句有主时，判据不分辨那条比较是"阈值"还是"恰好等于阈值的实测值"——同值的
+    时候它就是一个有主人的数。放行的代价是少核一处，比误伤一条常红的守卫便宜（沿用 `#45`）。
+    """
+    table = _gate_table()
+    owners: dict[float, set[str]] = {}
+    for key, (_op, val) in table.items():
+        owners.setdefault(val, set()).add(key)
+
+    rows: list[tuple[str, int, str, str, str]] = []
+    for name, text in pages.items():
+        lines = text.splitlines()
+        for idx, line in enumerate(lines):
+            for m in ADJ_THRESHOLD.finditer(line):
+                key, op, num = m.group(1), m.group(2), float(m.group(3))
+                if key not in table:
+                    continue
+                t_op, t_val = table[key]
+                if (op, num) != (t_op, t_val):
+                    rows.append((name, idx + 1, m.group(0), f"{key}{t_op}{t_val:g}",
+                                 "相邻形与表不一致"))
+            for m in BARE_THRESHOLD.finditer(line):
+                prior = IDENT_BEFORE.search(line[:m.start()])
+                if prior is not None and prior.group(1) in table:
+                    continue  # 这一格交给上面那支，它连方向一起核
+                num = float(m.group(2))
+                wanted = owners.get(num)
+                if not wanted:
+                    continue
+                names = set(ASCII_TOK.findall(_cited_sentence(lines, idx, m.start())))
+                paired_with = sorted(wanted & names)
+                if not paired_with:
+                    rows.append((name, idx + 1, m.group(0),
+                                 " 或 ".join(f"{k}{table[k][0]}{num:g}" for k in sorted(wanted)),
+                                 "裸形没有本句主人"))
+                elif not any(table[k][0] == m.group(1) for k in paired_with):
+                    rows.append((name, idx + 1, m.group(0),
+                                 " 或 ".join(f"{k}{table[k][0]}{num:g}" for k in paired_with),
+                                 "裸形比较符与表相反"))
+    return rows
+
+
+def test_the_threshold_gate_pairs_a_number_with_its_criterion():
+    """判据先要站在自己划的那条线上：六形开火、四形放过，正确形的字符串是从表里现读拼出来的。
+
+    这条用例写完即绿——十组形状是逐条对着真语料那几格验过才抄进来的，它的牙由 `#273` 的电池还
+    账：K1 摘掉「数不等」那一半 → 错数那组全绿；K2 摘掉「比较符不等」 → 抄反方向的两组全绿（相邻
+    与裸形各是一支判据，合起来才叫对表）；K3 把"本句有主"换成"这句里有任一判据名" → 指鹿为马那组
+    全绿，正是 `#108`/`#263` 量过的钝词背书；K4 把相邻形的豁免放宽成"比较符前面有名字就行" →
+    假键名那组全绿；K5 整支关掉裸形 → 无主、指鹿为马、假键名、裸形反向四组全绿；K6 把裸形加宽到
+    整数 → 放过整数那组开火，那正是把尺子指错东西的方向；K7 让地板的配对不核数值 → 后两条断言
+    当场红；K8 把 `_gate_table` 换成手抄的第二份 → 内容相同时不红（等价变异，登记在归档），改错
+    一枚数就红——"抄第二份"本身不可见，只有分歧才红。
+    """
+    table = _gate_table()
+    keys = sorted(table)
+    off = {k: f"{v + 0.017:.6f}".rstrip("0") for k, (_o, v) in table.items()}
+    n_keys = len(keys)
+    assert not ({float(x) for x in off.values()} & {v for _o, v in table.values()}), \
+        "夹具里当作「表外数」用的那个偏移撞上了表里的阈值，两组形状的区分度作废"
+
+    cells = {
+        "adjacent_ok": [f"闸门读 `{k}{table[k][0]}{table[k][1]:g}`。" for k in keys],
+        "adjacent_flipped_op": [f"闸门读 `{k}{FLIP_OP[table[k][0]]}{table[k][1]:g}`。" for k in keys],
+        "adjacent_wrong_num": [f"闸门读 `{k}{table[k][0]}{off[k]}`。" for k in keys],
+        "bare_owned": [f"`{k}` 那一格在 `{table[k][0]}{table[k][1]}` 上是假合格证。" for k in keys],
+        "bare_flipped_op": [f"`{k}` 那一格在 `{FLIP_OP[table[k][0]]}{table[k][1]}` 上是假合格证。"
+                            for k in keys],
+        "bare_unowned": [f"这张桌在 `{table[k][0]}{table[k][1]}` 上是一张假合格证。" for k in keys],
+        "bare_wrong_owner": [f"`{keys[(i + 1) % n_keys]}` 那一格在 `{table[k][0]}{table[k][1]}` 上"
+                             f"是一张假合格证。" for i, k in enumerate(keys)],
+        "bare_off_table": [f"这一句只写 `{off[k]}`，它不是表里的阈值。" for k in keys],
+        "bare_fake_key": [f"旧写法 `not_a_gate<{table[k][1]}` 已经没人这么写了。" for k in keys],
+        "bare_int_forms": ["整数比较 `> 1`、`== 0`、`< 6` 三种都不归这一族。"],
+    }
+    pages = {name: "\n\n".join(paras) for name, paras in cells.items()}
+    rows = _threshold_defects(pages)
+    counts: dict[str, int] = {}
+    for r in rows:
+        counts[r[0]] = counts.get(r[0], 0) + 1
+    n = n_keys
+    assert counts == {"adjacent_flipped_op": n, "adjacent_wrong_num": n, "bare_flipped_op": n,
+                      "bare_unowned": n, "bare_wrong_owner": n, "bare_fake_key": n}, \
+        f"六形该开火、四形该放过，逐格名册：{[(r[0], r[1], r[2], r[3]) for r in rows]}"
+    assert {r[4] for r in rows} <= {"相邻形与表不一致", "裸形没有本句主人",
+                                   "裸形比较符与表相反"}, \
+        f"开火的格子都该落在这三支判据上：{[(r[0], r[4]) for r in rows]}"
+    assert _paired_gate_names({"adjacent_ok": pages["adjacent_ok"]}) == set(keys), \
+        "相邻形写对的那一组里，五枚都该被算成'名字挨着自己的数'——地板的取词不认就没人红"
+    assert _paired_gate_names({"a": pages["adjacent_flipped_op"],
+                               "b": pages["adjacent_wrong_num"]}) == set(), \
+        "抄反方向和写错数那两组里一枚都不该配对成功，否则地板会被错号顶过"
+    for key in keys:
+        hit = [r for r in rows if r[0] == "adjacent_flipped_op" and r[2].startswith(key)]
+        assert hit and hit[0][3] == f"{key}{table[key][0]}{table[key][1]:g}", \
+            f"{key} 那格的「表里的写法」没点名比较符，改方向的红会失去依据：{hit}"
+
+
+def test_no_manual_page_writes_a_threshold_without_its_criterion():
+    """五本手册页里每一条阈值主张都该与表一致，或至少在同一句点名自己核的是哪一枚、方向对不对。
+
+    这是 `#45` 的下半场：`key=出厂值` 那一族有闸门了，`<0.4`、`需 < 0.35` 这种"只写比较符和数"
+    的写法还是没人对账。表改一枚阈值，报告里的"需 X"跟着走（`batch.py` 循环 `M3_GATE`），散文里
+    那句不会——于是手册安静地变成假话，而它是给人照抄的那一本。
+    """
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    rows = _threshold_defects(pages)
+    assert not rows, (
+        "手册里的阈值主张与 `metrics.M3_GATE` 不一致，或写了数却没在同一句点名是哪一枚判据"
+        f"（格式 页:行 写下的 表里的 方向）：{[(r[0], r[1], r[2], r[3], r[4]) for r in rows]}")
+
+
+def test_every_preregistered_criterion_is_written_by_name_in_the_manual():
+    """五条预注册判据，每一条都至少在手册里以「名字紧挨着自己的数」出现过一次。
+
+    为什么要这块地板：相邻形是这一族唯一同时钉住数值和方向的形状，而裸形那一支只认小数。一条判据
+    在手册里只剩人话描述时（`latency_p95_s` 写作"单轮 p95<20s"、`context_overflows` 写作"0 次
+    context 400"），两支判据都看不见它：`p95` 短于取名形状，`20s` 与 `400` 不带小数点。改那一枚
+    阈值就不会让任何东西变红。余量取"整本手册至少一次"而不是"每一本一次"：把五枚摊进五本会让
+    别的页变成表的抄本，而那正是 `#153` 收掉的东西。
+    """
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    missing = set(metrics.M3_GATE) - _paired_gate_names(pages)
+    assert not missing, (
+        f"手册里再没有「名字+比较符+数」形状的这一枚判据，改它的阈值没人红：{sorted(missing)}")

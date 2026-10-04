@@ -293,7 +293,7 @@ append，冲洗只随"又多折了一天"发生，上界就是 `max_days`（plan
 `dup_exact6_mean`、`opening_distinct_mean`），`worst_round` 单独留全量数据。
 **主判据不按轮取均值**：`passivity_pooled` 是"被动次数 ÷ 全部次数"，因为一个 2 人轮和一个 9 人轮
 在均值里同权重——同一局里两者能对出两个数（`#102`：真日志 `g00000301` 三轮规模 9/2/7，audit 读
-0.2037、闸门读 0.1111；构造的 9+1 两轮则是 0.2778 对 0.5，而阈值是 `<0.4`，正好一边一个判法）。
+0.2037、闸门读 0.1111；构造的 9+1 两轮则是 0.2778 对 0.5，而 `passivity_rate` 的阈值是 `<0.4`，正好一边一个判法）。
 每轮的速率仍然逐轮留在 `rounds[]` 里，看最塌缩的那一轮要看 `worst_round`，不是看头条。
 这一格旁边印的就是闸门那三条阈值，所以它必须与 `m3_gate_verdict` 出自同一次算术：三条判据的
 每轮读数、按轮均值、按次合并分别只写在 `round_readings`、`round_mean`、`pooled_passivity` 一处。
@@ -361,7 +361,7 @@ append，冲洗只随"又多折了一天"发生，上界就是 `max_days`（plan
 
 **M3★ 闸门判定（`m3_gate_verdict(games)`）**：计划 §十 那行预注册了五条
 （`passivity_rate<0.4` 主判据、`collapse_round<0.35`、`opening_distinct_rate>0.8`、单轮
-p95<20s、0 次 context 400），在此之前这些数字只被**打印**过，比大小留给人做。现在批级判定
+p95 写作 `latency_p95_s<20.0`、0 次 context 400 写作 `context_overflows<=0`），在此之前这些数字只被**打印**过，比大小留给人做。现在批级判定
 是一个函数返回值，`compare` 按臂各算一份并落在胜率表下面——一臂没过闸门时，它下面的 bootstrap
 区间描述的是一个不值得对比的东西，这句话要在数字之前出现。**单臂批次也印**：`run_batch` 收尾时调
 `batch.emit_gate()` 写 `<批次目录>/m3_gate.md`，渲染走的是与 `comparison.md` 那一份同一个 `_m3_md`，
@@ -390,7 +390,7 @@ p95<20s、0 次 context 400），在此之前这些数字只被**打印**过，�
   与 59/60）。谓词只有一只：`metrics.truncated_call`（`#92`），`m7_cost_profile` 的两格与这块读数都
   从它取，`None`（端点没报 `finish_reason`）与"报了、没被切"永远分得开。
 
-阈值表 `M3_GATE` 是唯一来源（`m5_style` 的 `gate`、判定函数、报告里的"需 < 0.35"三处都读它）。
+阈值表 `M3_GATE` 是唯一来源（`m5_style` 的 `gate`、判定函数、报告里 `collapse_round` 那一行的"需 < 0.35"三处都读它）。
 
 **M6 belief→action**：**必须分阵营**。好人 `consistency_good = mean(1[target ∈ 自报 suspects[:2]])`
 （k=2 预注册），狼 `divergence_wolf = mean(1[target ∉ :2])`——**狼的 divergence 高才是玩得好**，
