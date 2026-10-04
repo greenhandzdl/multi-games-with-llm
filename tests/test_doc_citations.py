@@ -4447,3 +4447,259 @@ def test_every_narrow_code_citation_in_the_manual_lands_on_a_src_name():
         assert census[bucket] >= floor, (
             f"豁免「{bucket}」今天没有语料读者（{census[bucket]} 格）：要么手册里的形状变了，"
             "要么这一支豁免该摘掉——留着没人走的门就是 `#274` 那把尺子的第三只眼睛")
+
+
+# ---------------- 套件里"拿真实时钟做断言"的那几枚要逐枚在册（`#276`）
+# README〈测试〉那一节写着「所以它仍是全仓库唯一能分辨"真的睡了"和"默认值被换成了空操作"的一条」，
+# `tests/test_live_path.py` 里那段注释写着「one duration assertion is enough to catch a no-op sleep」。
+# 两句都是全称主张。06:17:09Z 现测的账面：`monotonic`／`perf_counter`／`time.time` 三枚词根在 tests/
+# 只命中两处取时（`test_live_path.py` 与 `test_agent_turns.py`），而仓库里没有任何尺子问过
+# "这些断言比的是不是真实时钟"——加一条下界断言、或把这一条改成注入值，两处主张都会一字不改地继续绿。
+# 下界与上界必须分开数：`took >= 4.4` 否证"退避被换成空操作"，`elapsed < 5` 否证"deadline 没开火"，
+# 后者对 no-op sleep 完全无感，所以它不是 README 那一句的第二个证人。
+
+CLOCK_ATTRS = ("monotonic", "perf_counter", "time")
+LOWER_OPS = (ast.Gt, ast.GtE)
+UPPER_OPS = (ast.Lt, ast.LtE)
+
+
+def _reads_clock(node: ast.expr | None) -> bool:
+    return node is not None and any(
+        isinstance(c, ast.Attribute) and c.attr in CLOCK_ATTRS for c in ast.walk(node))
+
+
+def _case_chain(node: ast.AST, parents: dict[ast.AST, ast.AST]) -> list[str]:
+    """这条节点所在的用例名，从最内层往外排，末尾是 `<module>`。
+
+    取最内层那一个是为了**只数一次**：外层函数体里嵌套的 helper 也在外层的子树里，
+    按子树遍历会把同一条断言记两遍。链一起返回是因为闭包真会读外层的时钟量
+    （`took` 在用例体里算、在 helper 里比），只认最内层的作用域会把它漏成"没这条断言"。
+    """
+    out: list[str] = []
+    cur = node
+    while cur in parents:
+        cur = parents[cur]
+        if isinstance(cur, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            out.append(cur.name)
+    return out + ["<module>"]
+
+
+def _real_clock_asserts(sources) -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str]]]:
+    """(下界名册, 上界名册)，每格是 `(文件名, 用例名, 变量名)`，各自按源码顺序排。
+
+    只有一侧是时钟导出量、另一侧不是的**断言**才进账：`if` 问时间、只取值不比较、
+    两侧都是时钟量（比的是两个采样点之差，不是"等了多久"）都不算。方向从"时钟量在那一侧"
+    推，而不是从"它写在左边还是右边"推，所以 `4.4 <= took` 与 `took >= 4.4` 归同一档。
+    """
+    out: list[tuple[int, tuple[str, str, str]]] = []
+    for order, (name, text) in enumerate(sources):
+        tree = ast.parse(text)
+        parents: dict[ast.AST, ast.AST] = {}
+        for node in ast.walk(tree):
+            for child in ast.iter_child_nodes(node):
+                parents[child] = node
+        clock: dict[str, set[str]] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Assign, ast.AnnAssign)) and _reads_clock(node.value):
+                targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+                for tgt in targets:
+                    if isinstance(tgt, ast.Name):
+                        clock.setdefault(_case_chain(node, parents)[0], set()).add(tgt.id)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assert) or not isinstance(node.test, ast.Compare):
+                continue
+            chain = _case_chain(node, parents)
+            seen: set[str] = set()
+            for case in chain:
+                seen |= clock.get(case, set())
+            operands = [node.test.left, *node.test.comparators]
+            for i, (a, op, b) in enumerate(zip(operands, node.test.ops, operands[1:])):
+                def is_clock(e: ast.expr) -> bool:
+                    return (isinstance(e, ast.Name) and e.id in seen) or _reads_clock(e)
+
+                if is_clock(a) == is_clock(b):
+                    continue
+                is_lower = isinstance(op, LOWER_OPS) if is_clock(a) else isinstance(op, UPPER_OPS)
+                var = next(e.id for e in (a, b) if isinstance(e, ast.Name) and is_clock(e)) \
+                    if any(isinstance(e, ast.Name) and is_clock(e) for e in (a, b)) else "<call>"
+                out.append((order, node.lineno, i, 0 if is_lower else 1,
+                            (name, chain[0], var)))
+    lower = [cell for _, _, _, side, cell in sorted(out, key=lambda r: r[:4]) if side == 0]
+    upper = [cell for _, _, _, side, cell in sorted(out, key=lambda r: r[:4]) if side == 1]
+    return lower, upper
+
+
+def test_the_clock_assertion_scanner_splits_lower_from_upper_bounds():
+    """合成语料：五形该进下界、两形该进上界、五形都不该进。`#276`。
+
+    钉的是"名字像不像耗时"以外的东西——只有从真实时钟一步算出来的量才算：注入进夹具的
+    `latency_total_s`、手写的定长、只取值不比较的那一行，全都长得像耗时，而它们对 no-op sleep
+    一个都不敏感（`#159` 那一族的口径：判据要认得出处，不能只认名字）。链式比较同时主张了两件事，
+    所以两个方向各进一次。闭包读外层那个时钟量也算，归最内层那个 def——按子树遍历会把它记两遍，
+    所以归属取"离断言最近的那个 def"，名册按源码顺序排。带注解的绑定（`spent: float = …`）是同一次
+    读数而不是另一形，取名单那一支要同时认 `Assign` 与 `AnnAssign`。
+    """
+    src = '''
+import time
+
+
+async def test_lower_bound_catches_a_no_op_sleep():
+    started = time.monotonic()
+    await run()
+    took = time.monotonic() - started
+    assert took >= 4.4
+
+
+def test_reversed_write_is_still_a_lower_bound():
+    started = time.perf_counter()
+    dt = time.perf_counter() - started
+    assert 4.4 <= dt
+
+
+def test_an_annotated_binding_is_the_same_clock_reading():
+    start = time.monotonic()
+    spent: float = time.monotonic() - start
+    assert spent >= 2.0
+
+
+def test_upper_bound_catches_a_deadline_that_never_fired():
+    started = time.monotonic()
+    elapsed = time.monotonic() - started
+    assert elapsed < 5
+
+
+def test_a_chained_window_counts_both_ways():
+    started = time.monotonic()
+    took = time.monotonic() - started
+    assert 1 < took < 9
+
+
+def test_closure_reads_the_outer_clock():
+    started = time.monotonic()
+    took = time.monotonic() - started
+
+    def helper():
+        assert took >= 1
+    return helper
+
+
+def test_instrumented_number_is_not_a_real_clock():
+    assert out["latency_total_s"] == 9.0
+
+
+def test_a_plain_number_named_like_a_duration_does_not_count():
+    took = 9.0
+    assert took >= 4.4
+
+
+def test_time_is_read_but_never_compared():
+    started = time.monotonic()
+    return started
+
+
+def test_a_ratio_of_injected_numbers_is_not_a_clock():
+    assert 2.0 < a / b
+
+
+def test_an_if_asking_about_time_is_not_an_assertion():
+    started = time.monotonic()
+    took = time.monotonic() - started
+    if took > 4.4:
+        log.warn("slow")
+'''
+    lower, upper = _real_clock_asserts([("syn.py", src)])
+    assert lower == [("syn.py", "test_lower_bound_catches_a_no_op_sleep", "took"),
+                     ("syn.py", "test_reversed_write_is_still_a_lower_bound", "dt"),
+                     ("syn.py", "test_an_annotated_binding_is_the_same_clock_reading", "spent"),
+                     ("syn.py", "test_a_chained_window_counts_both_ways", "took"),
+                     ("syn.py", "helper", "took")], f"该进下界的五形：{lower}"
+    assert upper == [("syn.py", "test_upper_bound_catches_a_deadline_that_never_fired", "elapsed"),
+                     ("syn.py", "test_a_chained_window_counts_both_ways", "took")], \
+        f"该进上界的两形：{upper}"
+
+
+def test_exactly_one_case_in_the_suite_asserts_that_time_was_actually_spent():
+    """README 那句「全仓库唯一能分辨"真的睡了"和"默认值被换成了空操作"的一条」从此有了名册。`#276`。
+
+    06:20:29Z 现量的面：tests 那 48 本 `test_*.py` ＋ scripts 的 1 本 ＋ src 的 28 本，合 77 本。
+    下界一枚、上界一枚，都在 tests 里：前者比的是 `took`（端点不可用那一局，等完 `1.5 + 3.0`
+    两次退避），后者比的是 `elapsed`（挂死的席位那一局，问的是 deadline 开没开火）。
+    上界那一枚不是 README 那句话的第二个证人——它对"睡被换成空操作"完全无感，所以分开数。
+    """
+    files = [*TEST_FILES, *sorted((ROOT / "scripts").glob("*.py")),
+             *sorted((ROOT / "src").rglob("*.py"))]
+    assert len(files) >= 70, (
+        f"面塌到 {len(files)} 本了，下面那两句'唯一'就只是没看见东西")
+    lower, upper = _real_clock_asserts(
+        [(f.name, f.read_text(encoding="utf-8")) for f in files])
+    assert lower == [("test_live_path.py",
+                      "test_an_unreachable_endpoint_aborts_without_inventing_nine_seats_of_behaviour",
+                      "took")], (
+        f"下界那一枚必须真是唯一一枚——多一枚 README 那句「全仓库唯一」就断了，少一枚它是假话：{lower}")
+    assert upper == [("test_agent_turns.py",
+                      "test_a_hung_seat_is_skipped_and_the_turn_still_costs_one_deadline",
+                      "elapsed")], (
+        f"上界那一枚换了用例名或换了量，同一句里的方向区分要一起改：{upper}")
+
+
+# -------------------------------------------- 手册里"重跑这一片要几秒"的墙钟承诺（`#276` 的下半场）
+# README 的〈测试〉一节写着「**墙钟不是账**：同一份套件在负载不同的时候能差一倍」，同一节里却坐着四处
+# 拿墙钟当长期承诺的句子：数词紧贴"秒"，界落在重跑／复现／重生成的指令里（动词在前在后都算）。
+# `#162` 那一族把「数到 **N**」与「N passed」赶出了手册，注释里明写「秒数那一形不进判据」——那句对：
+# 延迟语料里的秒数是产品常数。但它盖不住"敲这条命令要多久"这一形：那一形承诺的是**本机负载**，不是
+# 端点，也不是仓库的性质。今天的现量（两趟同本单跑、以及它们各自的时刻）记在 `docs/iterations.md`
+# 的 `#276` 那一节，判据要的只是"这一形别再住进手册"，不是"重数它现在几秒"。
+
+RERUN_VERB = re.compile(r"重跑|复现|重生成")
+DURATION_BOUND = re.compile(r"(?:[0-9]+(?:\.[0-9]+)?|[一二两三四五六七八九十]|半)\s*秒")
+
+
+def _rerun_cost_lines(pages: dict[str, str]) -> list[tuple[str, int, str]]:
+    """同一行里既有"敲这条命令"的动词、又有"几秒"的界，就报出来。返回 `(页, 行, 原文)`。"""
+    bad: list[tuple[str, int, str]] = []
+    for page, text in pages.items():
+        for no, line in enumerate(text.splitlines(), 1):
+            if RERUN_VERB.search(line) and DURATION_BOUND.search(line):
+                bad.append((page, no, line.strip()))
+    return bad
+
+
+def test_the_wall_clock_shape_needs_a_rerun_verb_and_a_number():
+    """两半都要在场才报：只有秒数的是实测记录，只有"秒"字的是术语。
+
+    第 5–10 行各钉一种"看着像但不是"的放过：第 5 行是合规改写后的形状（动词在场、没有数），
+    第 8 行是 `秒 + seed`——局号那一句里的"秒"是一个字段名，前后都没有数；第 6、7 行是**一次具体跑次**
+    的记录（`实跑，10.8 秒`、`探过：2 秒内没有 TCP 响应`），它们没有重跑动词，说的是过去而不是承诺。
+    这一格放过的价：跨行的句子读不到（动词在上一行、秒数在下一行），与 `#169` 给判决读数登记过的那处
+    不对称同形——这里按行扫，所以第 3 行那种"界在动词前面"必须同一行才算。
+    """
+    pages = {"probe.md": "\n".join([
+        "重跑这一片（一秒内，不发请求）：",
+        "重跑：`.venv/bin/pytest tests/test_probe.py`（9 条，半秒内，不发请求）。",
+        "下面那条 `--mock` 命令 0.3 秒重生成一批合成桌",
+        "复现：`wolf batch --games 4 --mock --out /tmp/p`（全程 20 秒）",
+        "重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_probe.py`（不发请求；"
+        "墙钟跟着机器负载走，所以这里不写秒数）。",
+        "（实跑，10.8 秒、零 API 调用）末尾印的\"成本合计\"",
+        "（探过：2 秒内没有 TCP 响应）；在此之前这块的形状由伪造日志钉住",
+        "这一条的 `--seed` 不是装饰：局号是「秒 + seed」，上面那条刚在 `data` 里写过 7 号",
+        "**墙钟不是账**：同一份套件在负载不同的时候能差一倍，秒数只用来判断「跑完了没有」。",
+        "重跑：`.venv/bin/pytest tests/test_probe.py`（9 条，不发请求）。",
+    ])}
+    bad = _rerun_cost_lines(pages)
+    assert [b[1] for b in bad] == [1, 2, 3, 4], \
+        f"只有前四行该报——后六行分别是合规改写、实测记录、字段名与规矩本身：{bad}"
+
+
+def test_the_manual_promises_no_wall_clock_for_a_rerun():
+    """五本手册页里，重跑指令不许带墙钟上界（`#276`）。
+
+    失效方向写清楚：这类句子错了不会让任何一条断言变红——它既不是收集数也不是阈值，机器负载一变
+    它就假，而手册每笔提交都要人照抄。所以处置是**把界摘掉**、不动那句"不发请求"和那些有条数闸门
+    钉着的计数，也不重数一个"今天几秒"的新界。
+    """
+    bad = _rerun_cost_lines({f.name: f.read_text(encoding="utf-8") for f in _manual_pages()})
+    assert not bad, (
+        "手册里还有重跑指令带着墙钟上界（格式 文件:行 原文）："
+        f"{[(b[0], b[1], b[2][:46]) for b in bad]}——墙钟跟着负载走，这一格抄不动；"
+        "把那个界摘掉就行，句子剩下的部分照旧")

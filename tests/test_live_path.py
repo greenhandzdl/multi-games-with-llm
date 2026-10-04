@@ -131,12 +131,12 @@ async def test_an_unreachable_endpoint_aborts_without_inventing_nine_seats_of_be
     assert [e.kind for e in g.events if e.kind in ("vote", "night_action")] == []
     # 1 call + the 2 retries `LLM` is allowed, then the outage is named rather than absorbed.
     assert len(calls) == 3
-    # The only test in the suite that *asserts* a real-time wait, and it says so on purpose:
+    # The suite's only lower-bound claim on the real clock, and it says so on purpose:
     # every other retry test injects a recorder and asserts on the *values*, so nothing else
     # can tell `sleep=asyncio.sleep` from `sleep=lambda d: None` — and a zero-delay retry storm
     # is exactly what turns one flaky endpoint into ninety refused seats. 1.5 + 3.0 = the two
     # backoffs this game spends before it aborts. The 401 sibling below waits the same 4.5s
-    # without claiming to: one duration assertion is enough to catch a no-op sleep, and a second
+    # without claiming to: one lower-bound claim is enough to catch a no-op sleep, and a second
     # would only add another way for machine load to turn a green suite red.
     assert took >= 4.4, f"the game path must wait on the real backoff, not a no-op: {took:.2f}s"
 

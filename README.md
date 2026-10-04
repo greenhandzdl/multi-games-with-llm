@@ -299,7 +299,7 @@ wolf replay "$HLOG" --seat 3          # 打完了，从你那一席的视图重�
 〈README 测试那一节的逐片叙事摘进这一份〉——摘走而没登记的每一行都会让
 `test_a_line_that_left_the_manual_is_registered_verbatim_in_the_archive` 红。
 
-重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（两秒内，不发请求）。
+重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（不发请求；墙钟跟着机器负载走，所以这里不写秒数）。
 **误报也是这个闸门的输出**，所以它的红用例名要留在账上（那张表 D1 那一格记着它误报了谁）。
 
 文档点用例只点名不点号：名字有 `test_every_test_named_in_the_docs_resolves` 钉着，行号没人钉，留着就是一句迟早假掉的话。
@@ -339,7 +339,7 @@ K1–K5 的具名账（每格写着它红了哪条用例）在 `docs/iterations.
 
 **对照用例必须调用规则，不能复算规则**（这条形状的单一定义写在 `_undeclared_kinds` 的 docstring 里）。
 
-重跑这一片（一秒内，不发请求）：
+重跑这一片（不发请求）：
 
 ```bash
 PYTHONPATH=src .venv/bin/pytest tests/test_wiring.py -k "kind_to_a_bare or kind_guard_sees_both"
@@ -351,7 +351,7 @@ plan §15 要求上桌前从编排层清掉的三条隐含假设各有代码与�
 
 A1–C3 八具的具名账在 `docs/iterations.md`〈手册里那四张具名变异账表搬进了这一份〉一节的 A·B·C 表。
 
-重跑：`.venv/bin/pytest tests/test_actor_contract.py`（9 条，半秒内，不发请求）。
+重跑：`.venv/bin/pytest tests/test_actor_contract.py`（9 条，不发请求）。
 
 跑变异不只是为了证明测试能红，也是为了给写在文档里的那句理由做证——理由写错了，全套绿灯都不会红。
 
