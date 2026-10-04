@@ -4250,3 +4250,200 @@ def test_every_preregistered_criterion_is_written_by_name_in_the_manual():
     missing = set(metrics.M3_GATE) - _paired_gate_names(pages)
     assert not missing, (
         f"手册里再没有「名字+比较符+数」形状的这一枚判据，改它的阈值没人红：{sorted(missing)}")
+
+
+# ------------------------ 手册点名的「模块.名字 / 名字()」要落回 src 名册（`#275`）
+# `#274` 的四面普查里唯一没有闸门的那一形：既不带动行号（`#108` 那一族管不着）也不是用例名
+# （`#32` 那条管不着），改了名或删了函数，散文可以一字不改地继续绿。取词按**窄形**——反引号里整段
+# 匹配，不逐子串：宽形那一面 841 格要靠豁免名单撑（`#274` 现测），窄形 133 格里 122 格今天直接在册。
+
+NARROW_DOT = re.compile(r"^[a-z_][a-z0-9_]{2,}(?:\.[a-zA-Z_][a-zA-Z0-9_]{2,}){1,3}$")
+NARROW_CALL = re.compile(r"^[a-z_][a-z0-9_]{2,}\(\s*\w*\s*\)$")
+NARROW_DOT_CALL = re.compile(r"^[a-z_][a-z0-9_]{2,}(?:\.[a-zA-Z_][a-zA-Z0-9_]{2,}){1,3}"
+                             r"\(\s*\w*\s*\)$")
+NARROW_SHAPES = (("点号+调用", NARROW_DOT_CALL), ("点号访问", NARROW_DOT),
+                 ("带括号调用", NARROW_CALL))
+# 三张豁免：文件名后缀归 `#274` 的路径面，外部模块的左半按仓库自己的 import 现算，
+# 剩下「讲的是电池脚本而不是引擎」只能由同一句话自己声明（`#272` 的本句证人形）。
+FILE_SUFFIX_CITE = re.compile(r"\.(?:py|md|toml|json|lock|txt|cfg|ini|html|css|sh|jsonl|csv"
+                              r"|example)\b")
+OUTSIDE_ENGINE = re.compile(r"不是引擎的")
+
+
+def _src_name_roster() -> tuple[set[str], set[str]]:
+    """窄形点名的落点名册：`src/` 的定义名、属性名、落盘字符串键与关键字，外加模块 stem。
+
+    第四样不是装饰：`#274` 键名那一面的 33 枚"缺陷"整批是名册缺 stem 造成的假话（`metrics`、`cli`、
+    `game` 这些左半恒假），而 05:47:26Z 现测四样合起来 1758 枚、手册 133 格里 122 格直接落回主人。
+    名册是**扁平**的一份名字，不查"这个键挂在那个对象上"——失效方向因此是"名字还在别处就放过"，
+    比它弱的那一半由 `#158`（`类.成员` 要认得那具类）和行号闸门（要认得那一行）补着。
+    返回 `(名册, 模块 stem)`：stem 单列一份，是因为"左半是不是模块名"这件事只有拆开才量得出（见
+    合成用例末尾那一格把名册换成 `roster - stems` 的对照）。
+    """
+    names: set[str] = set()
+    stems: set[str] = set()
+    for f in sorted((ROOT / "src").rglob("*.py")):
+        if "__pycache__" in f.parts:
+            continue
+        stems.add(f.stem)
+        for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                names.add(node.name)
+            elif isinstance(node, ast.Attribute):
+                names.add(node.attr)
+            elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+                names.add(node.id)
+            elif isinstance(node, ast.keyword) and node.arg:
+                names.add(node.arg)
+            elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+                if re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_]{2,}", node.value.strip()):
+                    names.add(node.value.strip())
+    return names | stems, stems
+
+
+def _imported_stems() -> set[str]:
+    """豁免一的名单，当场算：`src`/`scripts`/`tests` 里 import 过的顶层模块名，减去树上有的那几本。
+
+    不抄一份外部模块常量，是因为 `#274` 那把尺子的第三只眼睛正是这么坏的——分桶里留了一句恒假的
+    `for s in ()`，`html.escape` 与 `termios.error` 就掉进了"查无此人"。现算那一跑（05:47:26Z）数到
+    60 枚，手册里靠它放过的有 7 格。
+    """
+    out: set[str] = set()
+    for root in ("src", "scripts", "tests"):
+        for f in sorted((ROOT / root).rglob("*.py")):
+            if "__pycache__" in f.parts:
+                continue
+            for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
+                if isinstance(node, ast.Import):
+                    out.update(a.name.split(".")[0] for a in node.names)
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    out.add(node.module.split(".")[0])
+    return out - _src_name_roster()[1]
+
+
+def _narrow_cites(pages: dict[str, str], roster: set[str],
+                  external: set[str]) -> tuple[list[tuple[str, int, str, str]], dict[str, int]]:
+    """(落不回的格, 分档读数)，格是 `(页, 行, 形状, 反引号里的整段)`。
+
+    逐段查，不按整条查：`ok = 任一半在册` 那一形的逃生门是 `#274` 现量到的第二只眼睛——它把 6 格盖成
+    0 格。所以左半是模块名而右半查无此人也算缺陷，合成用例末尾专门钉这一格。名册本身是 `(名字 ∪ stem)`
+    那一整份，`roster` 因此只有一个入口：把它换成 `roster - stems` 就是"缺 stem 那只眼睛"的对照。
+    三张豁免按后缀→外部模块→本句声明的顺序试，本句声明只看 `_cited_sentence` 给的那一句（邻居句、
+    同段另一句都不给背书，同 `#272` 的裸形证人一条规矩）。
+    """
+    bad: list[tuple[str, int, str, str]] = []
+    census: dict[str, int] = {"格数": 0, "在册": 0, "文件后缀": 0, "外部模块": 0,
+                              "本句声明": 0, "缺陷": 0}
+    for shape, _rx in NARROW_SHAPES:
+        census[shape] = 0
+    for page, text in sorted(pages.items()):
+        lines = text.splitlines()
+        for no, line in enumerate(lines, 1):
+            for span in BACKTICK.finditer(line):
+                tok = span.group(1).strip()
+                shape = next((k for k, rx in NARROW_SHAPES if rx.match(tok)), None)
+                if shape is None:
+                    continue
+                census["格数"] += 1
+                census[shape] += 1
+                segs = re.sub(r"\(.*\)$", "", tok).split(".")
+                missing = [s for s in segs if s not in roster]
+                if not missing:
+                    census["在册"] += 1
+                elif FILE_SUFFIX_CITE.search(tok):
+                    census["文件后缀"] += 1
+                elif len(segs) > 1 and segs[0] in external:
+                    census["外部模块"] += 1
+                elif OUTSIDE_ENGINE.search(_cited_sentence(lines, no - 1, span.start())):
+                    census["本句声明"] += 1
+                else:
+                    census["缺陷"] += 1
+                    bad.append((page, no, shape, tok))
+    return bad, census
+
+
+def test_the_narrow_citation_rule_lands_each_shape_and_grants_its_three_exemptions():
+    """合成语料：三形各钉一次该报的，四张豁免各钉一次该放过的，且邻句与邻段都不给背书。`#275`。
+
+    形状一律运行时拼：本文件坐在 `#158` 那一族的语料里，写死一个字面量就等于自己给自己种点名。
+    第一格是票面点名的正控制——**左半是模块名而右半查无此人**：名册要是缺了 stem 那只眼睛，
+    末尾那两格对照（换成 `roster - stems`、换成空的外部名单）就是它现形的时候。
+    末两格管的是"不进账"：大写开头的 `类.成员` 归 `#158`，带斜杠的路径归 `#274` 的路径面。
+    """
+    roster, stems = _src_name_roster()
+    external = _imported_stems()
+    mod, ext = "cli", "httpx"
+    leaf = sorted(n for n in roster if re.fullmatch(r"[a-z][a-z0-9_]{3,}", n)
+                  and n not in stems)[0]
+    leaf2 = sorted(n for n in roster if re.fullmatch(r"[a-z][a-z0-9_]{4,}", n)
+                   and n not in stems and n != leaf)[0]
+    ghost, ghost2 = "no_such_narrow_cell", "another_no_such_cell"
+    assert mod in stems and ext in external and ext not in roster
+    assert leaf in roster and leaf2 in roster
+    assert ghost not in roster and ghost2 not in roster
+    assert "run_manifest" not in roster, "夹具那一格会被算成在册，后缀豁免就没了读者"
+    def dotted(*parts):
+        return ".".join(parts)          # 形状一律拼出来，别在语料里留字面量
+
+    def call(tok):
+        return f"{tok}()"
+
+    pages = {"a.md": "\n\n".join([
+        f"`{dotted(mod, ghost)}` 那一格没人读。",
+        f"`{dotted(mod, leaf)}` 天天落盘。",
+        f"`{dotted(leaf, leaf2)}` 是落盘键路径。",
+        f"`{call(ghost)}` 这具查无此人。",
+        f"`{call(leaf)}` 每轮都跑。",
+        f"`{dotted(mod, leaf)}()` 那一具。",
+        f"`{dotted(leaf, ghost2)}()` 这一具也查无此人。",
+        f"`{dotted(ext, 'AsyncClient')}` 那一层不归本仓库管。",
+        "`run_manifest.json` 是产物名，归路径那一面。",
+        f"那一步属于电池脚本：`{call(ghost2)}` 不是引擎的函数。",
+        f"同一句前面写着不是引擎的函数。`{call(ghost)}` 每轮都跑。",
+        f"`{dotted('GameState', ghost)}` 那一形不归这一族。",
+        f"`src/wolfengine/{mod}.py` 的路径面另有闸门。",
+    ])}
+    bad, census = _narrow_cites(pages, roster, external)
+    assert bad == [("a.md", 1, "点号访问", dotted(mod, ghost)),
+                   ("a.md", 7, "带括号调用", call(ghost)),
+                   ("a.md", 13, "点号+调用", dotted(leaf, ghost2) + "()"),
+                   ("a.md", 21, "带括号调用", call(ghost))], f"该报的四格：{bad}"
+    assert census == {"格数": 11, "点号访问": 5, "带括号调用": 4, "点号+调用": 2,
+                      "在册": 4, "外部模块": 1, "文件后缀": 1, "本句声明": 1,
+                      "缺陷": 4}, f"分档读数对不上：{census}"
+
+    lost, census_lost = _narrow_cites(pages, roster - stems, external)
+    assert len(lost) == 6 and census_lost["在册"] == 2, (
+        f"名册缺 stem 那一格时这一族必须塌在左半上，实际：{lost}")
+    wide, census_wide = _narrow_cites(pages, roster, set())
+    assert ("a.md", 15, "点号访问", dotted(ext, "AsyncClient")) in wide, (
+        f"外部模块那张豁免没有读者的话这一格该报：{wide}")
+    assert census_wide["缺陷"] == 5 and census_wide["外部模块"] == 0, \
+        f"外部名单换成空集，只有那一格该换档：{census_wide}"
+
+
+def test_every_narrow_code_citation_in_the_manual_lands_on_a_src_name():
+    """手册五本里每一段窄形点名要么落回 src 名册，要么坐在三张豁免之一上。`#275`。
+
+    05:47:26Z 现测：133 格 = 点号访问 90 + 带括号调用 29 + 点号+调用 14；在册 122，后缀豁免 3
+    （`README.md` 的两格 `pyproject.toml` 与 `comparison.md` 的一格 `run_manifest.json`），
+    外部模块豁免 7（`math.comb`、`html.escape`、`httpx.AsyncClient`、`termios.error`、
+    `string.Template`、`asyncio.sleep`），本句声明豁免 1（`README.md` 的 379 行 `backup()`——
+    那句话写明它不是引擎的函数）。逐本账与三张豁免的价记在归档的 `#275`。
+
+    立尺不是为了今天的 0 缺陷，是为了下一次改名：`#274` 现量的那一趟，改一个落盘键名不会让
+    任何东西变红，而手册已经把它写成了今天的形状。
+    """
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    bad, census = _narrow_cites(pages, _src_name_roster()[0], _imported_stems())
+    for shape, floor in (("点号访问", 80), ("带括号调用", 25), ("点号+调用", 10)):
+        assert census[shape] >= floor, (
+            f"{shape} 形只数到 {census[shape]} 格（地板 {floor}，今值见本条 docstring）——"
+            "取词形状坏了，下面那句'零缺陷'就只是没看见东西")
+    assert not bad, (
+        "这些窄形点名落不回 src 名册，同一句里也没写明它是文件后缀、外部模块还是电池脚本"
+        f"（格式 页:行 形状 整段）：{bad}\n同趟分档读数：{census}")
+    for bucket, floor in (("文件后缀", 1), ("外部模块", 1), ("本句声明", 1)):
+        assert census[bucket] >= floor, (
+            f"豁免「{bucket}」今天没有语料读者（{census[bucket]} 格）：要么手册里的形状变了，"
+            "要么这一支豁免该摘掉——留着没人走的门就是 `#274` 那把尺子的第三只眼睛")
