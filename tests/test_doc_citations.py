@@ -4006,6 +4006,251 @@ def test_no_manual_page_carries_an_unresolved_bare_section_pointer():
         "要么把前缀补回去，要么挪进〈〉/报告 那两形")
 
 
+# --------------------------------------------------------------- 票号指针族（`#N`）
+# 手册页里那些井号加数字是任务清单的编号，那本清单不随仓库发布；仓库内唯一接得住它的地方是
+# `docs/iterations.md`。三条判据各自钉一向（下面的今值是 09:39Z、10:04Z、10:05Z 现量的；逐本账、
+# 后缀那一枚、以及 python 侧同形主张 14 枚这条已知面界都记在归档的 `#279`）：
+#
+# 一、号落得住：手册面 124 枚命中（去重 81 枚）每一枚都要能在归档里逐字检索到，今值 0 处落空。
+#     这一支的牙是"写歪一枚就是断链"——归档是 GitHub 上的读者手上唯一的落点。
+# 二、「那一节」要真有号槽：说"某一页里有一节以这枚号立题"的那些句得数得出恰好一节。手册面今天 3 枚
+#     主张全部落得住（`#217`、`#219` 点归档，各有一节；`#104` 点 `tests/test_m3_gate.py` 的那段横幅），
+#     所以这一支今值 0 处假主张。"号槽"是量出来的：归档 400 枚标题里 176 枚把号写在自己的前缀位或
+#     结尾号槽上（三种形状见 `_ticket_labels`），而把别人的号写在标题中间的那些不算——归档里有一节的
+#     标题同时写着「`#220`」和「`#217` 那一刀」，顺着"标题里出现过这枚号"去认，`#217` 就凭空多出第二节，
+#     那句"那一节"的断言被别人的标题顶绿（`#263` 对行号闸门量的正是同一只坑）。这一支是 10:04Z 重量的：
+#     第一版只认 `## \`#NNN\`：` 那一形，把 09:39Z 量成的"2 处真缺陷"顶成了 3 处假缺陷——判据的语料面
+#     比判据先错，这条也一起记进 `#279`。
+# 三、去处要有一句：这一族的名字与落点必须在手册里写出来一次（镜像 `#270` 对 plan 指针族做的事）。
+#     今值 0 句——占位形在手册五本里一次都没出现过，所以这一条今天红，README 补的那句是它唯一的读者。
+TICKET_REF = re.compile(r"#(\d{1,4}[A-Za-z]?)(?![\dA-Za-z])")
+TICKET_CLAIM = re.compile(r"`#(\d{1,4}[A-Za-z]?)`\s*的?(?:那一?节|这一?节|一节)")
+TICKET_HEAD = re.compile(r"^#{1,6}\s+(.*)$")
+TICKET_BANNER = re.compile(r"^#\s*-{3,}(.*)$")
+TICKET_SLOT = re.compile(r"^\s*`?#(\d{1,4}[A-Za-z]?)(?![\dA-Za-z])")
+TICKET_PAREN_TAIL = re.compile(r"（([^（)]*)）\s*$")
+TICKET_SEPS = " `+/,,:：()（）#"
+TICKET_TARGET = re.compile(r"`([\w./-]+\.(?:py|md))`")
+TICKET_SHAPE = re.compile(r"#N{1,4}(?![\dA-Za-z])")
+TICKET_ORIGIN = re.compile(r"任务清单|不随仓库发布|按号检索")
+
+
+def _ticket_pointers(pages: dict[str, str], archive: str) -> list[tuple[str, int, str]]:
+    """手册页里在归档中逐字检索不到的票号（格式 页名:行 命中的号）。
+
+    比的是整串，所以带字母后缀的那一枚要整串都对得上才算落住。两侧边界都要求非数字非字母：
+    色值那类 `#8a8f` 因此不会当成号——09:39Z 量过手册面 124 枚命中里 122 枚是反引号包住的号、
+    2 枚裸写（`docs/comparison.md` 那句「任务 #1/#5」）、1 枚带后缀，0 枚住在代码围栏里。
+    这是这一族今天的形状前提，不是给谁开的豁免名单。
+    """
+    rows: list[tuple[str, int, str]] = []
+    for page, text in pages.items():
+        for m in TICKET_REF.finditer(text):
+            if not re.search(rf"(?<![\dA-Za-z]){re.escape(m.group(0))}(?![\dA-Za-z])", archive):
+                rows.append((page, text[:m.start()].count("\n") + 1, m.group(0)))
+    return rows
+
+
+def _ticket_labels(title: str) -> set[str]:
+    """一枚标题（或 python 段落横幅）写在自己名下的号：紧跟井号的前缀位，或结尾那个只由号组成的号槽。
+
+    号槽的两种写法都有读者：一节管两票的「：`#63` + `#67`」，和把号挂在圆括号里的「（`#144d`）」。
+    结尾那段只要掺进一个词就不是号槽——「（`#32` / `#44` / `#45` / `#61` 那四批）」是一串名单，
+    不是这四票各自的节，所以「`#61` 那一节」不许由它背书。
+    """
+    out: set[str] = set()
+    m = TICKET_SLOT.match(title)
+    if m:
+        out.add(m.group(1))
+    paren = TICKET_PAREN_TAIL.search(title)
+    if paren:
+        tail = paren.group(1)
+    else:
+        segs = re.split(r"[：:]", title)
+        tail = segs[-1] if len(segs) > 1 else ""
+    found = TICKET_REF.findall(tail)
+    if found and not TICKET_REF.sub("", tail).strip(TICKET_SEPS):
+        out |= set(found)
+    return out
+
+
+def _ticket_keyed(text: str, *, python: bool) -> dict[str, int]:
+    """某一页里"以这枚号立题的节"各有几处：markdown 读标题，python 读段落横幅。"""
+    counts: dict[str, int] = {}
+    for line in text.splitlines():
+        m = (TICKET_BANNER if python else TICKET_HEAD).match(line)
+        if m:
+            for n in _ticket_labels(m.group(1)):
+                counts[n] = counts.get(n, 0) + 1
+    return counts
+
+
+def _read_repo_page(path: str) -> str:
+    f = ROOT / path
+    return f.read_text(encoding="utf-8") if f.is_file() else ""
+
+
+def _ticket_claim_target(sentence: str, number: str) -> str:
+    """那句主张点的是哪一本：号左边最近的一本反引号文件名，一个都没点就按归档读。
+
+    归档是这一族在仓库内唯一的落点，所以省略掉被指页的那句更可疑而不是更可信——按归档读它，
+    落不住就红。
+    """
+    target = "归档"
+    pos = sentence.find(f"`#{number}`")
+    for hit in TICKET_TARGET.finditer(sentence):
+        if pos < 0 or hit.end() <= pos:
+            target = hit.group(1)
+    return target
+
+
+def _ticket_section_claims(pages: dict[str, str], archive: str,
+                           read=_read_repo_page) -> list[tuple[str, int, str, str, str]]:
+    """说"某一页里有一节以某枚号立题"、而那一页的号槽数不出恰好一处的句子（页名:行 号 被点的页 原句）。
+
+    号与「那一节」之间只容许空白与一个「的」，跨硬换行的那支留着——10:05Z 量过手册面今天有 1 枚就是这么
+    写的。邻居句里孤零零的「那一节」不给上一句的号背书：它没对那枚号作出任何主张。
+    """
+    cache: dict[str, dict[str, int]] = {}
+    rows: list[tuple[str, int, str, str, str]] = []
+    for page, text in pages.items():
+        lines = text.splitlines()
+        starts = [0]
+        for ln in lines:
+            starts.append(starts[-1] + len(ln) + 1)
+        for m in TICKET_CLAIM.finditer(text):
+            idx = next(i for i in range(len(lines) - 1, -1, -1) if starts[i] <= m.start())
+            sentence = _cited_sentence(lines, idx, m.start() - starts[idx]).strip()
+            target = _ticket_claim_target(sentence, m.group(1))
+            if target not in cache:
+                if target in ("归档", ARCHIVE, f"docs/{ARCHIVE}"):
+                    cache[target] = _ticket_keyed(archive, python=False)
+                else:
+                    cache[target] = _ticket_keyed(read(target), python=target.endswith(".py"))
+            if cache[target].get(m.group(1), 0) != 1:
+                rows.append((page, idx + 1, f"#{m.group(1)}", target, sentence))
+    return rows
+
+
+def _ticket_origin_lines(pages: dict[str, str]) -> list[tuple[str, int, str]]:
+    """同一句里既给出这一族的占位形、又给出它落在哪儿的那些句（格式 文件:行 原句）。
+
+    句子窗口用 `_cited_sentence`——`#270` 对 plan 指针族的同一份定义，这里不造第二份。只认占位形：
+    任何一句带号的历史复述都凑得出"形状"，那样这条判据就成了一枚常绿的刀。
+    """
+    rows: list[tuple[str, int, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for page, text in pages.items():
+        lines = text.splitlines()
+        for idx, line in enumerate(lines):
+            for hit in TICKET_SHAPE.finditer(line):
+                sentence = _cited_sentence(lines, idx, hit.start())
+                if TICKET_ORIGIN.search(sentence) and (page, sentence) not in seen:
+                    seen.add((page, sentence))
+                    rows.append((page, idx + 1, sentence.strip()))
+    return rows
+
+
+def test_an_invented_ticket_number_is_a_dead_pointer():
+    pages = {"live.md": "那一格的账见 `#7`。\n",
+             "suffix.md": "四轮收完的那一片写着 `#7a`。\n",
+             "dead.md": "照着写成 `#8` 就没有任何东西接得住。\n",
+             "bare.md": "两种形状都还没补齐（任务 #9/#7）。\n"}
+    archive = "#7 的取证与 #7a 那一轮，另有 #9 一处。\n"
+    assert [(p, t) for p, _, t in _ticket_pointers(pages, archive)] == [("dead.md", "#8")], \
+        "带后缀的那一枚要按整串比，不带反引号的那两枚也要进账"
+
+
+def test_a_ticket_heading_writes_its_number_in_one_of_two_slots():
+    titles = [
+        "#217 markdown 之间按行号互指：40 处零闸门",
+        "`#279`：手册页里的票号指针族进闸门",
+        "预算表里五行没有数的尺子：`#63` + `#67`",
+        "能力清单又压掉八条复述（`#144d`）",
+        '#220 手册页里"现场口径 + N 处"的普查读数进闸门：`#217` 那一刀把自己顶成历史',
+        "D 表：文档引用闸门的三十四具（`#32` / `#44` / `#45` / `#61` 那四批）",
+        "没有号的标题",
+    ]
+    got = [sorted(_ticket_labels(t)) for t in titles]
+    assert got == [["217"], ["279"], ["63", "67"], ["144d"], ["220"], [], []], \
+        f"前缀位与结尾号槽两种写法都要认，掺了词的名单与别人标题里的号都不算：{got}"
+
+
+def test_a_ticket_section_claim_is_backed_by_the_page_it_names():
+    py = {"tests/fence.py": "# ---- 第三条措辞尺子还在旧地板上（#104）\n",
+          "tests/twice.py": "# ---- 同一票写了两段（#7）\n\n# ---- 又一段（#7）\n"}
+    pages = {
+        "keyed.md": "逐条处置都在归档 `#7` 那一节。\n",
+        "unkeyed.md": "逐条处置都在归档 `#8` 那一节。\n",
+        "honest.md": "逐条处置都在归档 `#8` 那一片。\n",
+        "doubled.md": "账在归档 `#6` 那一节。\n",
+        "pyfile.md": "构造夹具（`tests/fence.py` 的 `#104` 那一节）钉它。\n",
+        "pytwice.md": "两段的账在 `tests/twice.py` 的 `#7` 那一节。\n",
+        "neighbour.md": "那一片的账在归档 `#8`。\n它那一节的写法是旧的。\n",
+        "wrapped.md": "逐条处置都在归档 `#8`\n  那一节。\n",
+        "missing.md": "见 `docs/gone.md` 的 `#7` 那一节。\n",
+    }
+    archive = ("#7 与 #8 的取证散在好几片里\n\n## `#7`：带号的那一节\n\n"
+               "### #6 上半场\n\n### #6 下半场\n")
+    rows = _ticket_section_claims(pages, archive, read=lambda p: py.get(p, ""))
+    assert [(r[0], r[2], r[3]) for r in rows] == [
+        ("unkeyed.md", "#8", "归档"), ("doubled.md", "#6", "归档"),
+        ("pytwice.md", "#7", "tests/twice.py"), ("wrapped.md", "#8", "归档"),
+        ("missing.md", "#7", "docs/gone.md")], \
+        f"数得出恰好一节才算落住：0 节、两节、以及点不到的那一本都算红——{rows}"
+
+
+def test_a_ticket_origin_line_names_both_the_shape_and_where_it_resolves():
+    pages = {"shape-only.md": "手册里那些 `#NNN` 形的号别乱写。\n",
+             "origin-only.md": "那一本清单不随仓库发布。\n",
+             "explained.md": "手册里 `#NNN` 形的号是任务清单的编号，那份清单不随仓库发布，"
+                             "号本身要按号检索 `docs/iterations.md`。\n",
+             "wrapped.md": "手册里那些 `#NNN` 形的号是任务清单的编号，\n  它不随仓库发布。\n",
+             "concrete.md": "这一格的账见 `#217`，那本清单不随仓库发布。\n"}
+    assert [p for p, _, _ in _ticket_origin_lines(pages)] == ["explained.md", "wrapped.md"], \
+        "同一句里既给出这一族的占位形又给出去处才算解释；带具体号的复述句不给它背书，" \
+        "跨硬换行的同一句也算"
+
+
+def test_every_ticket_number_in_the_manual_is_searchable_in_the_archive():
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    archive = _read_repo_page(f"docs/{ARCHIVE}")
+    n = sum(len(TICKET_REF.findall(text)) for text in pages.values())
+    assert n >= 60, (
+        f"手册面只扫到 {n} 枚票号，多半是扫法坏了（今值与逐本账见归档 `#279`）——"
+        "这一格是判据自己的语料证人：号要是扫空，'落不落得住'就成了空转的一句话")
+    bad = _ticket_pointers(pages, archive)
+    assert not bad, (
+        "手册页里有点名的票号在 `docs/iterations.md` 里逐字检索不到（格式 页:行 命中的号）："
+        + "；".join(f"{p} 的 {ln} 行 {tok}" for p, ln, tok in bad)
+        + "——那本任务清单不随仓库发布，归档是读者手上唯一的落点，写歪一枚就是断链")
+
+
+def test_every_ticket_section_claim_in_the_manual_has_a_number_keyed_section():
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    archive = _read_repo_page(f"docs/{ARCHIVE}")
+    n = sum(len(TICKET_CLAIM.findall(text)) for text in pages.values())
+    assert n >= 1, (
+        f"手册面只扫到 {n} 枚「那一节」式主张，多半是取词形状坏了（10:05Z 现量 3 枚，账见归档 `#279`）"
+        "——这一格是下面那条断言的语料证人：主张要是扫空，'落不落得住'就成了空转的一句话")
+    rows = _ticket_section_claims(pages, archive)
+    assert not rows, (
+        "手册页里有句子说某一页存在一节以某枚票号立题，而那一页的号槽数不出恰好一处"
+        "（格式 页:行 命中的号|被点的页）："
+        + "；".join(f"{p} 的 {ln} 行 {tok}｜{tgt}「{s[:40]}」" for p, ln, tok, tgt, s in rows)
+        + "——号能按号检索，但一枚号常被打进好几片取证；那句'那一节'要么改成'那一片'，"
+        "要么把被点的那一本里真以该号立题的那一节补上")
+
+
+def test_the_manual_says_where_a_ticket_number_points():
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    rows = _ticket_origin_lines(pages)
+    assert rows, (
+        "手册里再没有一句话同时写出票号的占位形和它落在哪儿（格式 文件:行 原句）——"
+        "GitHub 上的读者手上只剩一串串点不开的数字，既不知道它是任务清单的编号，也不知道该去哪儿检索。"
+        "要么把那句话留在原处，要么搬到另一本人册页里，别只删不补")
+
+
 # --------------------------------------------------------------- 截断式 data/ 证据路径
 # 手册页里以反引号点出的 `data/…` 路径有两种身份：读者敲得出来的落点（配方），和读者点不开的证据
 # （已经跑过的那一局）。前者写在围栏里，后者只可能写成半截——把整串抄全会让人以为那是随仓库发的东西。
