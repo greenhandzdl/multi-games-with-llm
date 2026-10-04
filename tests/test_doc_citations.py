@@ -3831,7 +3831,7 @@ def test_a_pointer_endorsed_only_by_a_word_the_whole_file_repeats_is_bad():
 # 全语料的 `plan §…` 指针指向引擎之外的一份规划笔记：它不随仓库发布，所以在 GitHub 上点不开。手册里
 # 那一族唯一的去处说明今天没有任何东西在读——一次普通的 README 精简就能把它删掉而整套仍绿。这一片立
 # "手册必须有一句话同时给出指针形状与它指不到东西的原因"，不是"每枚指针都要自带解释"：后者今天就不
-# 成立（手册 35 枚指针里绝大多数光秃秃），硬写会把闸门写成常红。逐本今值与刀账记在归档的 `#270`。
+# 成立（手册里绝大多数指针光秃秃），硬写会把闸门写成常红。逐本今值与刀账记在归档的 `#270`。
 PLAN_SHAPE = re.compile(r"(?:plan|计划)\s*§\s*(?:[0-9一二三四五六七八九十]+|N)")
 PLAN_POINTER = re.compile(r"(?:plan|计划)\s*§\s*[0-9一二三四五六七八九十]+")
 PLAN_ORIGIN = re.compile(r"不随仓库发布|仓库之外|引擎之外|点不开")
@@ -3899,8 +3899,82 @@ def test_the_manual_explains_where_a_plan_pointer_points():
     rows = _plan_explainers(pages)
     assert rows, (
         "手册里再没有一句话同时写出 plan 指针的形状和它为什么指不到东西（格式 文件:行 原句）——"
-        "那 257 枚指针就失去了唯一的去处说明，GitHub 上的读者只会看见一节点不开的数字。"
+        "那批指针就失去了唯一的去处说明，GitHub 上的读者只会看见一节点不开的数字。"
         "要么把那句话留在原处，要么搬到另一本人册页里，别只删不补")
+
+
+# --------------------------------------------------------------- 裸 §N：省略形要本句证人
+# 指向引擎之外那本笔记的节号有两种写法：带 `plan`/`计划` 前缀的，和把前缀省略掉的裸形。裸形只有在
+# 同一句里另有一枚带前缀的才落得回那本笔记，否则读者手上就是一枚既点不开、又不知道归属于谁的数字。
+# 另两种裸形点的是仓库内的东西，按形状豁免：〈…〉里的是本归档的小节标题（形状住在 `#148` 的 `POINT` 里，
+# 这里借用它、只认它的首行，见 `_title_heads` 为什么不能整段吞），紧跟在 `报告` 后面的是产物自己的节号。
+# 逐本今值与刀账记在归档的 `#272`。
+BARE_SECTION = re.compile(r"§[0-9一二三四五六七八九十]+")
+BARE_INNER = re.compile(r"(?:plan|计划|报告)\s*$")
+
+
+def _title_heads(text: str) -> list[tuple[int, int]]:
+    """〈标题〉跨度的**首行**那一段（一组偏移区间）。
+
+    形状借 `#148` 的 `POINT`，不再造第二份；那道闸门拿整个跨度去找标题，跨硬换行时顶多判成假红
+    （`#150` 量过的那种"标题被劈开"）。这里反过来：拿跨度当**豁免**，整段吞下去的方向是假绿——
+    一枚恰好落在标题两半之间的裸 `§` 会被白白放过。所以只认首行：标题开头那一枚（`〈§5 那笔折扣…〉`
+    这一形，手册里在册的两枚都是）照样豁免，劈成两行的标题里夹在中间的裸形仍然报出来。
+    """
+    heads = []
+    for m in POINT.finditer(text):
+        heads.append((m.start(), m.start() + len(m.group(0).split("\n", 1)[0])))
+    return heads
+
+
+def _bare_section_pointers(pages: dict[str, str]) -> list[tuple[str, int, str, str]]:
+    """手册页里落不回任何出处的裸 `§N`（格式 文件:行 命中文本 原句）。
+
+    前缀按整篇文本回看 8 个字符判定，所以 `plan` 换行再接 `§143` 那种排版算带前缀；句子窗口用
+    `_cited_sentence`——同一份定义，不在这里造第二份。
+    """
+    rows: list[tuple[str, int, str, str]] = []
+    for page, text in pages.items():
+        lines = text.splitlines()
+        starts = [0]
+        for ln in lines:
+            starts.append(starts[-1] + len(ln) + 1)
+        titles = _title_heads(text)
+        for m in BARE_SECTION.finditer(text):
+            if BARE_INNER.search(text[max(0, m.start() - 8):m.start()]):
+                continue
+            if any(a <= m.start() < b for a, b in titles):
+                continue
+            idx = next(i for i in range(len(lines) - 1, -1, -1) if starts[i] <= m.start())
+            sentence = _cited_sentence(lines, idx, m.start() - starts[idx])
+            if PLAN_POINTER.search(sentence):
+                continue
+            rows.append((page, idx + 1, m.group(0), sentence.strip()))
+    return rows
+
+
+def test_a_bare_section_pointer_is_resolved_only_by_a_prefixed_sibling():
+    pages = {"ellipsis.md": "依据按种类挑：mock 在 plan §十一（\"必须真端点\"），含真人在 §十五。\n",
+             "lone.md": "这一格的判据抄自 §十二 那一条。\n",
+             "title.md": "见〈§5 那笔折扣走到批这一级就断了：`#75`〉末尾那三段。\n",
+             "report.md": "两处各读一半，那就是报告 §0 报了、audit 放行。\n",
+             "wrapped.md": "plan\n  §143 要的是预先声明剔除规则。\n",
+             "split-title.md": "账见〈§5 那笔折扣\n  §7 那一枚夹在标题的两半之间。\n  `#75`〉末尾那三段。\n"}
+    rows = _bare_section_pointers(pages)
+    assert [(r[0], r[1], r[2]) for r in rows] == [("lone.md", 1, "§十二"),
+                                                  ("split-title.md", 2, "§7")], (
+        f"省略形、〈〉标题的首行、报告节号、跨行前缀四形都不该报；标题被硬换行劈开时夹在中间的那一枚该报。"
+        f"只该报孤零零那一枚与夹住的那一枚：{rows}")
+
+
+def test_no_manual_page_carries_an_unresolved_bare_section_pointer():
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    rows = _bare_section_pointers(pages)
+    assert not rows, (
+        "手册页里有裸的 `§N` 既不带 plan/计划 前缀、同句也没有带前缀的同伴作证人（格式 文件:行 命中文本 原句）："
+        + "；".join(f"{p} 的 {n} 行 {tok}「{s[:40]}」" for p, n, tok, s in rows)
+        + "——那本笔记在 GitHub 上点不开，读者连它是引擎之外的节号都看不出来。"
+        "要么把前缀补回去，要么挪进〈〉/报告 那两形")
 
 
 # --------------------------------------------------------------- 截断式 data/ 证据路径
