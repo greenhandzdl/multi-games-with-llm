@@ -25,7 +25,7 @@
 * 还是 `views.md`，同一页开头那句「下表 7 行 = 9 个函数名」是**已经落空的数**：表里现数 8 行、第一格
   10 个名字，名册 `VIEWING_RULES` 也 10 个键——加的那一行是 `#183` 补 `provenance_line` 时落的，而这条
   句子从「6 行 = 8 个」涨到「7 行 = 9 个」那一次是手跟着改的（`docs/iterations.md` 的 `#180` 那一节记着），
-  第二次没人改、零红通过。补的是三向对账（`_rule_table_defects`，`#218`）：句子写的两个数 ⇄ 表实测 ⇄ 名册的键。
+  第二次没人改、零红通过。补的是三向对账（`_rule_table_defects`，`#218`）：句子写的两个数 ⇄ 表实测 ⇄ 名册的键；`#278` 起这一族的语料面是手册全页而不是点名哪一本——跨页抄件会零红钻过去，那是量出来的不是先验的规矩。
 * 还是 `views.md`，`#217` 那条禁令留下的那条缝里躺着一句**活指针**：「按 `comparison.md` 第 38 行那句契约」
   ——落笔时真是第 38 行（归档 `#57` 那一节记着），而 `comparison.md` 后来插了 47 行，那句契约 08:29:48Z
   在第 85 行，第 38 行是温度字段那一段。同一族里还有一处更隐蔽的：`--seat`/`--god` 那四种给法在手册里留了
@@ -88,8 +88,8 @@
 * 条数必须**绑在测试模块名上**才算主张，而 `条` 后面不能再接词；同一行那句"套件共 N 条用例（…）"
   里，总数只和它自己括号里的枚举对账。参数化模块不在核对范围内（模块级 `def` 数不等于收集数）。
   同一族的第三种数是**一张表自己的行数与名字数**：手册里那种「下表 N 行 = M 个函数名」的句子声明的
-  是"这张表与某个名册是一对"，所以它由 `views.md` 的表实测与名册的键现数双向对账（`_rule_table_defects`，
-  `#218`）——数写歪的那一次是隔壁那片加了一行而没人回头改这句。
+  是"这张表与某个名册是一对"，所以它由手册面上那一张表的实测与名册的键现数对账（`_rule_table_defects`，
+  `#218`；`#278` 起那张表与那句计数在手册面上各只许一处）——数写歪的那一次是隔壁那片加了一行而没人回头改这句。
 * 裸的 `` `key=数字` `` 从此是一句**出厂值**主张：键要在 `src/` 里存在、数要就是代码里那个字面量。
   实验臂压到的值不能用这个形状写，把键名和数字分开（"把 `A.regions.c_total` 压到 250"）；日志字段
   （`fallback` 这类只以字符串键存在、值不是字面量的名字）可以写，扫描器认它存在但不核数。
@@ -948,17 +948,32 @@ def _rule_table_measure(text: str) -> tuple[int, int, set[str]]:
     return rows, len(names), set(names)
 
 
-def _rule_table_defects(text: str, roster: set[str]) -> list[str]:
-    """三向逐条查，报第一条不成立的：语料落空 / 计数句缺席 / 数不对 / 名单与名册不是一批。"""
-    rows, names, found = _rule_table_measure(text)
-    if not rows:
-        return [f"这一页上找不到「{RULE_TABLE_HEADER}」那张表：判据的语料落空了，无东西可对账"]
-    claims = RULE_TABLE_CLAIM.findall(text)
+def _rule_table_defects(pages: dict[str, str], roster: set[str]) -> list[str]:
+    """面级两查（那张表恰好一本、那句计数恰好一处且住在那一本）＋三向逐条查，报第一条不成立的。
+
+    面是手册面上全部页而不是点名 `views.md`：`#277` 的 `K10`/`K11` 量出"只钉一页"会放过跨页抄件，
+    这一族同形——`#278` 动手前 `C1`/`C3` 把那句原样与写歪的数各抄进 `comparison.md` 都零红通过。
+    """
+    holders = sorted(name for name, text in pages.items() if RULE_TABLE_HEADER in text)
+    if len(holders) > 1:
+        return [f"「{RULE_TABLE_HEADER}」那张表被这些页点名：{holders}，"
+                f"手册面 {len(pages)} 本上要恰好一本才有东西可对账"]
+    if not holders:
+        return [f"手册面 {len(pages)} 本里找不到「{RULE_TABLE_HEADER}」那张表："
+                f"判据的语料落空了，无东西可对账"]
+    page = holders[0]
+    claims = [(name, pair) for name, text in sorted(pages.items())
+              for pair in RULE_TABLE_CLAIM.findall(text)]
     if len(claims) != 1:
-        return [f"「下表 N 行 = M 个函数名」在这一页上有 {len(claims)} 处，要恰好一处才有东西可对账"
-                f"（表实测 {rows} 行 / {names} 个名字）"]
-    if (int(claims[0][0]), int(claims[0][1])) != (rows, names):
-        return [f"句子写的是 {claims[0][0]} 行 / {claims[0][1]} 个名字，表里现数是 "
+        return [f"「下表 N 行 = M 个函数名」那一句在手册面（{len(pages)} 本）上有 {len(claims)} 处"
+                f"（点名：[{', '.join(name for name, _ in claims) or '无'}]），"
+                f"要恰好一处才有东西可对账（那张表实测在 {page}）"]
+    claim_page, (claim_rows, claim_names) = claims[0]
+    if claim_page != page:
+        return [f"那句「下表…」住在 {claim_page}，可那张表只在 {page}：这一页上「下表」指不到东西"]
+    rows, names, found = _rule_table_measure(pages[page])
+    if (int(claim_rows), int(claim_names)) != (rows, names):
+        return [f"句子写的是 {claim_rows} 行 / {claim_names} 个名字，表里现数是 "
                 f"{rows} 行 / {names} 个"]
     if found != roster:
         return [f"表里点名的规则与 `VIEWING_RULES` 不是同一批：只在表里的 {sorted(found - roster)}，"
@@ -967,16 +982,17 @@ def _rule_table_defects(text: str, roster: set[str]) -> list[str]:
 
 
 def test_the_views_rule_table_claim_reconciles_with_its_table_and_the_roster():
-    """三样东西今天必须说得一样多：那一句、那张表、那条参数化用例的名册。"""
-    text = (ROOT / "docs" / "views.md").read_text(encoding="utf-8")
-    defects = _rule_table_defects(text, set(VIEWING_RULES))
-    assert not defects, f"`docs/views.md` 的表和它的名册对不上账：{defects}"
+    """三样东西今天必须说得一样多：那一句、那张表、那条参数化用例的名册——面是手册全页。"""
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    defects = _rule_table_defects(pages, set(VIEWING_RULES))
+    assert not defects, f"手册里那句「下表…」与那一张表、与名册对不上账：{defects}"
 
 
 def test_the_rule_table_reconciler_counts_rows_names_and_spares_the_neighbours():
-    """四种各钉一次：合法的那一形、加一行没改数、改了名册没改表、以及"读整行"会把谁算进来。
+    """六种各钉一次：合法的那一形、加一行没改数、改了名册没改表、"读整行"会把谁算进来、
+    跨页的第二张表、以及那句计数与那张表分家住在两页。
 
-    最后这一格是判据自己的防线：真实语料的第二格全是 `render_html.py`，正则接不住它，所以只测
+    倒数第三格是判据自己的防线：真实语料的第二格全是 `render_html.py`，正则接不住它，所以只测
     真实语料看不出"只读第一格"这一层有没有读者——得造一行第三格里有个光秃秃的反引号词。
     """
     roster = {"shown_events", "event_flags", "markers"}
@@ -985,28 +1001,41 @@ def test_the_rule_table_reconciler_counts_rows_names_and_spares_the_neighbours()
           "|---|---|---|\n"
           "| `shown_events` | `render_html.py` | 观众能看见哪些事件（`visibility` 不是规则名） |\n"
           "| `event_flags` / `markers` | `render_html.py` | 一条 turn 带哪些闸门标记 |\n")
-    assert _rule_table_defects(ok, roster) == [], \
+    assert _rule_table_defects({"views.md": ok}, roster) == [], \
         "两名同行要数成两个名字、第一格外的反引号词一个都不许进名单"
     assert _rule_table_measure(ok)[:2] == (2, 3)
 
     added_row = ok + "| `provenance` | `render_html.py` | 哪一版写的 |\n"
-    bad = _rule_table_defects(added_row, roster | {"provenance"})
+    bad = _rule_table_defects({"views.md": added_row}, roster | {"provenance"})
     assert bad and "现数是 3 行 / 4 个" in bad[0], f"加了一行而句子没跟着改：{bad}"
 
     # 数改对了才轮得到名册那一向：前两查是逐条 exclusive 的，这里得先把句子拧对。
     numbered = added_row.replace("下表 2 行 = 3 个函数名", "下表 3 行 = 4 个函数名")
-    stale_roster = _rule_table_defects(numbered, roster)
+    stale_roster = _rule_table_defects({"views.md": numbered}, roster)
     assert stale_roster and "只在表里的 ['provenance']" in stale_roster[0], \
         f"表和名册分家时两个方向都要点名：{stale_roster}"
-    assert _rule_table_defects(numbered, roster | {"provenance"}) == []
+    assert _rule_table_defects({"views.md": numbered}, roster | {"provenance"}) == []
 
     reworded = ok.replace("下表 2 行 = 3 个函数名", "这张表有几行、几个名字")
-    assert len(_rule_table_defects(reworded, roster)) == 1, \
+    assert len(_rule_table_defects({"views.md": reworded}, roster)) == 1, \
         "计数句换成没有数的说法＝把入口擦了：判据不许在零主张时假装对账成功"
 
     moved = ok.replace(RULE_TABLE_HEADER, "| 规则 | 只有一个主人 | 回答的问题 |")
-    assert "找不到" in _rule_table_defects(moved, roster)[0], \
+    assert "找不到" in _rule_table_defects({"views.md": moved}, roster)[0], \
         "表头换了字就扫不到表，这条必须报出来而不是绿着——扫空了它照样绿是这族闸门的旧病"
+
+    copy = "（下表 2 行 = 3 个函数名，抄来的一句）\n"
+    twice = _rule_table_defects({"views.md": ok, "comparison.md": copy}, roster)
+    assert twice and "有 2 处" in twice[0] and "comparison.md" in twice[0], \
+        f"同一句话抄到第二本页上要点名两处各住哪：{twice}"
+    assert len(_rule_table_defects({"views.md": ok, "comparison.md": ok}, roster)) == 1, \
+        "同一张表被两本点名时先报那一张有几本，别让读者去猜是哪一向坏了"
+
+    orphan = _rule_table_defects(
+        {"views.md": ok.replace("（下表 2 行 = 3 个函数名，一名一条参数化用例钉住）", ""),
+         "comparison.md": copy}, roster)
+    assert orphan and "指不到东西" in orphan[0] and "comparison.md" in orphan[0], \
+        f"表与那句计数住在两页：那一页上的「下表」没有下表，要点名各住哪：{orphan}"
 
 
 # --------------------------------------------------------------- 出厂值引用
