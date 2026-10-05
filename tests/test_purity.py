@@ -146,3 +146,23 @@ def test_pure_core_modules_all_exist():
     present = set(_sources())
     missing = set(PURE_CORE) | {"phases.py", "events.py", "agent.py", "actors.py", "game.py"}
     assert not (missing - present), f"guarded module(s) vanished: {sorted(missing - present)}"
+
+
+def test_the_imported_package_is_the_tree_this_file_sits_on():
+    """这一本从盘上读源码的那棵树，必须就是解释器 import 进来的那一棵。
+
+    这一片上面的守卫都按 `SRC`（也就是本文件所在的那棵树）读源码，而 `import wolfengine` 走的是
+    `sys.path`。开发机上装的是可编辑安装，`site-packages` 里那个 `.pth` 文件写着开发树的
+    `src`，所以在新克隆里忘了带 `PYTHONPATH` 时，测试文件来自克隆、被测代码来自开发树——
+    整趟绿的是开发树，而读数会被写成"这份克隆自证过了"。
+    `17:50:27Z` 现量：同一本克隆、同一个解释器，不带那条环境变量时
+    `wolfengine.game.__file__` 落在开发树，带上才落进克隆（`17:48:30Z` 那一趟四本模块逐条点过）；
+    `17:50:13Z` 整套在带上之后跑出 1254 条全绿——也就是说"这份克隆自证过了"这句话，
+    在这一条之前没有任何东西替它站着。
+    """
+    import wolfengine
+
+    imported = Path(wolfengine.__file__).resolve().parent
+    assert imported == SRC, (
+        f"测试读的是 {SRC}，解释器 import 的却是 {imported} —— 这一趟证明的是另一棵树。"
+        f"在克隆里跑要带上 PYTHONPATH=src:.（或者用那份克隆自己装出来的 venv）")
