@@ -4143,6 +4143,9 @@ def _blank_string_tokens(text: str) -> str:
     只认 `tokenize.STRING` 一枚口径，是量出来的而不是省事：`12:13:01Z` 分桶 `.py` 面 28 枚主张，
     25 枚住在 STRING 里、3 枚住在注释里、0 枚住在别的字面量里；把 3.12 起拆开的 FSTRING_* 三支
     一起抹，全面主张与落不住两枚读数一个字不变（74 枚 / 0 枚）。零读者的分支不写进扫法。
+    这一支的失效方向是**过收**不是漏判（`#282` 实测翻了 `#281` 登记那句方向）：f-string 的字面段
+    是 `FSTRING_MIDDLE`，不叫 STRING，抹除碰不到它，所以住在字面段里的主张照样进面。尺是
+    `test_a_claim_written_in_an_fstring_literal_is_not_blank_off_the_face`，牙由"三支一起抹"那具刀量。
     抹不动的那一支返回原文，是更严的方向（字符串照旧进账）；今值 80 本里 0 本走到它。
     """
     try:
@@ -4298,6 +4301,26 @@ def test_blanking_a_python_string_keeps_line_numbers_and_column_offsets():
     assert TICKET_CLAIM.findall(cut) == ["7", "9"], (
         f"注释里的主张要留在面上、字符串常量里的要离开：{TICKET_CLAIM.findall(cut)}"
         "（住在字面量里的枚数账见 `_blank_string_tokens` 的注释头）")
+
+
+def test_a_claim_written_in_an_fstring_literal_is_not_blank_off_the_face():
+    """f-string 的字面段不在抹除那一支里：主张留在面上，这一支的失效方向是过收。
+
+    `#281` 把这一支登记成"没有尺量它"，归档那句还把它写成了漏判。实测把方向翻了过来：
+    3.12 起 f-string 拆成 `FSTRING_START`／`FSTRING_MIDDLE`／`FSTRING_END`，三种都不叫
+    `tokenize.STRING`，`_blank_string_tokens` 那一支碰不到它们——`requires-python` 就是 `>=3.12`，
+    所以这条断言没有版本歧义。同趟的正控制是那一枚普通字符串常量：它必须离开面，否则"字面段留着"
+    可能只是因为整本没被 tokenize 成功（抹不动时函数返回原文，读数会看着像全过）。
+    哪天有人把三支一起抹，方向翻成漏判——这一条要红，改的人得同时把新的失效方向写明。
+    """
+    src = ('PLAIN = "`#7` 的那一节住在字符串常量里，它要离开面"\n'
+           'FMT = f"计数 {n} 之后：`#8` 的那一节住在字面段里，它要留在面上"\n')
+    before = TICKET_CLAIM.findall(src)
+    assert before == ["7", "8"], f"夹具本身要先带得住两枚主张，否则两边的相等是空转：{before}"
+    left = TICKET_CLAIM.findall(_blank_string_tokens(src))
+    assert left == ["8"], (
+        f"字面段里的那一枚要留在面上、常量里的那一枚要离开：实际留下 {left}"
+        "（把 FSTRING_* 三支一起抹就会只剩空列表——那一改把方向翻成漏判，需同时改这条）")
 
 
 def test_every_ticket_section_claim_in_the_repo_has_a_number_keyed_section():
