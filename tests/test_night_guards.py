@@ -1,6 +1,6 @@
 """夜晚那两个"不问了"的分支：女巫两瓶都用完了、预言家无可查了。
 
-`/tmp/mut73.py` 在整套 779 条上复核出的幸存者里，P7/P8 是这一对。两条都不是抽象洁癖：
+那趟在整套 779 条上复核出的幸存者里，P7/P8 是这一对。两条都不是抽象洁癖：
 
 * **P7：`if witch is None or not t.state.is_alive(witch) or t.state.witch.both_used`** 少掉最后
   一支，女巫每夜多被问一次——那一问的合法集是 `acts=("pass",)、consumables=()`（见

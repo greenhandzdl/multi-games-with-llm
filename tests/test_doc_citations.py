@@ -1708,7 +1708,7 @@ def test_the_line_citation_corpus_has_one_entry_per_file_it_scans():
 def test_the_line_citation_gate_reads_the_product_files_that_cite_line_numbers():
     """`#126` 收了 `tests/` 与 `scripts/`，`src/` 是这一族唯一还没有读者的 .py。
 
-    代价先量过（09:29:11Z，`/tmp/m139.py`：把 markdown + tests + scripts + src 一起喂给闸门自己的
+    代价先量过（09:29:11Z：把 markdown + tests + scripts + src 一起喂给闸门自己的
     判据）：src 侧 28 个 .py 里只有一处注释写着这个形状，就是 `src/wolfengine/events.py` 末尾那段
     docstring，它同时点了两个号，**两处都报红**。票面那句"先得量有多少处注释里的号昨天就对不上"的
     答案是 2——不是 0，也不是几十处，所以这一层扩面是划算的。
@@ -1791,8 +1791,8 @@ ARCHIVE = "iterations.md"
 def _artifact_paths(text: str) -> list[str]:
     """"某一轮跑出来、又被写进文档当复现出处"的临时工件。
 
-    认 `.py`（电池脚本本身）、`.out` / `.log`（它印出来的台账）、以及 `/tmp/某目录/*`（宣称还留在
-    那里的备份）。**不认**命令自己生成又自己读的临时目录——`--out /tmp/clipin` 和
+    认 `.py`（电池脚本本身）、`.out` / `.log`（它印出来的台账）、以及「临时目录下某个子目录
+    再加通配」那一形（宣称还留在那里的整目录备份）。**不认**命令自己生成又自己读的临时目录——`--out /tmp/clipin` 和
     `/tmp/clipin/A/*.jsonl` 那两类是今天还能敲的命令行，不是指不到东西的出处，把它们算进来会让
     文档不敢再写"怎么复核"，而那正是这一片要保住的东西。
     """
@@ -1851,6 +1851,44 @@ def test_the_manual_never_points_at_an_artifact_that_evaporates():
     bad = [(f.name, p) for f in _manual_pages()
            for p in _artifact_paths(f.read_text(encoding="utf-8"))]
     assert not bad, f"这些复现出处指到了一次性工件：{bad}"
+
+
+def _artifact_py_pages() -> list[Path]:
+    """同一句判据在代码那一面读的页：`_line_cite_files()` 里以 `.py` 结尾的那些本。
+
+    清单从行号那一族派生，是因为三棵 .py 树的名单只该有一个作者（`#153`）；"哪些本在面上"
+    这件事由 `test_the_artifact_scanner_reads_both_faces` 独立钉，不靠派生关系自证。
+    """
+    return [f for f in _line_cite_files() if f.suffix == ".py"]
+
+
+def test_no_code_page_points_at_an_artifact_that_evaporates():
+    """`#142` 当年只量了手册页，同一族句子在代码的注释与 docstring 里另有一面（13:24:03Z 现量）。
+
+    走仓库自己的 `_artifact_paths()` 逐本扫三棵 .py 树：`src/` 与 `scripts/` 各 0 枚，
+    测试那一面 19 枚，全部 `test -f` 指不到东西——句式与 `#142` 在手册里摘掉的一模一样
+    （「手术刀：某某（某脚本 W11，时间戳 零红）」），只是住在代码里没被量过。
+    那一轮的账本来就在归档的变异表里，脚本名只是来路，指不到东西的来路不该当出处。
+
+    这一条的牙：K1 往改干净的那一句里放回一枚工件指针，只红这一条、不红手册那条（证明 .py
+    这一面有自己的读者）；K2 在 docstring 里放一条命令形状的临时目录，两条都得继续绿
+    （证明加宽没把"怎么复核"那句话禁止掉）；K3/K4 把面上某一棵树摘掉，行为用例不红而组成
+    用例红——越收窄越像绿的那一族，`#126` 用的同一招。
+    """
+    bad = [(str(f.relative_to(ROOT)), p) for f in _artifact_py_pages()
+           for p in _artifact_paths(f.read_text(encoding="utf-8"))]
+    assert not bad, f"代码里的复现出处指到了一次性工件：{bad}"
+
+
+def test_the_artifact_scanner_reads_both_faces():
+    """语料组成：手册那本减去归档，代码那一面恰好是三棵树里的 .py，谁也不在许多本之外。"""
+    py = _artifact_py_pages()
+    trees = {f.relative_to(ROOT).parts[0] for f in py}
+    assert len(py) >= 40, f"代码那一面只剩 {len(py)} 本，多半是清单或扫法坏了"
+    assert trees == {"tests", "scripts", "src"}, \
+        f"代码那一面应当恰好是这三棵树：{sorted(trees)}"
+    assert not [f for f in py if f.name == ARCHIVE], "归档被放进了面上：那条豁免就没有依据了"
+    assert all(f.suffix == ".py" for f in py), f"面上混进了非 .py：{[f for f in py if f.suffix != '.py']}"
 
 
 def test_the_artifact_scanner_scans_every_manual_page():

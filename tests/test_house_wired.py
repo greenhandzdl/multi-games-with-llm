@@ -1,6 +1,6 @@
 """房规的两个开关，编排层到底看不看：`tie_break` 与 `hunter_shoots_on`。
 
-`/tmp/mut73.py` 复核出的 P6/P9 是这一对。两具各自删掉一个 `and` 后面的房规读取：
+那趟变异复核出的 P6/P9 是这一对。两具各自删掉一个 `and` 后面的房规读取：
 
 * **P6：`if res.tied and res.pk_seats and t.state.house.tie_break == "pk_once_then_nobody":`** 少掉
   最后一支，`tie_break="nobody"` 的桌子照样进 PK——那条房规的全部含义就是"平票不重来"。

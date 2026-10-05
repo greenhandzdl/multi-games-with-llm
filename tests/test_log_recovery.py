@@ -679,7 +679,7 @@ def _cat_of_two_games(tmp_path: Path) -> Path:
     ([0, 3, 2, 1], "顺序倒挂 2 处"),
 ])
 def test_a_log_whose_numbering_was_broken_by_hand_says_so(tmp_path, capsys, order, words):
-    """实测（2026-09-22T03:20:16Z，/tmp/probe_seq.py）：缺号、重号、倒序三种文件在 `replay` 上
+    """实测（2026-09-22T03:20:16Z 那一趟逐文件探针）：缺号、重号、倒序三种文件在 `replay` 上
     一个字都不多说，`audit` 也没有任何编号读数——只有 `kinds` 那一格偶尔露出马脚。
 
     对着终端的人看见 `[e1] [e3] [e4]` 会以为这一局就没有 e2；看见 `[e2] [e2]` 分不出哪个引用是对的，

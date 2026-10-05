@@ -113,7 +113,7 @@ def test_a_person_at_the_table_is_asked_and_their_words_are_in_the_log(tmp_path,
     # 不下——那不是这一片要证的（CLI 有没有把这个人接上桌），硬钉"每一回合都算他说的"就成了假账。
     # 但这句话**必须挂在 3 号身上**：`actor_kinds` 只说"这桌有一个人在打字"，把椅子挪到 2 号它照样
     # 是 `['human','mock']`，而替身答的回合 `meta.rung` 同样是 -1（`#122` 那格决定的）。变异
-    # `/tmp/mut123.py` 的 K2 量的正是这一格，第一版这里扫的是全部事件，所以它是绿的。
+    # 那一趟的 K2 量的正是这一格，第一版这里扫的是全部事件，所以它是绿的。
     assert any(MARK.split(" ", 1)[1] in str(e.payload) for e in mine), (
         "3 号那一席没有一句是他说的话：那一席是引擎或替身在答")
     assert all(e.payload["meta"]["rung"] == -1 for e in mine), (
@@ -245,7 +245,7 @@ def test_two_games_on_one_read_share_a_seat_kind_list_without_repeating_it(tmp_p
 
     `metrics.seat_kinds` 是一个 set 推导。把 `sorted({...})` 换成 `sorted([...])` 时，上面那两条单局
     用例一条都不会红——`game.open_log` 已经在每一局的页眉里去过一次重了，所以那是一具**等价变异**
-    （`/tmp/mut125.py` 的 W3 量的正是这件事：它红 2 条，不是我预期的 3 条）。只有把两局真日志放到同
+    （W3 那一具量的正是这件事：它红 2 条，不是我预期的 3 条）。只有把两局真日志放到同
     一张桌上，才问得到"读者看到的那张种类表里 mock 出现一次还是两次"。
     """
     games = [metrics.read_game(_played(tmp_path, keyboard, f"pair-{i}", seed=11 + i,

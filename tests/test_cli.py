@@ -253,7 +253,7 @@ def test_the_batch_loader_ignores_the_prompt_dumps(no_network, tmp_path):
 def test_the_batch_reader_skips_the_dump_by_the_same_name_as_the_writer(no_network, tmp_path):
     """`compare` never goes through `read_dir`: `batch.read_arm` walks the arm folder with its own
     copy of "this name is not a trajectory". That copy had no assertion behind it — turning it into
-    one that never matches left all three test files green (`/tmp/mut_predup.py` P2,
+    one that never matches left all three test files green (knife P2,
     2026-09-22T01:14:10Z), which is what "a branch nobody reads" looks like when it is a `continue`.
 
     Written against the real writer rather than a hand-made filename: the predicate is a copy of an

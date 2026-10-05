@@ -974,8 +974,8 @@ def test_m7_reports_the_share_of_the_asked_budget_the_model_actually_used():
     """
     calls = [_call(1, 1, "day_speech", lat=2.0, ct=70, pt=900, asked=140),
              # 71, not 70: every ratio in this fixture would otherwise be exact (0.5, 1.0), and an
-             # exact quotient cannot tell a rounded reading from a raw float. K5 in
-             # `/tmp/mut_fillrate.py` survived on precisely that hole.
+             # exact quotient cannot tell a rounded reading from a raw float. Knife K5
+             # survived on precisely that hole.
              _call(2, 1, "day_speech", lat=2.0, ct=71, pt=900, asked=140),
              _call(3, 1, "day_vote", lat=1.0, ct=60, pt=900, asked=60, finish="length")]
     out = metrics.m7_cost_profile(calls)

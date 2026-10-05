@@ -114,12 +114,12 @@ def test_the_token_budget_enumeration_is_only_ever_read_through_one_function():
 def test_the_two_refusal_sites_do_not_keep_their_own_copy_of_the_lists():
     """`--set` 那一半和 `compare` 这一半必须问 `config.py` 要名单，不能各自抄一份。
 
-    独占的读数在顶层那一格：R11（`/tmp/mut65c.py`，10:05:07Z→10:07:22Z）只把 `enable_sheriff`
+    独占的读数在顶层那一格：R11（10:05:07Z→10:07:22Z 那一趟）只把 `enable_sheriff`
     内联进 `report.py`，742 条里**只有这一条红**——`test_batch_paired.py` 里那条对账守卫
     （`test_the_no_reader_list_and_the_source_agree_in_both_directions`）是绿的，因为它扫的名单
     只有点号路径（`flatten(Config())` 里带 `.` 的那些），一个没有点号的名字被抄走它看不见。
     内联**完整**名单（含 `"regions.b0"`）时就有第二个读者了：R9/R10
-    （`/tmp/mut65.py`，09:59:44Z）里那条对账守卫把 `batch.py` 中的字符串常量当成读取点，
+    （09:59:44Z 那一趟）里那条对账守卫把 `batch.py` 中的字符串常量当成读取点，
     "零读者名单"与源码对不上，于是它也红——那两只的预期写成"行为套件不动"被打掉过一次。
     两条守卫的分工就是这两半：对账那条管点号路径，这一条管顶层那一格有没有被抄走。
     手法与上面那条计价守卫一致：不看值，看字段名字出现在哪几个文件里，

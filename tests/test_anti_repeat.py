@@ -87,7 +87,7 @@ def test_four_repeated_phrases_get_four_slots_not_four_windows_of_one():
 def test_the_slots_go_to_the_phrases_used_most_often_not_the_least():
     """名额只有四个、模板有五个时，先被回灌的得是**说得最多的**那个。
 
-    手术刀：`frags.sort` 的次数键反向（`/tmp/mut66.py` W11，10:34:53Z 那具在 752 条里**零红**）。
+    手术刀：`frags.sort` 的次数键反向（W11 那一具，10:34:53Z 在 752 条里**零红**，账在归档的变异表里）。
     名额被最少见的四个占了，黑名单照样印、行数照样对，而真正塌陷的那一句——六个人都说的
     那句——一个字都没进提示词。这一条钉的不是"有没有那一行"，是那一行里**装的是哪四条**，
     所以只有断言到具体名额归属的用例能发现它。
@@ -107,7 +107,7 @@ def test_the_slots_go_to_the_phrases_used_most_often_not_the_least():
 def test_a_near_miss_does_not_take_a_second_slot_off_the_same_phrase():
     """同一句话还以"差一个字"的近亲形式出现过时，回灌给的是整句，不是那半截。
 
-    手术刀：删掉 `kept` 那一步的包含判断（`/tmp/mut66.py` W12，10:34:53Z 零红）。那时
+    手术刀：删掉 `kept` 那一步的包含判断（W12 那一具，10:34:53Z 零红）。那时
     "我先听听大家的"（被近亲卡住、长不出去）和"我先听听大家的发言，"（三个座位共享的整句）
     各占一个名额——同一句话花掉两个格子，四个名额只剩两个给别的模板。这种近亲在真实输出里
     常见（"我先听听大家的发言" / "我先听听大家的话"），不是假想敌。

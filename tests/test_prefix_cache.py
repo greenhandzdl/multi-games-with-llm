@@ -97,7 +97,7 @@ def test_the_per_phase_split_locates_the_wave_that_lost_its_prefix():
 def test_the_cache_denominator_is_the_same_batch_of_calls_m7_bills():
     """两处 `calls` 说的必须是同一句话：只算**记过延迟**的那些决定。
 
-    这一格的动机不是设计出来的，是变异跑出来的：`/tmp/mut70.py`（13:34:34Z）在把
+    这一格的动机不是设计出来的，是变异跑出来的（13:34:34Z 那一趟）：把
     `prefix_cache_reuse` 的延迟过滤摘掉时，全套 0 红——四个既有断言要么不看 `calls` 的绝对值，
     要么两格一起动。而 `m7_cost_profile` 里逐字相同的那一行才是这批调度的账面分母：两处各自
     过滤一遍，就是"一个判定两份实现"，改一处忘另一处时 `m7_cost.n_calls` 与 `prefix_cache.calls`
