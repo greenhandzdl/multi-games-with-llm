@@ -559,6 +559,7 @@ def _entry_point_names() -> set[str]:
 def _module_defs_and_production_reads(
     src_roots: tuple[str, ...] = ("src",),
     read_roots: tuple[str, ...] = ("src", "scripts"),
+    const_roots: tuple[str, ...] | None = None,
 ):
     """(src 的**模块级** def 名字 -> 落点, 生产链读者计数, src 的模块级常量名 -> 落点)。
 
@@ -574,11 +575,18 @@ def _module_defs_and_production_reads(
     常量都自带一个读者，探测永不发光。两把尺在同一棵树上的差是实测过的（01:08:24Z）：不扣报 **0 处**
     零读者，扣了报 **3 处**（`events.KINDS`、`metrics.SEAT_REF`、`persona.SPEECH_ACTS`）。函数不受
     这一格影响——`def` 的名字不是 `ast.Name`，所以 `#155` 那条判据的读数一格没动。
+
+    `const_roots`（`#160` 加宽到 `scripts/` 时补的那一格）把**候选面**与**扣账面**绑在一起。先前扣账
+    只随 `src_roots` 走，于是 `scripts/` 里一枚同名绑定会替 `src/` 的常量付读者账：`18:16:46Z` 在临时树
+    上现量两形——`src/a.py` 写 `X = 1` 而 src 从不读它、`scripts/b.py` 写 `X = 2`，旧口径报"有 1 枚读者"
+    并放行，把候选面与扣账面都收到 `(src, scripts)` 后报 0 枚读者、点名 `X`。默认值等于 `src_roots`，
+    所以 `#155` 与 `#166` 两条判据读的那两张表一格没动。
     """
     readers: dict[str, int] = {}
     written: dict[str, int] = {}
     defs: dict[str, list[str]] = {}
     consts: dict[str, list[str]] = {}
+    const_roots = src_roots if const_roots is None else const_roots
 
     def bind(target: ast.expr, node: ast.stmt, f: Path) -> None:
         """模块级赋值的左端：记一次落点，也记一次"它不是读者"。"""
@@ -616,7 +624,9 @@ def _module_defs_and_production_reads(
                 for node in tree.body:
                     if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                         defs.setdefault(node.name, []).append(f"{f}:{node.lineno}")
-                    elif isinstance(node, ast.Assign):
+            if root in const_roots:
+                for node in tree.body:
+                    if isinstance(node, ast.Assign):
                         for t in node.targets:
                             bind(t, node, f)
                     elif isinstance(node, ast.AnnAssign):
@@ -677,9 +687,10 @@ def test_the_export_list_is_not_a_caller_and_the_only_name_it_would_have_saved_i
 def _unreached_consts(
     src_roots: tuple[str, ...] = ("src",),
     read_roots: tuple[str, ...] = ("src", "scripts"),
+    const_roots: tuple[str, ...] | None = None,
 ) -> tuple[dict[str, list[str]], list[str]]:
     """常量层的探测本体：(名册, 零生产读者的名字)。两条判据共用这一具，夹具不许另写一份。"""
-    _, readers, consts = _module_defs_and_production_reads(src_roots, read_roots)
+    _, readers, consts = _module_defs_and_production_reads(src_roots, read_roots, const_roots)
     unreached = sorted(n for n, places in consts.items()
                        if not n.startswith("__") and readers.get(n, 0) <= 0)
     return consts, unreached
@@ -700,12 +711,17 @@ def test_no_module_level_engine_constant_is_left_without_a_reader():
     名单为空"是真话——所以地板取 80（01:26:57Z 现测 94 个名字、96 条落点，含双下划线那一格；同一趟
     另写了一份不共用这把尺的 ast 复算，两侧名字集相同）。
 
+    `#290` 把**候选面**与**扣账面**一起收到 `src` 加 `scripts` 两棵树：`18:15:46Z` 现量同一把尺名册从
+    94 个名字涨到 99 个，新增的五枚全住在 `scripts/calibrate.py`，零读者名单两侧都是空。这一面今天没有
+    真缺陷，所以它的牙不在真语料那一格——由夹具里"另一棵树上的同名绑定不许替它付账"那一条与电池里的
+    注入刀量。
+
     双下划线那一格豁免着的真零读者名字，01:33:36Z 实测是两具（`__all__`、`__version__`）：前者是出口
     清单，`#155` 已经定过性——清单不是调用者，豁免是对的。后者那一具 `#161` 删掉了（它是 `pyproject.toml`
     那句 `version` 的第二份抄本，两格今天相等而没有任何东西在核对，且零生产读者），所以这一格现在豁免的
     只有 `__all__`。版本号"只住一处"这件事不再靠这段散文兜着，由下面那两条用例钉着。
     """
-    consts, unreached = _unreached_consts()
+    consts, unreached = _unreached_consts(const_roots=("src", "scripts"))
     assert len(consts) >= 80, f"模块级常量只数到 {len(consts)} 个，多半是收集坏了"
     extra = sorted(set(unreached) - set(CONST_EXITS))
     stale = sorted(set(CONST_EXITS) - set(unreached))
@@ -977,6 +993,11 @@ def test_the_constant_probe_counts_a_definition_itself_as_no_reader(tmp_path):
     `ONLY_TEST` 的读者住在 `outside/`，而 `read_roots` 里没有它——这一格复现的是 `#155` 的决定：
     "只有自己的用例在养它"不算产品读者。`orphan` 那一具函数同时被数，是拿来证明第三格没有改动
     `#155` 那条判据读的那一张表（函数名不是 `ast.Name`，扣不到它）。
+
+    `#290` 在第二棵树 `script_side/run.py` 里加了两枚**同名绑定**（`USED`、`DEAD`），量的是扣账面必须
+    跟着候选面走这一格：两形同源的口径下 DEAD 报 0 枚读者、USED 报 2 枚；把扣账面退回一棵树，DEAD
+    被隔壁那枚绑定喂成 1 枚、USED 涨到 3 枚——前者是漏判（一枚死常量拿到通行证），后者是过收的反面
+    （别的树上有同名绑定，也不该把一枚活常量判死）。
     """
     pkg = tmp_path / "pkg"
     scripts = tmp_path / "script_side"
@@ -988,19 +1009,28 @@ def test_the_constant_probe_counts_a_definition_itself_as_no_reader(tmp_path):
         "def orphan():\n    return 0\n", encoding="utf-8")
     (pkg / "consumer.py").write_text(
         "from prod import USED\nprint(USED)\n", encoding="utf-8")
-    (scripts / "run.py").write_text("import prod\nprint(prod.show())\n", encoding="utf-8")
+    (scripts / "run.py").write_text("import prod\nprint(prod.show())\nUSED = 5\nDEAD = 9\n",
+                                   encoding="utf-8")
     (outside / "only_test_user.py").write_text("import prod\nassert prod.ONLY_TEST\n",
                                                encoding="utf-8")
 
     _, readers, _ = _module_defs_and_production_reads(
-        src_roots=(str(pkg),), read_roots=(str(pkg), str(scripts)))
-    roster, unreached = _unreached_consts((str(pkg),), (str(pkg), str(scripts)))
+        src_roots=(str(pkg),), read_roots=(str(pkg), str(scripts)),
+        const_roots=(str(pkg), str(scripts)))
+    roster, unreached = _unreached_consts(
+        (str(pkg),), (str(pkg), str(scripts)), const_roots=(str(pkg), str(scripts)))
+    _, laundered, _ = _module_defs_and_production_reads(
+        src_roots=(str(pkg),), read_roots=(str(pkg), str(scripts)), const_roots=(str(pkg),))
 
     assert sorted(roster) == ["DEAD", "ONLY_TEST", "USED"], sorted(roster)
     assert readers["USED"] >= 1 and readers["show"] >= 1
     assert readers["DEAD"] == 0 and readers["ONLY_TEST"] == 0
     assert readers.get("orphan", 0) == 0
     assert unreached == ["DEAD", "ONLY_TEST"], unreached
+    assert laundered["DEAD"] == 1 and laundered["USED"] == 3, (
+        "把扣账面退回一棵树时，`script_side` 里那两枚同名绑定就替 pkg 的名字付了账："
+        "DEAD 报 1 枚读者、USED 报 3 枚。18:16:46Z 现量这一对与同源口径下的 0 枚、2 枚——"
+        "候选面与扣账面必须同源，钉的就是这一格")
 
 
 def _class_defs_and_reads():
