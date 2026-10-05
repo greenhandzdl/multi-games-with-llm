@@ -4422,6 +4422,59 @@ def test_every_ticket_number_in_the_manual_is_searchable_in_the_archive():
         + "——那本任务清单不随仓库发布，归档是读者手上唯一的落点，写歪一枚就是断链")
 
 
+def _py_ticket_pages() -> dict[str, str]:
+    """票号族的代码那一面：`_ticket_claim_pages()` 里那三棵 `.py`，抹字符串口径照旧共用一份。
+
+    只取注释与 docstring 之外的源面是**量出来的**，不是顺手：同一份判据在不抹的那一面收进的枚数
+    比这一面多出一个量级，多出来的那些枚住在渲染层的颜色常量里（形状是井号加十六进制）。
+    这一格的下界由 `test_the_py_ticket_face_blanks_literals_because_raw_overcollects` 钉着。
+    """
+    return {k: v for k, v in _ticket_claim_pages().items() if k.endswith(".py")}
+
+
+def test_every_ticket_number_in_the_py_face_is_searchable_in_the_archive():
+    """代码那一面的票号也要在归档里逐字落住——上一格只读手册五本，这一格补的是另一半面。
+
+    与手册面同一条判据（`_ticket_pointers`，不写第二份）：整串比、两侧都要非字母非数字。
+    今值与逐本账见归档里这一片的编号节；枚数地板是"面不许悄悄变空"的语料证人。
+    """
+    pages = _py_ticket_pages()
+    archive = _read_repo_page(f"docs/{ARCHIVE}")
+    n = sum(len(TICKET_REF.findall(text)) for text in pages.values())
+    assert n >= 100, (
+        f"代码那一面只扫到 {n} 枚票号，多半是这一面又空了——"
+        "这一格是判据自己的语料证人：号要是扫空，'落不落得住'就成了空转的一句话")
+    bad = _ticket_pointers(pages, archive)
+    assert not bad, (
+        "三棵 .py 的注释里有点名的票号在 `docs/iterations.md` 里逐字检索不到（格式 文件:行 命中的号）："
+        + "；".join(f"{p} 的 {ln} 行 {tok}" for p, ln, tok in bad)
+        + "——那一面写的也是'见某票'，读者手上唯一的落点还是归档，写歪一枚就是断链")
+
+
+def test_the_py_ticket_face_blanks_literals_because_raw_overcollects():
+    """这一面为什么走抹字符串口径：不抹的那一面今天多收落不住的号，抹掉的这一面一枚不多。
+
+    两半各钉一侧。第一半钉"抹这一支在这一面上真的干活"——它对每一本都成了恒等就是口径没了读者。
+    第二半钉方向：不抹的面多收的枚数必须**严格大于**抹掉的面，否则这条判据就说不清自己在防什么，
+    而按不抹的口径加宽会把渲染层的颜色常量逐本报成断链。
+    """
+    blanked = _py_ticket_pages()
+    raw = {k: _read_repo_page(k) for k in blanked}
+    archive = _read_repo_page(f"docs/{ARCHIVE}")
+    diff = [k for k in blanked if blanked[k] != raw[k]]
+    assert diff, (
+        "抹字符串那一支在面里的每一本上都成了恒等，这一面的口径没有读者了——"
+        "要么 `_blank_string_tokens` 坏了，要么面里再也没有字面量")
+    rows_blank = _ticket_pointers(blanked, archive)
+    rows_raw = _ticket_pointers(raw, archive)
+    assert len(rows_raw) > len(rows_blank), (
+        f"不抹的那一面现在只比抹掉的多收 {len(rows_raw) - len(rows_blank)} 枚落不住的号——"
+        "这一格是'为什么走抹字符串口径'的唯一读数。它归零说明面里的颜色常量形消失了，"
+        "那时该把口径换成不抹并删掉这一条，而不是留着一条空转的辩护")
+    only = [r for r in rows_raw if r not in set(rows_blank)]
+    assert only, "多收的那几枚要真住在字面量里：抹掉之后它们一枚都不该在面上"
+
+
 def test_blanking_a_python_string_keeps_line_numbers_and_column_offsets():
     """抹字符串只抹"这一枚字面量的内容"，不许挪任何一个字符的位置。
 
