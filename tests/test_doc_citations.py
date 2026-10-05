@@ -2553,7 +2553,7 @@ def test_the_markdown_pointer_ban_covers_both_shapes_and_spares_the_five_legitim
 # ---------------------------------------------------- 手册里"页名 + 第 N 行"这一形（#219）
 # `#217` 禁的是冒号形（`名.md:NNN` 与裸 `` `:NNN` ``），并把「`文件名.md` 的 NNN 行」留给"复述一个历史号"——
 # 那一形正则接不住，是有意的。代价是**同一形也装得下一句活指针**：`docs/views.md` 里那句「按
-# [comparison.md](comparison.md) 第 38 行那句契约」落笔时真的是第 38 行（归档里 `#57` 那一节记着当时的契约
+# [comparison.md](comparison.md) 第 38 行那句契约」落笔时真的是第 38 行（归档里 `#57` 那一轮记着当时的契约
 # 就写在 38 行），而 comparison.md 后来插了行，那句契约今天在第 85 行，第 38 行是温度字段那一段。号会跟着
 # 页面挪，而这一个形状没有任何尺子读过——正是 `#217` 命名的那种病，只是走了一条它自己留的缝。
 # 归档里这一形 56 处几乎全是"搬运前那一版，`SHA`"式的历史账，管住它们不是清理；手册五本量出来是 1 处，
@@ -4030,7 +4030,7 @@ TICKET_BANNER = re.compile(r"^#\s*-{3,}(.*)$")
 TICKET_SLOT = re.compile(r"^\s*`?#(\d{1,4}[A-Za-z]?)(?![\dA-Za-z])")
 TICKET_PAREN_TAIL = re.compile(r"（([^（)]*)）\s*$")
 TICKET_SEPS = " `+/,,:：()（）#"
-TICKET_TARGET = re.compile(r"`([\w./-]+\.(?:py|md))`")
+TICKET_TARGET = re.compile(r"`([\w./-]+\.(?:py|md))`\s*的?\s*$")
 TICKET_SHAPE = re.compile(r"#N{1,4}(?![\dA-Za-z])")
 TICKET_ORIGIN = re.compile(r"任务清单|不随仓库发布|按号检索")
 
@@ -4054,9 +4054,11 @@ def _ticket_pointers(pages: dict[str, str], archive: str) -> list[tuple[str, int
 def _ticket_labels(title: str) -> set[str]:
     """一枚标题（或 python 段落横幅）写在自己名下的号：紧跟井号的前缀位，或结尾那个只由号组成的号槽。
 
-    号槽的两种写法都有读者：一节管两票的「：`#63` + `#67`」，和把号挂在圆括号里的「（`#144d`）」。
-    结尾那段只要掺进一个词就不是号槽——「（`#32` / `#44` / `#45` / `#61` 那四批）」是一串名单，
-    不是这四票各自的节，所以「`#61` 那一节」不许由它背书。
+    号槽的三种写法都有读者：一节管两票的「：`#63` + `#67`」，把号挂在圆括号里的「（`#144d`）」，
+    和把号署在全角逗号后面的「……走到人这一侧，`#127`」——11:33Z 量过这一形在归档里 13 枚、手册五本 0 枚，
+    归档自己的账就靠它接「那一节」那句。结尾那段只要掺进一个词就不是号槽——「（`#32` / `#44` / `#45` /
+    `#61` 那四批）」是一串名单，「（`#168` 第一步）」是一节分两半写的那种，都不是这四票各自的节，
+    所以「`#61` 那一节」「`#168` 那一节」不许由它们背书。
     """
     out: set[str] = set()
     m = TICKET_SLOT.match(title)
@@ -4066,7 +4068,7 @@ def _ticket_labels(title: str) -> set[str]:
     if paren:
         tail = paren.group(1)
     else:
-        segs = re.split(r"[：:]", title)
+        segs = re.split(r"[：:，、]", title)
         tail = segs[-1] if len(segs) > 1 else ""
     found = TICKET_REF.findall(tail)
     if found and not TICKET_REF.sub("", tail).strip(TICKET_SEPS):
@@ -4091,17 +4093,17 @@ def _read_repo_page(path: str) -> str:
 
 
 def _ticket_claim_target(sentence: str, number: str) -> str:
-    """那句主张点的是哪一本：号左边最近的一本反引号文件名，一个都没点就按归档读。
+    """那句主张点的是哪一本：只有紧贴号左边那一格写着的文件名（后面容许一个「的」）才算它认领了。
 
-    归档是这一族在仓库内唯一的落点，所以省略掉被指页的那句更可疑而不是更可信——按归档读它，
-    落不住就红。
+    归档是这一族在仓库内唯一的落点，所以没写被指页的那句更可疑而不是更可信——按归档读它，落不住就红。
+    同句里别处的文件名不参与：12:15Z 量过归档面 8 处红全是这么错认的——「……主人是 `#104` 那一节」
+    说的是本节，却因为同一句里早先提过 `docs/metrics.md` 而被读成点那一本的页，两边都数不出节就报红。
     """
-    target = "归档"
     pos = sentence.find(f"`#{number}`")
-    for hit in TICKET_TARGET.finditer(sentence):
-        if pos < 0 or hit.end() <= pos:
-            target = hit.group(1)
-    return target
+    if pos < 0:
+        return "归档"
+    hit = TICKET_TARGET.search(sentence[:pos])
+    return hit.group(1) if hit else "归档"
 
 
 def _ticket_section_claims(pages: dict[str, str], archive: str,
@@ -4161,19 +4163,23 @@ def test_an_invented_ticket_number_is_a_dead_pointer():
         "带后缀的那一枚要按整串比，不带反引号的那两枚也要进账"
 
 
-def test_a_ticket_heading_writes_its_number_in_one_of_two_slots():
+def test_a_ticket_heading_writes_its_number_in_one_of_three_slots():
     titles = [
         "#217 markdown 之间按行号互指：40 处零闸门",
         "`#279`：手册页里的票号指针族进闸门",
         "预算表里五行没有数的尺子：`#63` + `#67`",
         "能力清单又压掉八条复述（`#144d`）",
+        "被驳回之后的那一屏印什么：拒绝的码走到人这一侧，`#127`",
         '#220 手册页里"现场口径 + N 处"的普查读数进闸门：`#217` 那一刀把自己顶成历史',
+        "另外三本手册页里的散文判决：先登记、不摘（`#168` 第一步）",
         "D 表：文档引用闸门的三十四具（`#32` / `#44` / `#45` / `#61` 那四批）",
         "没有号的标题",
     ]
     got = [sorted(_ticket_labels(t)) for t in titles]
-    assert got == [["217"], ["279"], ["63", "67"], ["144d"], ["220"], [], []], \
-        f"前缀位与结尾号槽两种写法都要认，掺了词的名单与别人标题里的号都不算：{got}"
+    assert got == [["217"], ["279"], ["63", "67"], ["144d"], ["127"],
+                   ["220"], [], [], []], \
+        f"前缀位、结尾纯号槽、末尾署名三形都要认；掺词的尾段、掺词的括号名单、" \
+        f"别人标题里的号都不算：{got}"
 
 
 def test_a_ticket_section_claim_is_backed_by_the_page_it_names():
@@ -4184,20 +4190,27 @@ def test_a_ticket_section_claim_is_backed_by_the_page_it_names():
         "unkeyed.md": "逐条处置都在归档 `#8` 那一节。\n",
         "honest.md": "逐条处置都在归档 `#8` 那一片。\n",
         "doubled.md": "账在归档 `#6` 那一节。\n",
+        "signed.md": "逐条处置都在归档 `#9` 那一节。\n",
+        "tailword.md": "逐条处置都在归档 `#11` 那一节。\n",
         "pyfile.md": "构造夹具（`tests/fence.py` 的 `#104` 那一节）钉它。\n",
         "pytwice.md": "两段的账在 `tests/twice.py` 的 `#7` 那一节。\n",
+        "elsewhere.md": "那条用例的账在 `tests/twice.py` 里，逐条处置都在 `#7` 那一节。\n",
         "neighbour.md": "那一片的账在归档 `#8`。\n它那一节的写法是旧的。\n",
         "wrapped.md": "逐条处置都在归档 `#8`\n  那一节。\n",
         "missing.md": "见 `docs/gone.md` 的 `#7` 那一节。\n",
     }
     archive = ("#7 与 #8 的取证散在好几片里\n\n## `#7`：带号的那一节\n\n"
-               "### #6 上半场\n\n### #6 下半场\n")
+               "### #6 上半场\n\n### #6 下半场\n\n"
+               "### 那一屏不再只回答什么：局况上桌，`#9`\n\n"
+               "### 另外三本手册页里的账：先登记、不摘（`#11` 第一步）\n")
     rows = _ticket_section_claims(pages, archive, read=lambda p: py.get(p, ""))
     assert [(r[0], r[2], r[3]) for r in rows] == [
         ("unkeyed.md", "#8", "归档"), ("doubled.md", "#6", "归档"),
+        ("tailword.md", "#11", "归档"),
         ("pytwice.md", "#7", "tests/twice.py"), ("wrapped.md", "#8", "归档"),
         ("missing.md", "#7", "docs/gone.md")], \
-        f"数得出恰好一节才算落住：0 节、两节、以及点不到的那一本都算红——{rows}"
+        f"数得出恰好一节才算落住：0 节、两节、以及点不到的那一本都算红；被指的那一本要紧贴号左边那一格，" \
+        f"同句里别处的文件名不许替它认领——{rows}"
 
 
 def test_a_ticket_origin_line_names_both_the_shape_and_where_it_resolves():

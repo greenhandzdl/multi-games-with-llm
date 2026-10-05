@@ -898,7 +898,7 @@ def test_m5_treats_a_pk_round_as_its_own_round(golden):
     assert out["rounds"][1]["dup_exact6_rate"] == pytest.approx(1 / 3, abs=5e-4)
     # 批级那一格今天就有读者（`#104`）：`#102` 电池里"取错列"那具变异当时无人读，换成
     # `collapse_round_mean` 的列这条就红。这一局的三轮全都有 ≥2 人开口，所以它是**数值**读者、
-    # 不是地板读者——地板的读者在 `test_m3_gate.py` 的 `#104` 那一节。
+    # 不是地板读者——地板的读者在 `tests/test_m3_gate.py` 的 `#104` 那一节。
     assert out["dup_exact6_mean"] == pytest.approx(0.1111, abs=5e-4)
     assert out["gate"] == {"passivity_rate<": 0.4, "collapse_round<": 0.35,
                            "opening_distinct_rate>": 0.8}
