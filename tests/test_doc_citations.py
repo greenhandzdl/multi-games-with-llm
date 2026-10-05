@@ -4146,12 +4146,11 @@ def _blank_string_tokens(text: str) -> str:
     这一支的失效方向是**过收**不是漏判（`#282` 实测翻了 `#281` 登记那句方向）：f-string 的字面段
     是 `FSTRING_MIDDLE`，不叫 STRING，抹除碰不到它，所以住在字面段里的主张照样进面。尺是
     `test_a_claim_written_in_an_fstring_literal_is_not_blank_off_the_face`，牙由"三支一起抹"那具刀量。
-    抹不动的那一支返回原文，是更严的方向（字符串照旧进账）；今值 80 本里 0 本走到它。
+    没有"抹不动就返回原文"的兜底（`#283` 删掉的那一枚）：语料面里 80 本 `.py` 现量 0 本 tokenize 不过，
+    而写坏一本 `.py` 首先会让 pytest 收不起来——那本根本进不到这里，兜底护不住任何东西，
+    把它换成返回空串时整套闸门 133 条逐字不变（零读者的分支不写进扫法，同 `#251` 的处置口径）。
     """
-    try:
-        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
-    except (tokenize.TokenError, IndentationError, SyntaxError):
-        return text
+    tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
     starts = [0]
     for ln in text.splitlines():
         starts.append(starts[-1] + len(ln) + 1)
