@@ -518,7 +518,7 @@ def sidecar(ran_utc: str, quick: bool, features: dict, stream: dict, ratio: dict
 
     The endpoint's own listing is deliberately *not* flattened in beside `model`: it lives only in
     `features.models_endpoint`, and `metrics.declared_models()` is the one place that reads it. A
-    second copy would give the report's §0 line and `load_calibration`'s refusal two answers about
+    second copy would give `docs/calibration.md`'s §0 line and `load_calibration`'s refusal two answers about
     one run. It matters that much because the requested name comes from config and would match
     config forever — on its own it can never contradict anything, including R7, a box restarted on
     other weights. The listing is the one field in here that can.

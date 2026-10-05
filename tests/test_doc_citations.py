@@ -4026,7 +4026,7 @@ def test_a_bare_section_pointer_is_resolved_only_by_a_prefixed_sibling():
     pages = {"ellipsis.md": "依据按种类挑：mock 在 plan §十一（\"必须真端点\"），含真人在 §十五。\n",
              "lone.md": "这一格的判据抄自 §十二 那一条。\n",
              "title.md": "见〈§5 那笔折扣走到批这一级就断了：`#75`〉末尾那三段。\n",
-             "report.md": "两处各读一半，那就是报告 §0 报了、audit 放行。\n",
+             "report.md": "两处各读一半，那就是报告 \u00a70 报了、audit 放行。\n",
              "wrapped.md": "plan\n  §143 要的是预先声明剔除规则。\n",
              "split-title.md": "账见〈§5 那笔折扣\n  §7 那一枚夹在标题的两半之间。\n  `#75`〉末尾那三段。\n"}
     rows = _bare_section_pointers(pages)
@@ -4044,6 +4044,109 @@ def test_no_manual_page_carries_an_unresolved_bare_section_pointer():
         + "；".join(f"{p} 的 {n} 行 {tok}「{s[:40]}」" for p, n, tok, s in rows)
         + "——那本笔记在 GitHub 上点不开，读者连它是引擎之外的节号都看不出来。"
         "要么把前缀补回去，要么挪进〈〉/报告 那两形")
+
+
+# --------------------------------------------------------------- 仓内文档的编号节（代码那一面）
+# 节号指针的出处有两种：仓库外那本笔记（上一族），和随仓库走、今天就能翻开的那几本 `docs/*.md`。
+# 后一种在代码注释里的形状是"某个属格词的第 N 节"——owner 由一个词而不是一个文件名给出，而同一句里
+# 往往还住着另一本文档的名字（它只是被点名"说过这个失败"）。`#270` 给手册立过同一件事（去处要说出来），
+# 这一族是它的代码面：回看里点名了哪本，就查那一本的编号标题里有没有那一节；只有属格词，读者手上就是
+# 一个开不了的号。文档名按**整行前缀**取、且不许出现在节号之后（误绑会把一句真话判成假话，那是过收那
+# 一侧，`#282` 量过的方向）；属格词按 32 字回看取，跨硬换行的属格形读不到，这一格登记为漏判方向。
+# 今值与刀账记在归档的 `#287`。
+
+DOC_NAME_TAIL = re.compile(r'((?:[\w.-]+/)+[\w.-]+\.md)(?:[^§\n"。，；：—(（]{0,8})$')
+DOC_OWNER = re.compile(r"(?:report|报告|体检报告|calibrate|calibration)\D{0,4}$", re.I)
+PLAN_ADJACENT = re.compile(r"(?:plan|计划|方案)\s*$", re.I)
+DOC_HEADING = re.compile(r"(?m)^#+\s*(\d+)[.、]")
+SECTION_TOK = re.compile(r"§[0-9]+")
+
+
+def _doc_section_pointers(pages: dict[str, str]) -> list[tuple[str, int, str, str, str | None]]:
+    """代码那一面"某一本文档的第 N 节"式指针（格式 页:行 命中文本 原句 点名的文档或 None）。
+
+    句子窗口沿用 `#272` 的取词单位（`_cited_sentence`，同一份定义），但取枚不经过它的裸形名单——
+    那道闸门把"同句带前缀"的枚直接豁免掉了，而这里要的正是带文档名的那一枚。
+    """
+    rows: list[tuple[str, int, str, str, str | None]] = []
+    for page, text in pages.items():
+        lines = text.splitlines()
+        starts = [0]
+        for ln in lines:
+            starts.append(starts[-1] + len(ln) + 1)
+        for m in SECTION_TOK.finditer(text):
+            idx = next(i for i in range(len(lines) - 1, -1, -1) if starts[i] <= m.start())
+            col = m.start() - starts[idx]
+            back = text[max(0, m.start() - 32):m.start()]
+            if PLAN_ADJACENT.search(back):
+                continue
+            named = DOC_NAME_TAIL.search(lines[idx][:col])
+            if not named and not DOC_OWNER.search(back):
+                continue
+            rows.append((page, idx + 1, m.group(0), _cited_sentence(lines, idx, col),
+                         named.group(1) if named else None))
+    return rows
+
+
+def _numbered_headings(rel: str) -> set[str] | None:
+    """一本随仓库走的文档里真正存在的编号节号；文件不在场时给 None（那是"点空"而不是"没编号"）。"""
+    path = ROOT / rel
+    if not path.is_file():
+        return None
+    return {m.group(1) for m in DOC_HEADING.finditer(path.read_text(encoding="utf-8"))}
+
+
+def test_a_shipped_section_pointer_in_code_has_to_name_its_document():
+    """夹具六形：点名且落得住不报；只有属格词要报；点名但节号不在标题里要报；plan 前缀不报；
+    文档名在节号之后不算点名；文档名与 plan 同句相邻时号归上一族、两面不抢。
+
+    夹具里的节号用转义拼出来，免得这些原形自己进了被扫的那一面（`#140`/`#282` 同源的那一格）。
+    下面 `planadj.md` 那一形在今天的真语料里翻不出枚（上一族把那一片整个占了），它钉的是"两族
+    抢同一枚"那一格（`#278` 量过的互相抢读者）。
+    """
+    sec = "§"
+    pages = {
+        "named.md": f"延迟常数以 `docs/calibration.md` 的 {sec}4 那一节为准。\n",
+        "wordonly.md": f"这一格与报告的 {sec}0 是同一句话写两遍。\n",
+        "noheading.md": f"名单由 `docs/calibration.md` 的 {sec}9 声明。\n",
+        "planpref.md": f"配对协议整条在 plan {sec}8 第 2 条里预注册。\n",
+        "planadj.md": f"拟合值不在 `docs/calibration.md` plan {sec}7 那一节里预注册，号是 plan 自己的。\n",
+        "trailing.md": f"报告的 {sec}0 那一行，正是 `docs/metrics.md` 点名的失败。\n",
+    }
+    rows = _doc_section_pointers(pages)
+    assert [(r[0], r[2], r[4]) for r in rows] == [
+        ("named.md", f"{sec}4", "docs/calibration.md"),
+        ("wordonly.md", f"{sec}0", None),
+        ("noheading.md", f"{sec}9", "docs/calibration.md"),
+        ("trailing.md", f"{sec}0", None),
+    ], f"六形各钉一形：plan 前缀归上一族，节号之后的文档名不许当 owner；{rows}"
+    landed = [(r[0], r[2]) for r in rows
+              if r[4] and r[2][1:] in (_numbered_headings(r[4]) or set())]
+    assert landed == [("named.md", f"{sec}4")], \
+        f"编号标题那把尺只该认得下第 4 节那一枚：{landed}"
+
+
+def test_no_code_comment_points_at_a_shipped_section_by_a_word_alone():
+    faces = {str(f.relative_to(ROOT)): f.read_text(encoding="utf-8") for f in _artifact_py_pages()}
+    rows = [r for r in _doc_section_pointers(faces) if r[4] is None]
+    assert not rows, (
+        "代码注释里这些节号只有属格词当 owner、没点名是哪一本文档（格式 文件:行 命中文本 原句）："
+        + "；".join(f"{p} 的 {n} 行 {tok}「{s.strip()[:48]}」" for p, n, tok, s, _ in rows)
+        + "——仓内带编号标题的文档与批次的产物报告不止一本，一个词接不住那个号")
+
+
+def test_every_shipped_section_pointer_in_code_lands_on_a_real_heading():
+    faces = {str(f.relative_to(ROOT)): f.read_text(encoding="utf-8") for f in _artifact_py_pages()}
+    bad = []
+    for page, ln, tok, sentence, doc in _doc_section_pointers(faces):
+        if doc is None:
+            continue
+        heads = _numbered_headings(doc)
+        if heads is None:
+            bad.append(f"{page} 的 {ln} 行点名了不在场的 {doc}")
+        elif tok[1:] not in heads:
+            bad.append(f"{page} 的 {ln} 行 {tok} 在 {doc} 的编号标题里没有 {tok[1:]} 这一节")
+    assert not bad, "代码里点名了仓内文档的节号落不回那一本的编号标题：" + "；".join(bad)
 
 
 # --------------------------------------------------------------- 票号指针族（`#N`）

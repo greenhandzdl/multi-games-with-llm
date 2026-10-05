@@ -1075,7 +1075,7 @@ def fitted_constant(value: Any) -> bool:
     negative would make the term it divides into either infinite or nonsense, and an
     arithmetic error that survives into a verdict is worse than a missing number.
 
-    Public and imported by `calibrate.py`: the report's §0 "本节尚不构成常数来源" line and this
+    Public and imported by `calibrate.py`: the report `docs/calibration.md`'s §0 "本节尚不构成常数来源" line and this
     module's `usable` verdict are the same sentence written twice, so they read the same ruler.
     A negative `per_call_fixed_overhead_s` — what a zero-latency server produces — used to pass
     the report's `is None` check while this one refused the file.
@@ -1087,7 +1087,7 @@ def declared_models(features: Any) -> list[str]:
     """The model ids the endpoint advertised about itself, or [] when that probe never answered.
     Read out of the same `models_endpoint` block the calibration report prints in §1, so this is
     not a second source of truth — it is the only place this listing is parsed, and both the
-    report's §0 line and `load_calibration`'s refusal go through it."""
+    `docs/calibration.md`'s §0 line and `load_calibration`'s refusal go through it."""
     if not isinstance(features, dict):
         return []
     body = (features.get("models_endpoint") or {}).get("body")
@@ -1160,7 +1160,7 @@ def load_calibration(path: str | os.PathLike[str], *,
         else:
             constants = {k: block[k] for k in CALIBRATION_KEYS}
     # The listing is read out of the run's own raw probe and from nowhere else: a flat copy kept
-    # beside it in this same file is how the report's §0 line and this refusal would start
+    # beside it in this same file is how `docs/calibration.md`'s §0 line and this refusal would start
     # disagreeing about one run — the failure `docs/metrics.md` names. Absent probe = no evidence.
     declared = declared_models(raw.get("features"))
     denial = model_denial(model, declared)

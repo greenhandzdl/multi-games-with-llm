@@ -103,7 +103,7 @@ def test_a_null_constant_names_the_key_that_is_null(tmp_path, missing):
 
 def test_a_missing_fixed_overhead_is_not_zero_overhead(tmp_path):
     """`m7` 以前把缺省的 overhead 当 0 用，于是预测值系统性偏小、measured/predicted
-    系统性偏大——一个假的 "suspect"。三个数在 calibrate 的 §0 里被一并声明为
+    系统性偏大——一个假的 "suspect"。三个数在 `docs/calibration.md` 的 §0 里被一并声明为
     "别的代码允许引用的三个数"，那么要用就一起用。"""
     consts = dict(COMPLETE, per_call_fixed_overhead_s=None)
     cal = metrics.load_calibration(_sidecar(tmp_path, constants=consts))
@@ -173,7 +173,7 @@ def test_an_absent_or_empty_listing_is_no_evidence_not_a_contradiction(tmp_path)
 
 def test_a_flat_copy_of_the_listing_does_not_outvote_the_raw_block(tmp_path):
     """同一个文件里如果有两条路径能说出清单，读侧就必须在它们冲突时站在原始探针那一侧：
-    `docs/metrics.md` 里点名的失败正是这一对——报告的 §0 从 `features` 现推，它说"不承认"，
+    `docs/metrics.md` 里点名的失败正是这一对——`docs/calibration.md` 的 §0 从 `features` 现推，它说"不承认"，
     audit 却从另一格读出"承认"，于是放行了一份没人承认的常数。"""
     cal = metrics.load_calibration(_sidecar(
         tmp_path, features=_listing("some-other-weight"), model_declared=["gemma-fit"]))
