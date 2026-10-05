@@ -132,9 +132,11 @@ from __future__ import annotations
 
 import argparse
 import ast
+import io
 import re
 import subprocess
 import sys
+import tokenize
 
 import pytest
 from pathlib import Path
@@ -4134,6 +4136,44 @@ def _ticket_section_claims(pages: dict[str, str], archive: str,
     return rows
 
 
+def _blank_string_tokens(text: str) -> str:
+    """把 `.py` 语料里的字符串常量整枚抹成等长空白，行号与列位置一个字不动。
+
+    等长是硬要求：`_ticket_section_claims` 按字符偏移往回找句子窗口，位移一挪整本的读数就错位。
+    只认 `tokenize.STRING` 一枚口径，是量出来的而不是省事：`12:13:01Z` 分桶 `.py` 面 28 枚主张，
+    25 枚住在 STRING 里、3 枚住在注释里、0 枚住在别的字面量里；把 3.12 起拆开的 FSTRING_* 三支
+    一起抹，全面主张与落不住两枚读数一个字不变（74 枚 / 0 枚）。零读者的分支不写进扫法。
+    抹不动的那一支返回原文，是更严的方向（字符串照旧进账）；今值 80 本里 0 本走到它。
+    """
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(text).readline))
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return text
+    starts = [0]
+    for ln in text.splitlines():
+        starts.append(starts[-1] + len(ln) + 1)
+    out = list(text)
+    for tok in tokens:
+        if tok.type != tokenize.STRING:
+            continue
+        lo = starts[tok.start[0] - 1] + tok.start[1]
+        hi = starts[tok.end[0] - 1] + tok.end[1]
+        for i in range(lo, min(hi, len(out))):
+            if out[i] != "\n":
+                out[i] = " "
+    return "".join(out)
+
+
+def _ticket_claim_pages() -> dict[str, str]:
+    """「那一节」式主张的语料面：手册五本（按 basename 存键，与 `_manual_pages()` 同一份）＋归档＋三棵 `.py`。"""
+    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+    pages[f"docs/{ARCHIVE}"] = _read_repo_page(f"docs/{ARCHIVE}")
+    for label in ("tests", "src", "scripts"):
+        for f in sorted((ROOT / label).rglob("*.py")):
+            pages[str(f.relative_to(ROOT))] = _blank_string_tokens(f.read_text(encoding="utf-8"))
+    return pages
+
+
 def _ticket_origin_lines(pages: dict[str, str]) -> list[tuple[str, int, str]]:
     """同一句里既给出这一族的占位形、又给出它落在哪儿的那些句（格式 文件:行 原句）。
 
@@ -4239,16 +4279,52 @@ def test_every_ticket_number_in_the_manual_is_searchable_in_the_archive():
         + "——那本任务清单不随仓库发布，归档是读者手上唯一的落点，写歪一枚就是断链")
 
 
-def test_every_ticket_section_claim_in_the_manual_has_a_number_keyed_section():
-    pages = {f.name: f.read_text(encoding="utf-8") for f in _manual_pages()}
+def test_blanking_a_python_string_keeps_line_numbers_and_column_offsets():
+    """抹字符串只抹"这一枚字面量的内容"，不许挪任何一个字符的位置。
+
+    判据按字符偏移往回取句子窗口，所以等长与等行数就是这一支的契约：注释里的话留着、字符串里的话离开，
+    两边都不许改行数。抹的时候连换行一起抹掉，这一条当场红——它钉的是"位置不许动"那一侧。
+    """
+    src = ("# 注释里的 `#7` 的那一节要留在面上\n"
+           'DOC = """字符串里的 `#8` 的那一节要离开面\n'
+           "第二行按列对齐\"\"\"\n"
+           "X = 1  # 行尾注释 `#9` 的那一节也留着\n")
+    cut = _blank_string_tokens(src)
+    assert len(cut.splitlines()) == len(src.splitlines()), (
+        f"抹完行数变了（{len(src.splitlines())} → {len(cut.splitlines())}）："
+        "字符串里的硬换行被抹成了空格，往后的行号全体前移")
+    assert [len(ln) for ln in cut.splitlines()] == [len(ln) for ln in src.splitlines()], \
+        "每一行的长度要逐行相等，否则列位置会漂"
+    assert TICKET_CLAIM.findall(cut) == ["7", "9"], (
+        f"注释里的主张要留在面上、字符串常量里的要离开：{TICKET_CLAIM.findall(cut)}"
+        "（住在字面量里的枚数账见 `_blank_string_tokens` 的注释头）")
+
+
+def test_every_ticket_section_claim_in_the_repo_has_a_number_keyed_section():
+    """这一轴从手册五本加宽到手册＋归档＋三棵 `.py`：说"那一节"的句子在哪儿写都同样要落得住。
+
+    价是量过的（`12:13:01Z`）：加宽后今值 74 枚主张、按判据口径落不住 0 枚；同一批语料不抹字符串常量时
+    99 枚、落不住 15 枚，多出来的那一批全住在判据自己造的假页面夹具与 docstring 里（逐条账见归档
+    `#280`、`#281`）。所以这一步抹掉的那一桶不是给谁开的豁免名单，而是"夹具不是主张"这条口径的实现——
+    `_ticket_claim_pages()` 里那一枚抹字符串的函数一旦退成恒等，下面那条断言就该当场把住在字面量里的那
+    一批报出来（`#281` 的 K1 就是这么量的）。
+    """
+    pages = _ticket_claim_pages()
+    assert f"docs/{ARCHIVE}" in pages, (
+        f"语料面里没有归档（今天住着的是：{sorted(pages)[:6]}……）——归档里那句「那一节」写歪了没人读")
+    n_py = sum(1 for k in pages if k.endswith(".py"))
+    assert n_py >= 50, (
+        f"语料面里只有 {n_py} 本 `.py`（今值 80 本）——注释里那句「那一节」不在扫面上，"
+        "而 #280 量过的 3 枚注释主张就成了没人管的句子")
     archive = _read_repo_page(f"docs/{ARCHIVE}")
     n = sum(len(TICKET_CLAIM.findall(text)) for text in pages.values())
-    assert n >= 1, (
-        f"手册面只扫到 {n} 枚「那一节」式主张，多半是取词形状坏了（10:05Z 现量 3 枚，账见归档 `#279`）"
-        "——这一格是下面那条断言的语料证人：主张要是扫空，'落不落得住'就成了空转的一句话")
+    assert n >= 60, (
+        f"加宽后的扫面只数出 {n} 枚「那一节」式主张，多半是取词形状或某一面整个掉出了语料"
+        "（今值：手册 3、归档 68、tests 3、src 与 scripts 各 0）——主张扫空时"
+        "'落不落得住'就成了空转的一句话")
     rows = _ticket_section_claims(pages, archive)
     assert not rows, (
-        "手册页里有句子说某一页存在一节以某枚票号立题，而那一页的号槽数不出恰好一处"
+        "仓库里有句子说某一页存在一节以某枚票号立题，而那一页的号槽数不出恰好一处"
         "（格式 页:行 命中的号|被点的页）："
         + "；".join(f"{p} 的 {ln} 行 {tok}｜{tgt}「{s[:40]}」" for p, ln, tok, tgt, s in rows)
         + "——号能按号检索，但一枚号常被打进好几片取证；那句'那一节'要么改成'那一片'，"
