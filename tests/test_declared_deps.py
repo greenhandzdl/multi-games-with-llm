@@ -2,7 +2,8 @@
 
 前面那几层数的都是名字：函数 `#81`、导入 `#83`、类 `#85`、入参 `#86`、模块级常量 `#160`、
 类体字段 `#172`、整本文件 `#187`、用例读的 sidecar `#189`。这一本管比"文件"大一档的那一形：
-**声明**。三份东西各自说话，两两之间目前没有东西在读：
+**声明**。头五条管的是三份东西各自说话，两两之间目前没有东西在读；第六条拉进第四份
+（CI／构建配置），它管的不是对账而是"一句依据还在不在"：
 
 1. 代码里 import 的每一个三方顶层名，必须在 `pyproject.toml` 的 `dependencies` 或
    `optional-dependencies` 里点名过。没点名也能在作者机器上跑——`.venv` 里恰好装着它——
@@ -20,22 +21,29 @@
 5. `[tool.pytest.ini_options].markers` 里注册的每一枚 marker，要在 `tests/` 里真被挂过一次
    （`#228`）。注册句会印进 `pytest --markers`，所以一句"拿 -m 可以 deselect 掉它"而没有任何用例
    戴着的注册，是递给每一个敲的人一条不动任何东西的命令。`network` 就是被这一格抓住之后删掉的。
+6. `#253` 摘掉 43 枚豁免注释的那条闸门，全部依据是"这个仓库的依赖闭包里没有检查器"，而那句话
+   当时只写在它自己的 docstring 里，**没有任何判据读它**：谁加一行 `ruff` 到 dev extras，那条闸门
+   照旧绿，而它摘注释的理由当天就没了（`#284`）。这一格把那句话变成三扇门的读数——在册依赖名、
+   锁里的包名、CI／构建配置里的调用点名。
 
 判定住在 `_undeclared_imports()` / `_unread_dependencies()` / `_missing_from_lock()` /
-`_broken_entry_points()` / `_markers_without_users()` 五个纯函数里，
-真仓库和夹具共用同一份（`#153` 那条规矩：判据不许在守卫和夹具里各抄一遍）。前四条的包名比对一律先过
-`_canonical()` 走 PEP 503 口径——`pydantic-core` 和 `import pydantic_core` 是同一只包，换个分隔符
-或大小写不算缺陷，`uv` 自己也不这么认；报出来的仍是文件里写着的原样。第五条不走这张桌子：
-marker 名是 Python 标识符，`Network` 与 `network` 在 `--strict-markers` 下是两枚。
+`_broken_entry_points()` / `_markers_without_users()` / `_checker_recipients()` 六个纯函数里，
+真仓库和夹具共用同一份（`#153` 那条规矩：判据不许在守卫和夹具里各抄一遍）。凡比包名的那几格——
+第一至第四条和第六条——一律先过 `_canonical()` 走 PEP 503 口径——`pydantic-core` 和
+`import pydantic_core` 是同一只包，换个分隔符或大小写不算缺陷，`uv` 自己也不这么认；报出来的仍是
+文件里写着的原样。第五条不走这张桌子：marker 名是 Python 标识符，`Network` 与 `network` 在
+`--strict-markers` 下是两枚。
 
-限界五条，写的都是这一本明知会放过什么：只看顶层名，所以 `import a.b.c` 里住着的三方子模块
+限界六条，写的都是这一本明知会放过什么：只看顶层名，所以 `import a.b.c` 里住着的三方子模块
 不会被拆开对账；`optional-dependencies` 的每一组都算进"在册"，所以一个只有文档里提到、
 从来没人装的第二组 extra 不会被这本报出来；锁那一格只问"有没有同名包"，不问版本区间是否还对得上
 ——`uv lock --check` 那一步仍然归人（或 CI）跑，本包不假设那把命令在机器上存在；第四条只认冒号后
 那一个顶层属性名，所以 `pkg:Class.method` 那一形会被它报成缺陷，真要改成那种写法得先改这一本；
 第五条的"挂过"只认 `pytest.mark.x` 那个属性访问，所以 `from pytest import mark` 之后写 `@mark.x`
 不算使用者（报错方向是多事那一边），而它读的注册表整段允许为空——空语料那一格开不开火不由它自己
-证明，住在夹具那一格加一具还原刀里。
+证明，住在夹具那一格加一具还原刀里；第六条不读机器状态（`.venv/bin` 里有没有那几把刀每台机器不一样，
+读进判据就造出"本机绿、别人红"），也不认把检查器捆在里面的包装工——`pre-commit` 那一类要从
+**它自己的配置文件**里才被认出，名单本身放过它。
 """
 from __future__ import annotations
 
@@ -48,11 +56,24 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# 插件型依赖不靠 import 被读走，靠宿主配置文件里的那一句。这张表是这一本唯一手写的知识：
+# 插件型依赖不靠 import 被读走，靠宿主配置文件里的那一句。这张表是这一本最早手写的知识：
 # 以后接来一个新插件而忘了登记，那条依赖会被报成"没有读者"——报错方向是多事，不是放过。
 PYTEST_PLUGIN_READERS = {
     "pytest-asyncio": ("asyncio_mode", "async def test_"),
 }
+
+# 豁免注释（`#253`）的收件人名单：那三族标记各自只对这一类工具说话。这一本的第二张手写表，
+# 形状与上面那张不同——它不给依赖找读者，它问"这个名单里的东西有没有被请进仓库"。
+CHECKER_PACKAGES = ("mypy", "ruff", "flake8", "pylint", "pyright", "coverage", "pytest-cov")
+
+# 一个检查器不进 pyproject 也能被跑起来的那几本：CI 工作流与构建／钩子配置。按路径形状筛，
+# 不按内容猜，所以 README 里讲这些名字不算，本文件自己的字符串也不算（夹具钉住那一格）。
+CI_CONFIG_PATHS = re.compile(
+    r"^(?:\.github/workflows/[^/]+|\.gitlab-ci\.yml|\.circleci/config\.yml"
+    r"|azure-pipelines\.yml|\.travis\.yml|Jenkinsfile|tox\.ini|noxfile\.py"
+    r"|\.pre-commit-config\.yaml)$"
+)
+CHECKER_CALL = re.compile(r"\b(?:%s)\b" % "|".join(re.escape(n) for n in CHECKER_PACKAGES))
 
 SPEC_CUT = re.compile(r"[<>=!~;\[\s]")
 NAME_VARIANT = re.compile(r"[-_.]+")
@@ -188,6 +209,37 @@ def _markers_without_users(declared: set[str], used: set[str]) -> list[str]:
     return sorted(declared - used)
 
 
+def _ci_config_texts() -> dict[str, str]:
+    """按路径形状筛出的那几本 CI／构建配置，连同原文。今天在册零本——零本身就是读数。"""
+    return {f: (ROOT / f).read_text(encoding="utf-8", errors="replace")
+            for f in sorted(_tracked_files()) if CI_CONFIG_PATHS.match(f)}
+
+
+def _checker_recipients(deps: set[str], lock_names: set[str],
+                        file_texts: dict[str, str]) -> list[str]:
+    """第六条判据：三扇门里哪一扇把一个检查器请进了仓库。
+
+    前两扇按**包名**比，走 `_canonical()`（`#192`：换个分隔符或大小写是同一只包）；第三扇按
+    **调用点名**，只读 `CI_CONFIG_PATHS` 筛中的那些本本，所以把名字写在 README 或写在这本守卫
+    自己的字符串里都不算收件人——那一格由夹具钉住，不是靠这函数恰好没读到。
+    """
+    want = {_canonical(n) for n in CHECKER_PACKAGES}
+    out: list[str] = []
+    for dep in sorted(deps):
+        if _canonical(dep) in want:
+            out.append(f"pyproject 依赖 {dep}")
+    for name in sorted(lock_names):
+        if _canonical(name) in want:
+            out.append(f"uv.lock 包 {name}")
+    for path, text in sorted(file_texts.items()):
+        if not CI_CONFIG_PATHS.match(path):
+            continue
+        hits = sorted(set(CHECKER_CALL.findall(text)))
+        if hits:
+            out.append(f"{path} 点了 {', '.join(hits)}")
+    return out
+
+
 def _marker_uses(bodies: dict[str, str]) -> set[str]:
     """`tests/` 里真挂上去的 marker 名：`@pytest.mark.x` 与 `pytestmark = [pytest.mark.x]` 两种形。
 
@@ -207,10 +259,14 @@ def _marker_uses(bodies: dict[str, str]) -> set[str]:
     return used
 
 
-def _tracked_py_files() -> set[str]:
+def _tracked_files() -> set[str]:
     out = subprocess.run(["git", "ls-files"], cwd=ROOT, capture_output=True, text=True)
     assert out.returncode == 0, out.stderr.strip()[:120]
-    files = {f for f in out.stdout.split("\n") if f.endswith(".py")}
+    return {f for f in out.stdout.split("\n") if f}
+
+
+def _tracked_py_files() -> set[str]:
+    files = {f for f in _tracked_files() if f.endswith(".py")}
     assert len(files) >= 60, f"只数到 {len(files)} 本在册 .py，多半是 `git ls-files` 这步坏了"
     return files
 
@@ -427,3 +483,54 @@ def test_a_marker_declaration_needs_a_wearer_and_a_string_is_not_one():
     assert _markers_without_users({"decoy_one"}, used) == []
     assert _markers_without_users(set(), used) == []
     assert _markers_without_users({"Decoy_One"}, used) == ["Decoy_One"]
+
+
+def test_no_lint_type_or_coverage_checker_is_a_recipient_the_repo_declares():
+    """`#284`：`#253` 那把豁免注释闸门的前提从散文变成读数——依赖闭包里请进了检查器没有。
+
+    `tests/test_wiring.py` 里那条用例摘掉了 43 枚 `# noqa`／`# type: ignore`，它的全部依据是
+    "这个仓库的依赖闭包里没有检查器"，而那句话说在 docstring 里，**没有任何一条判据读它**：
+    谁往 dev extras 里加一行 `ruff`，那条闸门照旧绿，而它摘掉那些注释的理由当天就没了——
+    与 `#118` 被订正过的那类"拿一条没实测过的出处当依据"同形。这一格把前提接进本已有的
+    `_pyproject()` 与 `uv.lock` 读法（`#153`：判据不许抄第二份），所以它是随仓库走的一条读数，
+    不依赖作者机器上装了什么。
+
+    现测三扇门都是空的：dev extras 只有 `pytest` 与 `pytest-asyncio`，`uv.lock` 里的包名与这张名单
+    零交（枚数不抄在这一句里：重锁一次它就是历史，`#262` 的口径），CI／构建配置在册零本。
+
+    读法边界两格，写在这里而不是藏在代码里：机器状态那一格不进这一本——`.venv/bin` 里有没有那几把
+    刀每台机器不一样，把它读进判据就造出一条"本机绿、别人红"的闸门，而这一本从第一条起就把 `.venv`
+    判成非权威（`#191`：没点名也能在作者机器上跑）。第二格是名单的形状：只认包名与本本点名，
+    所以一个把检查器捆在自己里面的包装工（`pre-commit` 那一类）要从**它的配置文件**里才被认出，
+    名单本身不会替它报——那是多事那一边的缺口，等真有人装上它再按同一配方加一门。
+    """
+    deps, _tops, _own, _cfg, _tests, lock_names = _real_inputs()
+    got = _checker_recipients(deps, lock_names, _ci_config_texts())
+    assert not got, (f"豁免注释那把尺的前提没了：这些检查器已经进了在册的某一扇门，"
+                     f"要么给那些注释找回收件人，要么把那条闸门的依据改口：{got}")
+
+
+def test_each_of_the_three_doors_reports_a_checker_and_only_its_own_shape():
+    """夹具：三扇门各自该报的报出来、该放行的一个都不报，外加"提到 ≠ 在册"那一格。
+
+    一条只扫真树的判据在锚点推错方向时照样绿（`#254`、`#262` 那一课），所以这一本每加一条守卫
+    都紧跟着配一枚形状夹具。四格钉的是这一条的全部风险：
+
+    - 依赖门只认名单上的名字，`rich` 那种在册但非检查器的包不许报——报错了它就成了永久的假红，
+      而假红的下场是被 `-k` 摘掉，那整条闸门就没人跑了。
+    - 锁门独立开火：锁里有而 pyproject 没有是另一形（重锁带进来的传递依赖），只测依赖门会放过它。
+    - CI 门按**调用点名**而不是按文件存在：一句只跑 `pytest` 的工作流不许报，一句 `uvx ruff check`
+      必须报——那是唯一一扇不经过 pyproject 就能把检查器请进仓库的门。
+    - 最后一格钉这本守卫自己的生存方式：把 `ruff` 写进 README 或写进它自己这一本的字符串里，
+      都不许算收件人，否则这一条会在被扫的语料里替自己报红（`#226` 那族"讲那种标记"同形）。
+    """
+    got = _checker_recipients({"ruff", "rich"}, {"mypy", "pytest"},
+                              {"tox.ini": "commands =\n    uvx ruff check\n"})
+    assert got == ["pyproject 依赖 ruff", "uv.lock 包 mypy", "tox.ini 点了 ruff"], got
+
+    assert _checker_recipients({"rich", "pytest-asyncio"}, {"pytest", "httpx"},
+                                {".github/workflows/ci.yml": "run: pytest -q\n"}) == []
+
+    assert _checker_recipients(set(), set(),
+                               {"README.md": "we never run ruff or mypy here"}) == []
+    assert _checker_recipients(set(), set(), {".github/workflows/ci.yml": "runs-on: ubuntu-latest"}) == []
