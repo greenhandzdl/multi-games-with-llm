@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import test_golden_game as G  # the authored transcript, reused as the fixture
 from declared_kinds import KINDS  # the roster, derived once, test-side since `#160`
 
-TABLE = Path("src/wolfengine/events.py")
+TABLE = Path(__file__).resolve().parents[1] / "src" / "wolfengine" / "events.py"
 
 
 def declared_shapes() -> dict[str, set[str]]:
@@ -145,7 +145,7 @@ def test_the_citation_list_is_recorded_once(written):
     assert not offenders, f"evidence 是 meta.citation_stats 的第二支笔：{offenders[:6]}"
 
 
-SRC = Path("src/wolfengine")
+SRC = Path(__file__).resolve().parents[1] / "src" / "wolfengine"
 
 # 形状表里出现过的键名，全库一份。住在豁免表旁边是因为两边都要它：豁免表按它点名，
 # `src_load_sites` 的控制用例要拿它逐个问"这一格到底有没有读者"。

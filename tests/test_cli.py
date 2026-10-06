@@ -1323,10 +1323,10 @@ def _doc_block(doc: Path, heading: str) -> str:
     测试不抄一份"等价"的命令清单：抄写就是第二份主张，而两份会在下一次改文档时各自演化
     ——`#136` 那一片的 bug 恰恰是文档里那句 shell 和目录的真实内容对不上。
     标题按整行相等找，不按前缀：`find()` 会把 `## 三分钟离线演示x` 也算命中（K4 那具刀量出来的）。
-    `doc` 是相对仓库根的路径：`#197` 把同一套机械接到 `docs/comparison.md` 时，取块这一段
-    本来可以照抄一份，那就是 `#153` 反对的那第二份实现。
+    `doc` 两种都接：相对就当它是仓库根下的那一本（`#197`），自带根就直接用（`#310` 把那一枚
+    配方常量换成了跟着 `__file__` 的锚，旧那句"是相对仓库根的路径"从此只剩一半真）。
     """
-    text = (Path(__file__).resolve().parents[1] / doc).read_text(encoding="utf-8")
+    text = (doc if doc.is_absolute() else Path(__file__).resolve().parents[1] / doc).read_text(encoding="utf-8")
     lines = text.splitlines()
     try:
         at = next(i for i, l in enumerate(lines) if l.strip() == heading)
@@ -1570,7 +1570,7 @@ def test_the_command_menu_lines_run_in_sequence(tmp_path):
 
 
 # ------------------------------- docs/comparison.md〈两个命令〉那一块整块能跑（#197）
-RECIPE_DOC = Path("docs/comparison.md")
+RECIPE_DOC = Path(__file__).resolve().parents[1] / "docs" / "comparison.md"
 RECIPE_HEADING = "## 两个命令"
 
 

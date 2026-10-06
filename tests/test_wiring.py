@@ -19,7 +19,7 @@ import json
 import random
 import re
 import tokenize
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import get_args
 
 import pytest
@@ -3911,3 +3911,145 @@ def test_the_pinned_module_constants_have_exactly_one_definition_in_tests():
         assert homes[0].startswith(f"{owner}:"), (
             f"`{name}` 唯一那处定义在 {homes[0]}，主人应是 {owner}"
             f"——删掉或挪走主人那一份，委托方那本 import 不到东西")
+
+
+# ---------------------------------------------------- 模块级路径常量的锚法（#310）
+PATH_ANCHOR_FACES = ("tests", "scripts")
+# 两形同一个病：解出来的位置跟着**进程的当前目录**走，而不是跟着仓库走。
+PATH_ANCHOR_FORBIDDEN = ("LITERAL_REL", "CWD")
+
+
+def _module_binds(src: str) -> dict[str, ast.expr]:
+    """模块级绑定 `名 -> 值节点`（`Assign` 与带值的 `AnnAssign`，同名只留第一次）。"""
+    out: dict[str, ast.expr] = {}
+    for st in ast.parse(src).body:
+        if isinstance(st, (ast.Assign, ast.AnnAssign)) and st.value is not None:
+            tgt = st.targets[0] if isinstance(st, ast.Assign) else st.target
+            if isinstance(tgt, ast.Name):
+                out.setdefault(tgt.id, st.value)
+    return out
+
+
+def _root_literal(node: ast.expr) -> str | None:
+    """只有挂在链顶那一截上的字面才算根。
+
+    刻意不扫子树里任意字符串：派生别名 `B / "src"` 的那截 `"src"` 落在右手，把它当根会把
+    每一条派生都读成相对字面。`#310` 定价（`15:18:47Z`）：按"任何模块级绑定、字面里有斜杠"
+    的口径，177 枚候选里绝大多数是正则串——所以筛的是"是不是路径"，不是"有没有斜杠"。
+    """
+    if isinstance(node, ast.Call) and node.args:
+        arg = node.args[0]
+        return arg.value if isinstance(arg, ast.Constant) and isinstance(arg.value, str) else None
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    return None
+
+
+def _is_path_call(node: ast.expr) -> bool:
+    return any(isinstance(n, ast.Call)
+               and ast.unparse(n.func) in ("Path", "pathlib.Path", "PurePath", "pathlib.PurePath")
+               for n in ast.walk(node))
+
+
+def _path_anchor_readings(src: str) -> dict[str, tuple[str, int, int]]:
+    """一本 .py 里模块级路径常量各自的锚法：`名 -> (锚法, 行号, 沿派生链走了几步)`。
+
+    桶的入桶条件是"值是 `Path`/`PurePath` 调用，或引用了已在桶里的那一枚"（闭包迭代到不动）：
+    只按"本表达式自己带 `Path` 字样"筛会把派生别名整条漏掉，`#310` 的尺第一次跑就抓到这一点。
+    """
+    binds = _module_binds(src)
+    pathish = {n for n, v in binds.items() if _is_path_call(v)}
+    for _ in range(5):
+        grown = {n for n, v in binds.items()
+                 if n in pathish
+                 or any(isinstance(k, ast.Name) and k.id in pathish for k in ast.walk(v))}
+        if grown == pathish:
+            break
+        pathish = grown
+    out: dict[str, tuple[str, int, int]] = {}
+    for name in sorted(pathish):
+        cur, hops = binds[name], 0
+        while True:
+            if any(isinstance(n, ast.Name) and n.id == "__file__" for n in ast.walk(cur)):
+                out[name] = ("FILE", cur.lineno, hops)
+                break
+            if any(isinstance(n, ast.Attribute) and n.attr in ("getcwd", "cwd")
+                   or isinstance(n, ast.Name) and n.id == "getcwd" for n in ast.walk(cur)):
+                out[name] = ("CWD", cur.lineno, hops)
+                break
+            lit = _root_literal(cur)
+            if lit is not None:
+                kind = "OTHER" if PurePosixPath(lit).is_absolute() else "LITERAL_REL"
+                out[name] = (kind, cur.lineno, hops)
+                break
+            base = next((binds[n.id] for n in ast.walk(cur)
+                         if isinstance(n, ast.Name) and n.id in binds and binds[n.id] is not cur), None)
+            if base is None or hops >= 4:
+                out[name] = ("OTHER", cur.lineno, hops)
+                break
+            cur, hops = base, hops + 1
+    return out
+
+
+def _cwd_relative_path_consts(src: str) -> list[str]:
+    return [f"{name}:{ln} {kind}" for name, (kind, ln, _) in _path_anchor_readings(src).items()
+            if kind in PATH_ANCHOR_FORBIDDEN]
+
+
+def test_the_path_anchor_classifier_names_each_form_on_its_own():
+    """尺面先要有牙：五种锚法各归各的桶，两种不该进桶的不进。
+
+    合成一本，不落仓库——仓库是 PUBLIC，假值不进仓库（`#310` 的尺同一口径）。
+    `C` 钉的是派生链要跟着主人（它自己不带 `Path` 字样），`E` 钉的是根只认链顶那一截
+    （右手那截相对字面不许把绝对根读成相对），`F` 把**已知漏判**钉成一个读数：按属性的
+    `模块.__file__` 现在落在 OTHER 而不是 FILE——它是 CWD 无关的，所以漏的是分类不是缺陷，
+    谁将来把 FILE 加宽到属性形，这一格会红着提醒他一起改登记。`G`/`H` 是过收方向：不带
+    `Path` 的常量根本不进桶，因此一截相对**字符串**常量（尺量到全库 7 枚，全是正则与理由文案，
+    见 `#310` 那一节）没有一处被拿去接成 `Path` 开文件，都在这道闸门眼皮底下——那是面的边界，不是牙的松动。
+    """
+    src = (
+        "import os, pathlib\n"
+        "import tests.test_cli as cli\n"
+        'A = pathlib.Path("src/wolfengine")\n'
+        'B = pathlib.Path(__file__).resolve().parents[1]\n'
+        'C = B / "src" / "wolfengine"\n'
+        'D = pathlib.Path(os.getcwd()) / "src"\n'
+        'E = pathlib.Path("/tmp") / "src"\n'
+        "F = pathlib.Path(cli.__file__).parent\n"
+        "G = 3\n"
+        'H = "src/wolfengine"\n'
+    )
+    got = {n: (k, h) for n, (k, _, h) in _path_anchor_readings(src).items()}
+    assert got == {"A": ("LITERAL_REL", 0), "B": ("FILE", 0), "C": ("FILE", 1),
+                   "D": ("CWD", 0), "E": ("OTHER", 0), "F": ("OTHER", 0)}, got
+    assert not any(n in got for n in ("G", "H")), "不带 Path 调用的常量不该进桶"
+    assert sorted(_cwd_relative_path_consts(src)) == ["A:3 LITERAL_REL", "D:6 CWD"], \
+        "只有跟着进程当前目录的那两形才算违例"
+
+
+def test_no_module_level_path_constant_resolves_against_the_current_directory():
+    """`#310`：tests＋scripts 的模块级路径常量不许拿当前目录当根——要跟着仓库走。
+
+    现量到的坏法在 `tests/test_payload_shape.py` 那两枚：它们在**模块级**求值，而模块级还有一条
+    `DECLARED_KEYS = frozenset(... declared_shapes() ...)` 的调用，于是那一整本在 collection 期
+    就抛 `FileNotFoundError`——换个目录敲 pytest 时那 9 条一条都不跑。两头的读数都是现量：把 HEAD
+    那棵树原样取出来重放（`15:45:19Z`）是 rc 2、`Interrupted: 1 error during collection`，锚好以后
+    同一本从别处收是 `9 passed`（`15:44:16Z`）；`__file__` 锚的那本孪生 `tests/test_purity.py`
+    两趟都在同一棵树下 25/25 全过——坏的从来不是内容，是锚法。
+    翻目录的用例这一趟量到 0 处（全库无 `os.chdir`/`monkeypatch.chdir`，17 处只是给子进程传
+    `cwd=`），所以这条闸门今天钉的是"从别处敲 pytest"这一形，不是"某条用例翻了目录以后读到别的"。
+    扫描面地板先立：ROOT 解错就 glob 到 0 本，"全 0"配 rc 0 看起来像一次干净的负结果——
+    `#310` 的尺第一次跑就是这么假的（控制 8/8 全过、真数四桶全 0）。
+    """
+    root = Path(__file__).resolve().parents[1]
+    books = [f for face in PATH_ANCHOR_FACES for f in sorted((root / face).glob("*.py"))]
+    assert len(books) >= 40 and (root / "src" / "wolfengine").is_dir(), (
+        f"扫描面异常：{len(books)} 本，src 目录在不在={(root / 'src' / 'wolfengine').is_dir()}"
+        "——这条断言的 rc 0 只在面真的扫到东西时才算读数")
+    offenders = [f"{f.relative_to(root)}:{hit}" for f in books
+                 for hit in _cwd_relative_path_consts(f.read_text(encoding="utf-8"))]
+    assert not offenders, (
+        f"模块级路径常量拿当前目录当根的 {len(offenders)} 枚：{offenders}"
+        "——换成 `Path(__file__).resolve().parents[1]` 打头；"
+        "模块级求值的那一枚会在 collection 期就把整本判死，红都不出")
+
