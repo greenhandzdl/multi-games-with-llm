@@ -664,3 +664,102 @@ def test_the_public_scrubber_takes_no_factory_default_for_the_name_it_erases_by(
     param = inspect.signature(transport.redact).parameters["key_env"]
     assert param.default is inspect.Parameter.empty, \
         f"`redact()` 的 key_env 又带上了默认值 {param.default!r}：改名部署下这一路会静默只擦出厂名"
+
+
+# ------------------------------ 广告面加宽到散文：教读者 export 的名字也要有读者
+
+AD_EXPORT = re.compile(r"export\s+([A-Z][A-Z0-9_]{3,})")
+PROSE_AD_FLOORS = {"手册": 2, "py 散文": 1}
+
+# 这两串只有代码行里有形状：本文件的 docstring 与注释都在这条尺的语料面上，把原形贴进散文就会
+# 让它成为自己收到的第 4 枚（`#140` 那格自噬的形状）。
+_AD_POSITIVE = "照手册敲 `export WOLF_LLM_NOT_READ=1` 就能跑"
+_AD_NEGATIVE = "`WOLF_LLM_NOT_READ` 这一枚没有读者，别照抄"
+
+
+def _doc_and_comment_lines(text: str) -> list[tuple[int, str]]:
+    """一本 `.py` 里的散文行：模块/类/函数 docstring 占的那些行，加整行注释。
+
+    代码行不算广告面。取值的那一句是程序在问，不是文档在教；读者会照抄的是用法块与注释里的命令。
+    """
+    doc: set[int] = set()
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            body = getattr(node, "body", None)
+            head = body[0] if body else None
+            if isinstance(head, ast.Expr) and isinstance(head.value, ast.Constant) \
+                    and isinstance(head.value.value, str):
+                doc.update(range(head.lineno, head.end_lineno + 1))
+    return [(i, line) for i, line in enumerate(text.splitlines(), 1)
+            if i in doc or line.lstrip().startswith("#")]
+
+
+def _advertised_exports(text: str) -> list[str]:
+    """一段文本里"教读者去 export 某个名字"的那一形收到的名字。"""
+    return AD_EXPORT.findall(text)
+
+
+def _prose_advertisements() -> list[tuple[str, str, int, str]]:
+    """散文面上的每一条广告，格式是〈面, 出处, 行号, 名〉。
+
+    两面：手册五本逐行——那份名册住在 `test_doc_citations.py` 的 `_manual_pages()` 里，不抄第二份；
+    加三棵 `.py` 的散文行。归档不在面上，理由与它藏着的住户由下面那条控制用例点名。
+    """
+    from test_doc_citations import _manual_pages
+    out: list[tuple[str, str, int, str]] = []
+    for page in _manual_pages():
+        for num, line in enumerate(page.read_text(encoding="utf-8").splitlines(), 1):
+            out += [("手册", page.name, num, name) for name in _advertised_exports(line)]
+    for face in ("src", "scripts", "tests"):
+        for book in sorted((ROOT / face).rglob("*.py")):
+            rel = str(book.relative_to(ROOT))
+            for num, line in _doc_and_comment_lines(book.read_text(encoding="utf-8")):
+                out += [("py 散文", rel, num, name) for name in _advertised_exports(line)]
+    return out
+
+
+def test_no_prose_page_advertises_a_variable_the_code_never_reads():
+    """`#146` 只管住 `.env.example` 那一页广告；手册与 `.py` 散文里也有一样的句子在教 export。
+
+    它们共用同一把尺 `_env_names_the_code_reads()`，所以这一片只加面，不造第二枚判据（`#153`）。
+
+    票面是 `#319` 留下的那一格：出厂密钥名在代码里只有一个作者（`#313`），可"散文里教你敲的那一句"
+    从来没人核——`#313` 的探针在自己的 docstring 里就写着散文面不在射程。改名之后 README 的配置一节
+    与体检脚本的用法块会留下一个没有读者的名字，而静默无效这一族的第一次事故正是这一形。
+
+    这条写完即绿：定价那趟（22:51:39Z，账住在项目记忆 `census320/`）数到手册面 2 枚、`.py` 散文面
+    1 枚，三条都指着真有读者的名字。它的牙由 `#320` 的变异电池还账，其中必须红的那一具是把
+    `Config.api_key_env` 的出厂名改掉。
+
+    两处"不收"各自挡着一类过收，所以都记在这里：
+      - 归档整本不在面上。那一本里"报告假话的句子"和普查表的一列都凑得出广告形，把它们当广告会咬到
+        历史复述；而"归档只多不少"（`#162`）决定这一族不能靠改归档里的句子变绿。下面那条控制用例
+        钉着这个豁免有住户。
+      - 只认 `export` 紧跟一个全大写名那一形，句子里光提到名字不算——判据比形状宽就会把"这个名字
+        没有读者"这类正确的叙述收进来。
+    """
+    hits = _prose_advertisements()
+    for face, floor in PROSE_AD_FLOORS.items():
+        got = sum(1 for hit in hits if hit[0] == face)
+        assert got >= floor, (
+            f"{face} 面只扫到 {got} 枚广告（地板 {floor}）：这条会在塌掉的语料上发合格证")
+    readers = _env_names_the_code_reads()
+    unread = sorted({(where, num, name) for _, where, num, name in hits if name not in readers})
+    assert not unread, f"这些散文在教读者 export 一个代码里没人取的变量：{unread}"
+
+
+def test_the_prose_advertisement_probe_houses_the_archive_and_spares_a_mention():
+    """三格：广告形收到、光提名字的放过、归档那一面的豁免里真有一户住在里面。
+
+    正控制不靠仓库恰好有几枚广告——三面今天全都有读者，语料被修干净之后"扫不到东西"这种错是沉默的。
+    最后一格钉的是豁免不是免检：归档面一旦空了，并进语料面就没有代价，该并。
+    """
+    from test_doc_citations import ARCHIVE
+    assert _advertised_exports(_AD_POSITIVE) == ["WOLF_LLM_NOT_READ"], "广告那一形没收到：整把尺没有牙"
+    assert _advertised_exports(_AD_NEGATIVE) == [], "句子里光提到名字被当成了广告：判据比形状宽"
+    readers = _env_names_the_code_reads()
+    hidden = [(num, name)
+              for num, line in enumerate(
+                  (ROOT / "docs" / ARCHIVE).read_text(encoding="utf-8").splitlines(), 1)
+              for name in _advertised_exports(line) if name not in readers]
+    assert hidden, "归档豁免这一格没有住户：它谁都不挡，该把归档并进语料面"

@@ -15463,3 +15463,72 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
     "Reads the key from the environment only" 与 `scripts/calibrate.py:10` 那行 `export` 示例，`WOLF_LLM_API_KEY`
     在散文里逐字站着；`#313` 只放行了作者那一格，散文里的手写名不在本片射程。
   - `#302` 那笔仍在：普查尺与刀住在记忆目录里，不在版本控制里，克隆自证带不上它们。
+
+## `#320` 散文那一面的广告第一次有读者：手册 2 枚与 `.py` 散文 1 枚全有读者，被豁免的归档面藏着 3 枚没有读者的命中
+
+- **票面前提**：`#319` 收尾登记的那一格写着"散文里的手写名不在本片射程"，点名的就是体检脚本用法块里那一行。
+  出厂密钥名在代码里只有一个作者（`#313`），可"文档教你敲哪一句"从来没人核：`#146` 那道闸门读的是 `.env.example`
+  那一页（`tests/test_no_secrets.py:187` 的 `test_every_variable_the_example_advertises_has_a_reader`），手册与
+  `.py` 散文里的同一形不在它面上；`#313` 自己的探针甚至把"放过散文"写进了用例名（`tests/test_no_secrets.py:430`
+  的 `test_the_key_name_probe_fires_on_each_shape_and_stays_off_prose`）。改名之后 README 的配置一节与体检脚本的
+  用法块会留下一个没有读者的名字，而"静默无效"这一族有过事故——归档第 5801 行记着照手册去敲端点与模型那两个变量
+  的人拿到的是静默无效；那一枚不是密钥格，但它是同一形状的失效。
+- **先量三张面**（`22:44:16Z` 只读普查，起点负载 0.90；尺子与回显在搁板 `census320/`）：按 tokenize 分面数逐字命中——
+  注释 0 枚、docstring 3 枚、代码 9 枚、markdown 32 枚；名字两枚，`WOLF_LLM_API_KEY` 与只在归档出现过一处的
+  `MVP_VLM_API_KEY`。这一趟数的是"名字站着几枚"，不等于"教读者 export 几枚"，所以它只定分母不定形状。
+- **宽形的价**（`22:50:37Z`，`census320/price.log`）：把散文里"大写名加等号"那一族整个收进来，markdown 面 74 枚里
+  71 枚没有读者、`.py` 散文面 9 枚里 8 枚没有读者。过收的成因逐枚读过，两族都不是广告：普查与电池脚本自己的
+  回显变量（`SUITE_RC`／`VERDICT`／`DEAD` 那一类），和一次性 shell 变量（`HLOG`／`PYTHONPATH` 那一类）。
+  收进来等于给下一次改名备好一笔必红的账，**宽形弃用**。
+- **窄形定案**（`22:51:40Z`，`census320/price2.log`）：只认 `export` 紧跟一个全大写名。现用面上手册 2 枚（`README.md`
+  的 22 行、`docs/calibration.md` 的 2 行）、`.py` 散文 1 枚（`scripts/calibrate.py:10` 那行
+  `export WOLF_LLM_API_KEY=<key>`），三条都指着真有读者的名字；同一把尺在归档面量到 3 枚没有读者的命中——第 5801 行
+  那一枚 `WOLF_LLM_MODEL`，加表体里两行的 `export HTML` 形状。同趟量的第二形（"句子里光提到名字"）是 47 枚、名集 7 枚，
+  它给不出"这句在教读者去 export"这一判据，不收。
+- **尺**：两条用例进 `tests/test_no_secrets.py`——`tests/test_no_secrets.py:721` 的
+  `test_no_prose_page_advertises_a_variable_the_code_never_reads`，与 `tests/test_no_secrets.py:751` 的
+  `test_the_prose_advertisement_probe_houses_the_archive_and_spares_a_mention`。读者名册复用
+  `tests/test_no_secrets.py:166` 的 `_env_names_the_code_reads()`，不造第二枚判据（`#153`）；手册名册复用
+  `test_doc_citations.py` 的 `_manual_pages()`，取处写在 `tests/test_no_secrets.py:708`，是函数内的 import——
+  这一片自己踩过那一格：把它加到文件顶部会把这本的每个行号往上挪一格，而行号闸门一次报红 14 处（归档点着这本的号），
+  改回局部 import 后那 14 处逐字复绿。
+- **两处"不收"各挡一类过收**：归档整本不在面上——那一本里"报告假话的句子"和普查表的一列都凑得出广告形，
+  把它们当广告会咬到历史复述，而"归档只多不少"（`#162`）决定这一族不能靠改归档里的句子变绿；句子里光提到名字
+  不算——判据比形状宽就会把"这个名字没有读者"这类正确的叙述收进来。豁免不是免检：
+  `tests/test_no_secrets.py:765` 那条 `assert hidden` 要求归档面里"没有读者的命中"真有几枚，豁免挡着东西才算数。
+- **一处自噬形状的预防**：判据自己那本的 docstring 与注释就在 `.py` 散文面上，把广告原形贴进散文就会让它成为
+  自己收到的第 4 枚（`#140` 那一族）。正反两串因此只出现在代码行里——`tests/test_no_secrets.py:676` 那枚
+  `_AD_POSITIVE` 与 `tests/test_no_secrets.py:677` 那枚 `_AD_NEGATIVE`。
+- **刀账**（电池 `census320/knife320.py`，五具；规矩同 `#319`：锚点唯一 → 落盘前 `compile()` → 行数中性 →
+  sha 变 → 按字节还原并证 sha 回到基线；env 只覆写 `PYTHONPATH`／`PYTHONDONTWRITEBYTECODE`，每具另印被测树的路径
+  （`#289` 的混树那笔）。`23:03:02Z`→`23:06:10Z`，起点负载 1.40、终点 8.64，终点那一读是 K1 那趟全量自己造出来的，
+  按 `#232` 的口径不拿它作对照）：
+  - K1 把 `src/wolfengine/config.py:95` 那行 `api_key_env: str = "WOLF_LLM_API_KEY"` 换成第二枚名字 → CAUGHT，
+    全量离线 `4 failed, 1281 passed in 88.46s`。四枚红用例是本片新立那条、`#146` 的样例广告那条、
+    `test_the_committed_report_is_still_what_the_code_renders`、语料地板那条
+    `test_the_env_reader_corpus_actually_finds_the_key_name`。这一具登记的是**一次改名同时在四处说假话**，
+    而不是新尺独占的牙——它的失效方向与 `#313`／`#317` 那一族重合，仍然要跑，因为"三面跟着走"这件事只有全量能看见。
+  - K2 只把 README 那一枚广告的名字换成没有读者的（`#146` 那条与 `.env.example` 一字未动）→ CAUGHT，
+    `1 failed, 176 passed`，红的只有新立那条。这一具量的才是新尺自己的牙，并且证了**两面各自独立**：样例页没改而
+    手册改了名时，报的是散文面。
+  - K4 把 `.py` 散文那一支拧成恒假：`tests/test_no_secrets.py:680` 的 `_doc_and_comment_lines` 里，docstring 占的
+    那些行不再算散文行 → CAUGHT，红在地板那一格：`py 散文 面只扫到 0 枚广告（地板 1）`。它钉的是"这一面的住户被数过"，
+    不是"这一面恰好有一枚"。
+  - K5 把归档并进语料面 → CAUGHT，红在点名归档那 3 枚（第 5801 行那枚 `WOLF_LLM_MODEL` 与表体两行的 `export HTML`）。
+    与 K3 成对，两具量的都是同一格豁免的价。
+  - K3 把同样一句广告形的话贴进归档那一本末尾（负控制，期待新尺不红）→ NORED，`177 passed`、rc 0。这一具按预期
+    不红：它证的是豁免真的在挡东西，也证"归档只多不少"那一格不会替新尺付账。
+  - **还原自证**：四本散列逐本回到基线（`src/wolfengine/config.py`／`README.md`／`docs/iterations.md`／
+    `tests/test_no_secrets.py`），还原后定向三面复跑 `177 passed`、rc 0，红的用例：无。
+- **今值**（计数是证人，秒数是脏读数）：三面现量手册 2 枚＋`.py` 散文 1 枚，缺陷 0 枚；被豁免的归档面 3 枚没有读者的
+  命中，逐字留在原处当 K5 与 `assert hidden` 的住户。**落笔之后复跑**：定向三面 `177 passed`、rc 0
+  （`23:15:13Z`→`23:15:32Z`，起点负载 1.61），与电池还原后 `23:06:10Z` 那一趟同值——归档这一节加的句子不在任何
+  一把尺的面上，两趟之间没有用例增删。全量离线 `1285 passed in 86.79s`、rc 0（`23:15:37Z`→`23:17:04Z`，
+  起点负载 1.11）——比 `#319` 的 `1283` 多两枚，正是本片新立的两条用例，一格没红别的。
+- **这一片没做的事**：
+  - 没有把它并进 `#146` 那条：两条共用同一把读者尺，但那条的用例名被归档点着，并名的代价是把历史叙述里的用例名
+    逐处改写——`#168`／`#171` 那一族的规矩是先登记代价再动句子，本片只加面、不动旧名。
+  - 只认 `export` 那一形：README〈命令一览〉里的 `python -m wolfengine.cli …` 教的是子命令不是变量名，不在这一把尺的
+    面上（可粘贴区另有 `#198` 那一族管）。
+  - 归档面那 3 枚是历史复述，按"归档只多不少"不改句子。
+  - `#302` 那笔仍在：普查尺与刀住在记忆目录里，不在版本控制里，克隆自证带不上它们。
