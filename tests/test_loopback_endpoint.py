@@ -41,7 +41,7 @@ import time
 
 import pytest
 
-from wolfengine import cli
+from wolfengine import cli, config
 
 PLACEHOLDER = "STUB-NOT-A-KEY"   # 不是 key，形状也不会被密钥扫描当成 key
 MAX_DAYS = "2"
@@ -108,7 +108,7 @@ def _wolf(url: str, tmp_path, *argv: str):
     )
     r = subprocess.run([sys.executable, "-c", prog, url, *argv], capture_output=True,
                        text=True, cwd=str(tmp_path), timeout=180,
-                       env={**os.environ, "WOLF_LLM_API_KEY": PLACEHOLDER})
+                       env={**os.environ, config.Config().api_key_env: PLACEHOLDER})
     return r
 
 

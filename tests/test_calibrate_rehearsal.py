@@ -36,10 +36,10 @@ from pathlib import Path
 
 import pytest
 
-from wolfengine import metrics
+from wolfengine import config, metrics
 
 ROOT = Path(__file__).resolve().parents[1]
-KEY_ENV = "WOLF_LLM_API_KEY"
+KEY_ENV = config.Config().api_key_env
 # 一个刻意不像密钥的占位值：它存在的意义只是"环境变量里有东西"，并且必须不出现在任何产物里。
 STUB_KEY = "rehearsal-placeholder-9d4b"
 

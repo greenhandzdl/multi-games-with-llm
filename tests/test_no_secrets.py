@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 import subprocess
@@ -114,7 +115,7 @@ def test_redact_elides_values_by_key_name_and_by_literal_content(tmp_path, monke
     from wolfengine.transport import redact
 
     sentinel = SENTINEL
-    monkeypatch.setenv("WOLF_LLM_API_KEY", sentinel)
+    monkeypatch.setenv(Config().api_key_env, sentinel)
 
     out = redact({"headers": {"Authorization": f"Bearer {sentinel}"},
                   "error": f"POST failed with header Authorization: Bearer {sentinel}",
@@ -361,3 +362,83 @@ def test_the_env_reader_corpus_actually_finds_the_key_name():
     reads = _env_names_the_code_reads()
     assert "WOLF_LLM_API_KEY" in reads, f"扫到的只有 {sorted(reads)}——语料或正则坏了"
     assert (ROOT / ".env.example").read_text(encoding="utf-8").count("WOLF_LLM_API_KEY=") == 1
+
+
+# ------------------------------------------- 取哪个变量：这个名字只许有一个作者
+
+KEY_NAME_FACES = {"src": 20, "scripts": 1, "tests": 40}
+
+
+def _writes_the_key_name_by_hand(node: ast.AST, name: str) -> bool:
+    return isinstance(node, ast.Constant) and node.value == name
+
+
+def _hand_written_key_name_sites(src: str, rel: str) -> list[str]:
+    """把出厂密钥变量名**当取值依据手写**的地方——四种形状：绑给一个名字、当实参交给一次调用
+    （`setenv` 那一类）、当键写进一份字典、当键写进一次下标赋值。
+
+    「句子里提到了这个名字」不算，因为分界是结构给的而不是名单给的：一条断言的内容就是名字本身
+    （报错信息里该不该出现它），抄一遍是对的；而"我该往哪个变量里放东西"这件事只能有一个作者，
+    也就是 `Config` 的那个字段默认值。作者那一格自己落在类体里，被下面那条断言点名，不进豁免名单。
+
+    四种形状里没有一种是凑数的：`#313` 量过的三份抄本分属"绑给名""交给调用点""写进字典"，
+    下标那一形现语料 0 枚，由合成证人钉着（下面那条控制用例）——它的失效方向是尺比形状窄，
+    那种错永远不红。
+    """
+    name = Config().api_key_env
+    out: list[str] = []
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, (ast.Assign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            if _writes_the_key_name_by_hand(node.value, name):
+                out.append(f"{rel}:{node.lineno} 绑给 "
+                           f"{','.join(ast.unparse(t) for t in targets)}")
+        elif isinstance(node, ast.Call):
+            if any(_writes_the_key_name_by_hand(a, name) for a in node.args):
+                out.append(f"{rel}:{node.lineno} 交给 {ast.unparse(node.func)}()")
+        elif isinstance(node, ast.Dict):
+            out += [f"{rel}:{node.lineno} 写进字典"
+                    for k in node.keys if _writes_the_key_name_by_hand(k, name)]
+        elif isinstance(node, ast.Subscript):
+            if _writes_the_key_name_by_hand(node.slice, name):
+                out.append(f"{rel}:{node.lineno} 写进下标")
+    return out
+
+
+def test_the_factory_key_name_has_exactly_one_author():
+    """`#147` 把擦值的那一步接上了 `api_key_env`，却没管**谁在往变量里放东西**。
+
+    取值的写法（`os.environ.get`）只有一处，名字由配置供给，改名以后它跟着走；可测试侧要是不
+    手抄一遍名字去 `setenv`，改了名的人就会看到"值没被擦掉"这种红，而真正坏的是那句对账。
+    这条把"手抄"收成像，并要求剩下的唯一一处就是作者本人。
+
+    语料地板按面各钉一格，因为三面的形状本来就不同：`src` 二十来本模块、`tests` 五十来本用例、
+    `scripts` 现量只有一本体检程序——那一格钉的是"这个目录还在被扫"，不是"它该有很多本"。
+    """
+    sites: list[str] = []
+    for face, floor in KEY_NAME_FACES.items():
+        books = [p for p in (ROOT / face).rglob("*.py") if "__pycache__" not in p.parts]
+        assert len(books) >= floor, (
+            f"{face} 面只扫到 {len(books)} 本（地板 {floor}）：这条会在塌掉的语料上发合格证")
+        for book in sorted(books):
+            sites += _hand_written_key_name_sites(book.read_text(encoding="utf-8"),
+                                                  str(book.relative_to(ROOT)))
+    assert len(sites) == 1, f"出厂名被手写的地方应只剩作者，实测 {len(sites)} 处：{sorted(sites)}"
+    assert sites[0].startswith("src/wolfengine/config.py") and "绑给 api_key_env" in sites[0], sites[0]
+
+
+def test_the_key_name_probe_fires_on_each_shape_and_stays_off_prose():
+    """四形各有一具合成证人，再加两形"不该收"的负控制。
+
+    正控制不靠仓库里恰好有几枚抄本：仓库会被修干净，而尺比形状窄这种错在修干净之后是沉默的。
+    """
+    name = Config().api_key_env
+    probe = _hand_written_key_name_sites
+    assert probe(f'KEY_ENV = "{name}"\n', "a.py"), "绑给一个名字那一形没收到"
+    assert probe(f'import os\nos.environ["{name}"] = "x"\n', "b.py"), "下标赋值那一形没收到"
+    assert probe(f'import os\nos.environ.get("{name}")\n', "c.py"), "交给调用点那一形没收到"
+    assert probe(f'env = {{"{name}": "x"}}\n', "d.py"), "写进字典那一形没收到"
+    # 名字是断言的内容、或者由配置供给——两种都不是"第二个作者"
+    assert probe(f'assert "{name}" in err\n', "e.py") == [], "把名字当断言内容收进来了"
+    assert probe("from wolfengine.config import Config\n"
+                 f'KEY_ENV = Config().api_key_env\n', "f.py") == [], "派生的那一形被误收"
