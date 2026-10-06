@@ -24,7 +24,7 @@ import httpx
 import pytest
 
 from wolfengine.config import Config
-from wolfengine.transport import HttpTransport
+from wolfengine.transport import HttpTransport, redact
 
 # Not a key, and shaped so it could never be mistaken for one in a log or a secret scan.
 PLACEHOLDER = "PLACEHOLDER-NOT-A-KEY"
@@ -388,3 +388,50 @@ async def test_a_refused_200_says_which_kind_of_bad_body_it_was(monkeypatch):
         res = await _chat(_transport(lambda request: make(), monkeypatch))
         assert not res.ok
         assert reason in res.error, f"原因被擦成了这一形：{res.error!r}"
+
+
+# ------------------------------------------------------------------ the scrubber's own recursion
+def test_the_scrubber_walks_into_a_list_and_still_elides_by_key_name(monkeypatch):
+    """`redact()` 的列表那一支一直没有执行证人，而它的失效方向是静默漏擦。
+
+    执行普查（`#237` 那把尺）的「整套离线跑从没走到」名册里，这一格回回都在：生产链今天只把
+    dict 与 str 喂给 `redact()`——`llm.py` 那边是 `raw_usage`（`usage_from()` 挑剩的计数）和
+    `res.error`（一句字符串）。但 `raw_usage` 声明的类型是 `dict[str, Any]`，端点完全可以在某个
+    键下发回一个列表。把列表那一支删掉，什么都不会坏、不会红、不会崩：列表原样透传，里面那条
+    `Bearer …` 明文一路进日志。静默方向没有别的读者，只能直接问这一格"列表里面的东西擦不擦"。
+    """
+    secret = "SENTINELNOTKEY-abc123"
+    monkeypatch.setenv(Config().api_key_env, secret)
+
+    got = redact({"usage": [{"api_key": secret}, f"Authorization: Bearer {secret}"],
+                  "echo": (secret,)})
+
+    assert got["usage"][0] == {"api_key": "<elided>"}, f"列表里那层 dict 的凭据键没被盖住：{got}"
+    assert got["usage"][1] == "Authorization: Bearer <elided>", f"列表里那条字符串没擦值：{got}"
+    assert got["echo"] == ["<elided>"], "元组走同一支，归一成列表"
+    assert secret not in repr(got), f"明文穿过去了：{got!r}"
+
+
+async def test_only_the_transport_that_owns_its_client_closes_it(monkeypatch):
+    """`aclose()` 里那道 `_own_client` 守卫有两个方向，两个方向今天都能离线测——不必真端点。
+
+    名册把这一格算进"要真端点才走到"那一档，量的是**生产链**：只有真的建了端点连接，才有谁去
+    调 `aclose()`。但这一格的行为本身不敲门：`HttpTransport(cfg)` 不注入 client 时自己造一个
+    `httpx.AsyncClient`，构造过程不产生任何连接，所以"我造的客户端我关"和"别人借我的客户端我
+    不关"两格都能当场问。第二向尤其要有证人——生产链上拿到它的地方都不注入 client（`cli.py`
+    自己造、自己关），注入这一支今天只有测试在用，而测试借进去的那个 client 关了就得当场废掉
+    下一句 `chat`；把守卫写成恒真，红的第一条不会是这一本，而是那些共用一个 client 的直播用例。
+    """
+    own = HttpTransport(Config())
+    assert own._own_client is True                      # 没注入 client，走的才是"自己造的"那一支
+    await own.aclose()
+    assert own.client.is_closed is True, "自己造的客户端没被关掉，连接会留到进程结束"
+
+    borrowed = httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda request: httpx.Response(200, json=ANSWER)))
+    monkeypatch.setenv(Config().api_key_env, PLACEHOLDER)
+    t = HttpTransport(Config(), client=borrowed)
+    assert t._own_client is False
+    await t.aclose()
+    assert borrowed.is_closed is False, "借来的客户端被 aclose() 关了，别的调用方下一秒就用不上"
+    await borrowed.aclose()
