@@ -41,6 +41,7 @@ from wolfengine import batch, cli, events, metrics, render_html, render_live
 from wolfengine.events import EventLog, Kind, seats
 
 from live_frame import frame_text
+from conftest import REPO
 
 SECRET = "狼队密语：今晚刀7号，别让任何人听见这句话"
 
@@ -250,7 +251,7 @@ def test_exactly_one_place_turns_log_damage_into_an_exit_code():
     这是本文件一直在付的那种债的反面：`#46` 那轮四处各写一份弹循环，正是"边界处理散到每个出口"
     长出来的形状。`events.py:406` 那一处 `LogDamage` 不算，它是把消息包上文件名的那只手，不在终端这一侧。
     """
-    body = Path("src/wolfengine/cli.py").read_text(encoding="utf-8")
+    body = (REPO / "src/wolfengine/cli.py").read_text(encoding="utf-8")
     assert body.count("except LogDamage") == 1, (
         "cli.py 里接住 `LogDamage` 的地方不止一处：某个命令自己接了一遍，"
         "下一次改报错措辞就只改一处")
@@ -314,7 +315,7 @@ def test_exactly_one_place_turns_an_unusable_path_into_an_exit_code():
     """为什么这条也要钉成结构断言，`test_exactly_one_place_turns_log_damage_into_an_exit_code` 说过一遍：
     每个出口自己接一遍在行为上和 `main()` 接一次无法区分，九条参数全绿也分辨不出谁在兜底。
     """
-    body = Path("src/wolfengine/cli.py").read_text(encoding="utf-8")
+    body = (REPO / "src/wolfengine/cli.py").read_text(encoding="utf-8")
     assert body.count("except OSError") == 1, (
         "cli.py 里接住 `OSError` 的地方不止一处：路径失败这句报告会长成四个版本")
     assert "except OSError" in body.split("def main(", 1)[1].split("\n\n", 1)[0], (
@@ -527,11 +528,11 @@ def test_the_no_manifest_sentence_has_one_owner():
     """三个出口同一句话，判据住在 `events.py`，和 `torn_notice` 一个待遇：两处各写一遍就会长成两种
     措辞，而"这一屏说的是哪一局"这种话一旦不一致，读者就得分辨哪个出口是真的。
     """
-    hits = sorted(p.name for p in Path("src").rglob("*.py")
+    hits = sorted(p.name for p in (REPO / "src").rglob("*.py")
                   if NOTICE in p.read_text(encoding="utf-8"))
     assert hits == ["events.py"], f"这句话被抄到了别处：{hits}"
     for mod in ("cli.py", "render_html.py", "render_live.py"):
-        src = (Path("src/wolfengine") / mod).read_text(encoding="utf-8")
+        src = ((REPO / "src/wolfengine") / mod).read_text(encoding="utf-8")
         assert "meta_notice" in src, f"{mod} 没走那只手，它印的是自己那份措辞"
 
 
@@ -626,11 +627,11 @@ def test_the_live_frame_says_the_game_recorded_nothing():
 
 def test_the_recorded_nothing_sentence_has_one_owner():
     """和前两句同一个待遇：一只手写，三个出口调。"""
-    hits = sorted(p.name for p in Path("src").rglob("*.py")
+    hits = sorted(p.name for p in (REPO / "src").rglob("*.py")
                   if BLANK in p.read_text(encoding="utf-8"))
     assert hits == ["events.py"], f"这句话被抄到了别处：{hits}"
     for mod in ("cli.py", "render_html.py", "render_live.py"):
-        src = (Path("src/wolfengine") / mod).read_text(encoding="utf-8")
+        src = ((REPO / "src/wolfengine") / mod).read_text(encoding="utf-8")
         assert "empty_notice" in src, f"{mod} 没走那只手"
 
 
@@ -817,13 +818,13 @@ def test_a_file_of_two_games_refuses_every_command_that_reads_it(tmp_path, capsy
 
 def test_the_broken_numbering_sentence_has_one_owner():
     """和前三句同一个待遇：一只手写计数，三个出口和 audit 各自去说。"""
-    hits = sorted(p.name for p in Path("src").rglob("*.py")
+    hits = sorted(p.name for p in (REPO / "src").rglob("*.py")
                   if BROKEN in p.read_text(encoding="utf-8"))
     assert hits == ["events.py"], f"这句话被抄到了别处：{hits}"
     for mod in ("cli.py", "render_html.py", "render_live.py"):
-        src = (Path("src/wolfengine") / mod).read_text(encoding="utf-8")
+        src = ((REPO / "src/wolfengine") / mod).read_text(encoding="utf-8")
         assert "seq_notice" in src, f"{mod} 没走那只手"
-    assert "seq_damage" in (Path("src/wolfengine/cli.py")).read_text(encoding="utf-8"), \
+    assert "seq_damage" in ((REPO / "src/wolfengine/cli.py")).read_text(encoding="utf-8"), \
         "audit 那一面自己数了一套"
 
 

@@ -87,7 +87,7 @@ def test_only_one_place_in_the_cli_puts_a_person_in_a_chair():
     import ast
 
     hits = []
-    for f in sorted(Path("src/wolfengine").rglob("*.py")):
+    for f in sorted((REPO / "src/wolfengine").rglob("*.py")):
         if "__pycache__" in f.parts:
             continue
         for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
@@ -305,11 +305,11 @@ def test_the_roster_sentence_has_one_owner_and_reaches_three_screens():
 
     与 `meta_notice`/`empty_notice` 同一个待遇（`test_log_recovery.py` 里那三条 `..._has_one_owner`）。
     """
-    hits = sorted(p.name for p in Path("src").rglob("*.py")
+    hits = sorted(p.name for p in (REPO / "src").rglob("*.py")
                   if ROSTER in p.read_text(encoding="utf-8"))
     assert hits == ["events.py"], f"这句话被抄到了别处：{hits}"
     for mod in ("cli.py", "render_html.py", "render_live.py"):
-        src = (Path("src/wolfengine") / mod).read_text(encoding="utf-8")
+        src = ((REPO / "src/wolfengine") / mod).read_text(encoding="utf-8")
         assert "roster_notice" in src, f"{mod} 没走那只手，它印的是自己那份措辞"
 
 
@@ -349,3 +349,5 @@ def test_a_substitute_sits_on_every_chair_except_the_one_a_person_sits_in():
     mocked = [s for s, a in seats.items() if isinstance(a, MockActor)]
     assert len(mocked) == cfg.seat_count - 1, f"除真人那一席之外每一席都该有替身：{mocked}"
     assert mocked == [s for s in range(1, cfg.seat_count + 1) if s != 3]
+# 这一本把 import 放在文件尾是不顶号：它上面有按行号点了本文件的归档读数（同 `#262`、`#310` 那笔账）。
+from conftest import REPO

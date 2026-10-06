@@ -33,6 +33,22 @@ PLACEHOLDER = "PLACEHOLDER-NOT-A-KEY"
 HTTP_SEND_METHODS = ("delete", "get", "head", "options", "patch", "post",
                      "put", "request", "send", "stream")
 
+# 仓库根：跟着**这本书在仓库里的位置**走，不跟着进程的当前目录走（`#310`、`#311`）。
+# 语料扫面一旦相对 cwd，换目录跑就 glob 到 0 本，"全 0"配 rc 0 看着像一次干净的负结果。
+REPO = Path(__file__).resolve().parents[1]
+
+
+def repo_key(p: "Path | str") -> str:
+    """扫面建键用的拼写：仓库内的给相对仓库根的形，夹具 tmp 里的原样给出。
+
+    锚到 `REPO` 之后 `rglob` 交回的是绝对路径，而名册的键、`MANUAL_EXITS` 那句
+    `startswith(f"{doc}:")`、归档里的落点读数要的都是 `tests/x.py` 这一形；换锚的这一刀
+    必须先把键的拼写逐字还回去，否则扣账面上先红的就是它。
+    """
+    q = Path(p)
+    return str(q.relative_to(REPO)) if q.is_absolute() and q.is_relative_to(REPO) else str(p)
+
+
 
 def git_history_is_shallow(repo: Path | str) -> bool:
     """这份克隆的 git 历史是被截断的吗（`git clone --depth 1`、CI 的默认深度）。"""

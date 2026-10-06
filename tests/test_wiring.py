@@ -133,7 +133,7 @@ def test_every_declared_kind_has_an_emitter():
                 and node.value.id == "Kind" and node.attr in declared else None)
 
     emitted = set()
-    for f in sorted(Path("src/wolfengine").rglob("*.py")):
+    for f in sorted((REPO / "src/wolfengine").rglob("*.py")):
         for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
             if not isinstance(node, ast.Call):
                 continue
@@ -196,7 +196,7 @@ def test_no_module_compares_an_event_kind_to_a_bare_string():
     or nothing. `tests/` had five of these (`compaction`, `game_over`) until the ban was widened.
     """
     banned, wire = [], []
-    for f in sorted(Path("src/wolfengine").rglob("*.py")) + sorted(Path("tests").glob("*.py")):
+    for f in sorted((REPO / "src/wolfengine").rglob("*.py")) + sorted((REPO / "tests").glob("*.py")):
         o, r = _kind_comparisons(f)
         banned += o
         wire += r
@@ -229,7 +229,7 @@ def test_the_kind_guard_sees_both_tiers_on_a_synthetic_file(tmp_path):
 
 
 def test_there_is_exactly_one_chronicle_renderer():
-    owners = [f.name for f in sorted(Path("src/wolfengine").rglob("*.py"))
+    owners = [f.name for f in sorted((REPO / "src/wolfengine").rglob("*.py"))
               if "def render_line" in f.read_text(encoding="utf-8")]
     assert owners == ["compress.py"], owners
 
@@ -260,7 +260,7 @@ def _imported_from(module: str, owner: str) -> set[str]:
     The substring check this replaces passed on a docstring mention, so a view could stop
     using the shared rule and keep the test green by leaving the word in a comment.
     """
-    text = Path(f"src/wolfengine/{module}.py").read_text(encoding="utf-8")
+    text = (REPO / f"src/wolfengine/{module}.py").read_text(encoding="utf-8")
     return {a.name for node in ast.walk(ast.parse(text))
             if isinstance(node, ast.ImportFrom) and node.module == owner and node.level == 1
             for a in node.names}
@@ -272,7 +272,7 @@ def test_the_two_views_share_one_definition_of_each_viewing_rule(rule):
     see are two audience-sized truths about one file, and only one of them gets looked at when
     somebody reports "the shared file leaked". Same shape as the render_line pin above."""
     owner, users = VIEWING_RULES[rule]
-    owners = [f.name for f in sorted(Path("src/wolfengine").rglob("*.py"))
+    owners = [f.name for f in sorted((REPO / "src/wolfengine").rglob("*.py"))
               if f"def {rule}(" in f.read_text(encoding="utf-8")]
     assert owners == [f"{owner}.py"], owners
     for f in users:
@@ -291,11 +291,11 @@ def test_the_torn_tail_bound_has_one_owner_and_every_reader_calls_it():
     version of this check (see `_imported_from`).
     """
     for def_ in ("def split_torn_tail(", "def torn_notice("):
-        owners = [f.name for f in sorted(Path("src/wolfengine").rglob("*.py"))
+        owners = [f.name for f in sorted((REPO / "src/wolfengine").rglob("*.py"))
                   if def_ in f.read_text(encoding="utf-8")]
         assert owners == ["events.py"], f"{def_} 的第二份实现在 {owners}"
     for reader in ("cli.py", "metrics.py", "render_html.py", "render_live.py"):
-        assert "read_split(" in Path("src/wolfengine", reader).read_text(encoding="utf-8"), (
+        assert "read_split(" in (REPO / "src/wolfengine" / reader).read_text(encoding="utf-8"), (
             f"{reader} 自己在解析日志行，没有走 events 的那一份")
     for printer in ("cli", "render_html"):
         assert "torn_notice" in _imported_from(printer, "events"), (
@@ -328,23 +328,23 @@ def test_the_truncation_extent_has_one_arithmetic_and_three_readers():
     两处，各一处——`metrics.py` 里那只转交的手、`cli.py` 里那句 `is not` 的空判断。批次碰不到原文，
     就只能走 `Game.torn_extent`。
     """
-    arithmetic = [n for n in ast.parse(Path("src/wolfengine/events.py").read_text(encoding="utf-8")).body
+    arithmetic = [n for n in ast.parse((REPO / "src/wolfengine/events.py").read_text(encoding="utf-8")).body
                   if isinstance(n, ast.FunctionDef) and n.name == "torn_extent"]
     assert len(arithmetic) == 1, "数行数/字节数那只手在 events.py 里被写了不止一份"
 
-    prop = _defs_named(Path("src/wolfengine/metrics.py").read_text(encoding="utf-8"), "torn_extent")
+    prop = _defs_named((REPO / "src/wolfengine/metrics.py").read_text(encoding="utf-8"), "torn_extent")
     assert len(prop) == 1 and any(ast.unparse(d) == "property" for d in prop[0].decorator_list)
     assert _code(prop[0]) == "return torn_extent(self.torn_tail)", (
         f"Game.torn_extent 不只是一次转交：{_code(prop[0])}")
 
     reads = {p.name: sum(1 for x in ast.walk(ast.parse(p.read_text(encoding="utf-8")))
                          if isinstance(x, ast.Attribute) and x.attr == "torn_tail")
-             for p in sorted(Path("src/wolfengine").rglob("*.py"))}
+             for p in sorted((REPO / "src/wolfengine").rglob("*.py"))}
     touched = {k: v for k, v in reads.items() if v}
     assert touched == {"cli.py": 1, "metrics.py": 1}, (
         f"碰到被砍原文的地方变了：{touched}——多一处就多一套数法"
         "（#56 之前 `cli.py` 正是第二处：那句 `is not` 之外还自己数了一遍行数和字节数）")
-    assert _defs_named(Path("src/wolfengine/batch.py").read_text(encoding="utf-8"), "torn_extent") == []
+    assert _defs_named((REPO / "src/wolfengine/batch.py").read_text(encoding="utf-8"), "torn_extent") == []
     assert "torn_extent" in _imported_from("metrics", "events")
     assert "torn_extent" not in _imported_from("batch", "events"), (
         "batch.py 绕开 Game 自己去数，批次读数和转录读数就有两套算法了")
@@ -364,14 +364,14 @@ def test_the_batch_reads_the_numbering_arithmetic_instead_of_recounting_it():
     * `batch.py` 不导入它：批次要经 `Game` 拿数，否则 #54 刚拆掉的"四个出口各有一套算法"就在
       机器侧原地重建。
     """
-    arithmetic = [n for n in ast.parse(Path("src/wolfengine/events.py").read_text(encoding="utf-8")).body
+    arithmetic = [n for n in ast.parse((REPO / "src/wolfengine/events.py").read_text(encoding="utf-8")).body
                   if isinstance(n, ast.FunctionDef) and n.name == "seq_damage"]
     assert len(arithmetic) == 1, "计数那只手在 events.py 里被写了不止一份"
-    prop = _defs_named(Path("src/wolfengine/metrics.py").read_text(encoding="utf-8"), "seq_damage")
+    prop = _defs_named((REPO / "src/wolfengine/metrics.py").read_text(encoding="utf-8"), "seq_damage")
     assert len(prop) == 1 and any(ast.unparse(d) == "property" for d in prop[0].decorator_list)
     assert _code(prop[0]) == "return seq_damage(self.events)", (
         f"Game.seq_damage 不只是一次转交：{_code(prop[0])}")
-    elsewhere = [p.name for p in sorted(Path("src/wolfengine").rglob("*.py"))
+    elsewhere = [p.name for p in sorted((REPO / "src/wolfengine").rglob("*.py"))
                  if p.name not in ("events.py", "metrics.py")
                  and _defs_named(p.read_text(encoding="utf-8"), "seq_damage")]
     assert elsewhere == [], f"编号计数被抄到了第二处：{elsewhere}"
@@ -420,8 +420,8 @@ def test_the_win_check_names_its_key_space_as_teams_and_has_no_role_twin():
     为什么名字值得一条守卫：`Counter` 按职业建键时压根没有 "god" 这个键，`get("god", 0)` 永远是
     0，屠边在第一次 `check_win` 就判狼赢——`tests/test_rules.py` 里那格把后果钉成了读数。
     """
-    src = Path("src/wolfengine/rules.py").read_text(encoding="utf-8")
-    teams = _literal_values(Path("src/wolfengine/roles.py").read_text(encoding="utf-8"), "Team")
+    src = (REPO / "src/wolfengine/rules.py").read_text(encoding="utf-8")
+    teams = _literal_values((REPO / "src/wolfengine/roles.py").read_text(encoding="utf-8"), "Team")
     assert teams == {"wolf", "villager", "god"}, f"阵营键空间变了：{sorted(teams)}"
 
     fn = _defs_named(src, "winner_for")[0]
@@ -482,7 +482,7 @@ def _py_refs(def_roots: tuple[str, ...], ref_roots: tuple[str, ...]):
         refs[key] = refs.get(key, 0) + 1
 
     def scan(root: str, own: bool) -> None:
-        for f in sorted(Path(root).rglob("*.py")):
+        for f in sorted((REPO / root).rglob("*.py")):
             if "__pycache__" in f.parts:
                 continue
             for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
@@ -537,13 +537,13 @@ def _manual_command_names() -> dict[str, list[str]]:
     一个函数名不是（`#142` 收过一批"看着像命令其实没有"的出处）。
     """
     out: dict[str, list[str]] = {}
-    for f in sorted(Path("docs").glob("*.md")) + [Path("README.md")]:
+    for f in sorted((REPO / "docs").glob("*.md")) + [(REPO / "README.md")]:
         for no, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
             for span in SPAN.findall(line):
                 if not COMMAND_HEAD.search(span):
                     continue
                 for tok in re.findall(r"[A-Za-z_][A-Za-z_0-9]*", span):
-                    out.setdefault(tok, []).append(f"{f}:{no}")
+                    out.setdefault(tok, []).append(f"{repo_key(f)}:{no}")
     return out
 
 
@@ -551,7 +551,7 @@ def _entry_point_names() -> set[str]:
     """`[project.scripts]` 里 `模块:名字` 的那个名字——它是读者，只是形状不是 Python 里的点名。"""
     import tomllib
 
-    with open("pyproject.toml", "rb") as fh:
+    with open(REPO / "pyproject.toml", "rb") as fh:
         data = tomllib.load(fh)
     return {str(v).rsplit(":", 1)[-1] for v in data.get("project", {}).get("scripts", {}).values()}
 
@@ -598,7 +598,7 @@ def _module_defs_and_production_reads(
             return
         for t in names:
             written[t.id] = written.get(t.id, 0) + 1
-            consts.setdefault(t.id, []).append(f"{f}:{node.lineno}")
+            consts.setdefault(t.id, []).append(f"{repo_key(f)}:{node.lineno}")
 
     def count(tree: ast.AST) -> None:
         for node in ast.walk(tree):
@@ -616,7 +616,7 @@ def _module_defs_and_production_reads(
             readers[key] = readers.get(key, 0) + 1
 
     for root in read_roots:
-        for f in sorted(Path(root).rglob("*.py")):
+        for f in sorted((REPO / root).rglob("*.py")):
             if "__pycache__" in f.parts:
                 continue
             tree = ast.parse(f.read_text(encoding="utf-8"))
@@ -743,8 +743,8 @@ def test_the_version_string_has_exactly_one_home_in_the_repo():
     两格当时相等，而没有任何东西在核对——`#160` 的 K3 摘掉双下划线豁免时它现形，零生产读者。这一条钉的
     是"只住一处"，不是"出厂版本必须等于 0.1.0"：那个值归 `pyproject.toml` 自己管，本包不复制它。
     """
-    corpus = {str(p): p.read_text(encoding="utf-8")
-              for p in sorted(Path("src/wolfengine").rglob("*.py"))}
+    corpus = {repo_key(p): p.read_text(encoding="utf-8")
+              for p in sorted((REPO / "src/wolfengine").rglob("*.py"))}
     assert len(corpus) >= 10, f"src 只数到 {len(corpus)} 个模块，多半是扫面坏了"
     homes = _version_homes(corpus)
     assert not homes, f"版本字符串在 src/ 里有第二份：{homes}，而出厂口径只该住在 pyproject.toml"
@@ -783,8 +783,8 @@ def test_no_module_level_test_helper_is_left_without_a_caller_or_an_injector():
 
     地板取 250（现测 312 处定义、46 个文件）：名册空掉的"零处零读者"是真话，所以扫面坏了必须先红。
     """
-    trees = {str(f): ast.parse(f.read_text(encoding="utf-8"))
-             for root in ("tests", "scripts") for f in sorted(Path(root).rglob("*.py"))}
+    trees = {repo_key(f): ast.parse(f.read_text(encoding="utf-8"))
+             for root in ("tests", "scripts") for f in sorted((REPO / root).rglob("*.py"))}
     roster, dead = _unreached_test_helpers(trees)
     assert len(roster) >= 250, f"名册只数到 {len(roster)} 具，多半是扫面坏了"
     assert dead == [], f"这些测试侧/脚本侧的模块级 helper 没人调用、也没人按名字注入：{dead}"
@@ -877,8 +877,8 @@ def test_no_test_side_helper_is_reachable_only_from_dead_code():
     是真的会跑的代码。第一次探针没建这个结点，于是四处**假死**（`_board`、`_blob`、`A`、
     `looks_like_gateway_error`）——它们的调用点全在顶层，量出来是 4 具到不了，逐条 grep 后一句都站不住。
     """
-    trees = {str(f): ast.parse(f.read_text(encoding="utf-8"))
-             for root in ("tests", "scripts") for f in sorted(Path(root).rglob("*.py"))}
+    trees = {repo_key(f): ast.parse(f.read_text(encoding="utf-8"))
+             for root in ("tests", "scripts") for f in sorted((REPO / root).rglob("*.py"))}
     roster, unreachable = _unreachable_test_helpers(trees)
     assert len(roster) >= 250, f"名册只数到 {len(roster)} 具，多半是扫面坏了"
     assert unreachable == [], f"这些 helper 只有死代码会调到，从任何入口都到不了：{unreachable}"
@@ -1061,7 +1061,7 @@ def _class_defs_and_reads():
 
     defs: dict[str, list[int]] = {}
     for root, bucket in (("src", prod), ("scripts", prod), ("tests", tests)):
-        for f in sorted(Path(root).rglob("*.py")):
+        for f in sorted((REPO / root).rglob("*.py")):
             if "__pycache__" in f.parts:
                 continue
             tree = ast.parse(f.read_text(encoding="utf-8"))
@@ -1086,10 +1086,10 @@ def _cited_path_exists(text: str) -> bool:
     """
     for p in re.findall(r"[\w/.-]+\.(?:py|md)", text):
         name = Path(p).name
-        if Path(p).exists():
+        if (REPO / p).exists():
             return True
         if any(f.name == name for root in ("src", "tests", "scripts", "docs")
-               for f in Path(root).rglob(name)):
+               for f in (REPO / root).rglob(name)):
             return True
     return False
 
@@ -1230,13 +1230,13 @@ def _field_defs_and_reads(
                 bump(bucket, node.slice.value, origin)
 
     def py_files(root: str):
-        for f in sorted(Path(root).rglob("*.py")):
+        for f in sorted((REPO / root).rglob("*.py")):
             if "__pycache__" not in f.parts:
                 yield f, ast.parse(f.read_text(encoding="utf-8"))
 
     for root in read_roots:
         for f, tree in py_files(root):
-            count_reads(tree, readers, str(f))
+            count_reads(tree, readers, repo_key(f))
     for root in test_roots:
         for f, tree in py_files(root):
             if root not in read_roots:
@@ -1371,10 +1371,10 @@ def _own_module_names() -> set[str]:
     `httpx.py` 的文件）。
     """
     names: set[str] = set()
-    for f in Path("src/wolfengine").rglob("*.py"):
+    for f in (REPO / "src/wolfengine").rglob("*.py"):
         names.add(f.stem)              # 模块自己的文件名
-        names.add(f.parts[1])          # 包名：wolfengine
-        names.update(f.parts[2:-1])    # 子包目录名：prompts
+        *pkg, _ = f.relative_to(REPO).parts
+        names.update(pkg[1:])          # 包名 wolfengine，往后是子包目录名
     return names
 
 
@@ -1398,7 +1398,7 @@ def _classes_no_reader_reaches():
         reads[name] = reads.get(name, 0) + 1
 
     for root in ("src", "tests", "scripts"):
-        for f in sorted(Path(root).rglob("*.py")):
+        for f in sorted((REPO / root).rglob("*.py")):
             if "__pycache__" in f.parts:
                 continue
             for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
@@ -1415,7 +1415,7 @@ def _classes_no_reader_reaches():
                     bump(node.value)
 
     dead = []
-    for f in sorted(Path("src/wolfengine").rglob("*.py")):
+    for f in sorted((REPO / "src/wolfengine").rglob("*.py")):
         if "__pycache__" in f.parts:
             continue
         for node in ast.parse(f.read_text(encoding="utf-8")).body:
@@ -1427,7 +1427,7 @@ def _classes_no_reader_reaches():
                 continue
             members = sorted({s.name for s in node.body
                               if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef))})
-            dead.append(f"{f}:{node.lineno} class {node.name}（成员 {members}）")
+            dead.append(f"{repo_key(f)}:{node.lineno} class {node.name}（成员 {members}）")
     return sorted(dead)
 
 
@@ -1635,9 +1635,9 @@ def _parsed_trees(roots: tuple[str, ...]) -> dict[str, "ast.Module"]:
     """
     out: dict[str, ast.Module] = {}
     for root in roots:
-        for f in sorted(Path(root).rglob("*.py")):
+        for f in sorted((REPO / root).rglob("*.py")):
             if "__pycache__" not in f.parts:
-                out[str(f)] = ast.parse(f.read_text(encoding="utf-8"))
+                out[repo_key(f)] = ast.parse(f.read_text(encoding="utf-8"))
     return out
 
 
@@ -1913,7 +1913,7 @@ def _unread_imports(roots: tuple[str, ...]) -> list[str]:
     """
     dead: list[str] = []
     for root in roots:
-        for f in sorted(Path(root).rglob("*.py")):
+        for f in sorted((REPO / root).rglob("*.py")):
             if "__pycache__" in f.parts or f.name == "__init__.py":
                 continue
             tree = ast.parse(f.read_text(encoding="utf-8"))
@@ -1936,7 +1936,7 @@ def _unread_imports(roots: tuple[str, ...]) -> list[str]:
                     head = node.value.split(".")[0]
                     if head.isidentifier():
                         used.add(head)
-            dead += [f"{f}:{ln} {name}"
+            dead += [f"{repo_key(f)}:{ln} {name}"
                      for name, ln in imported.items() if name not in used]
     return sorted(dead)
 
@@ -2031,7 +2031,7 @@ def test_the_live_header_shows_the_manifest_the_shared_reader_found(tmp_path, ca
     for ln in named:
         assert "g-header-7" in ln, f"离线读取器认得这局的名字，这一处不认得：{ln}"
 
-    live_src = Path("src/wolfengine/render_live.py").read_text(encoding="utf-8")
+    live_src = (REPO / "src/wolfengine/render_live.py").read_text(encoding="utf-8")
     assert "read_text(" not in live_src, (
         "render_live 又自己去开日志文件了：哪一行是 manifest 的判据只该有一份")
 
@@ -2117,11 +2117,11 @@ def test_the_wave_splitter_has_one_owner_and_both_readers_call_it():
     and the drift is invisible until an audit says "3 waves" next to a page that printed 2 —
     the same split-brain this file was written for, one layer down.
     """
-    owners = [f.name for f in sorted(Path("src/wolfengine").rglob("*.py"))
+    owners = [f.name for f in sorted((REPO / "src/wolfengine").rglob("*.py"))
               if "def voting_waves(" in f.read_text(encoding="utf-8")]
     assert owners == ["events.py"], owners
     for reader in ("metrics.py", "render_html.py"):
-        assert "voting_waves(" in Path("src/wolfengine", reader).read_text(encoding="utf-8"), (
+        assert "voting_waves(" in (REPO / "src/wolfengine" / reader).read_text(encoding="utf-8"), (
             f"{reader} must call the shared splitter, not reimplement it nearby")
 
 
@@ -2795,8 +2795,8 @@ def test_no_module_level_literal_alias_is_declared_twice_in_src():
     `legality.py` 各有一遍，两格**值集合本来就不同**（那两把尺管的是两件事），同名不是同一种事实。铺开的
     判据会把这一形报成缺陷，所以限界写死在这里——这一条只管"同一份类型别名抄了两遍"。
     """
-    corpus = {str(p): p.read_text(encoding="utf-8")
-              for p in sorted(Path("src/wolfengine").rglob("*.py"))}
+    corpus = {repo_key(p): p.read_text(encoding="utf-8")
+              for p in sorted((REPO / "src/wolfengine").rglob("*.py"))}
     assert len(corpus) >= 10, f"src 只数到 {len(corpus)} 个模块，多半是扫面坏了"
     homes = _literal_alias_homes(corpus)
     assert len(homes) >= 6, f"模块级 Literal 别名只数到 {len(homes)} 个，多半是收集坏了"
@@ -3006,8 +3006,8 @@ def test_every_declared_ability_is_asked_about_by_name_or_named_in_the_register(
     是因为它的读侧统一到一个表达式形状上（与名为 `abilities` 的属性做成员测试），容器名就写在
     同一格里，归属不需要反推类型。
     """
-    corpus = {str(p): p.read_text(encoding="utf-8")
-              for p in sorted(Path("src/wolfengine").rglob("*.py"))}
+    corpus = {repo_key(p): p.read_text(encoding="utf-8")
+              for p in sorted((REPO / "src/wolfengine").rglob("*.py"))}
     assert len(corpus) >= 10, f"src 只数到 {len(corpus)} 个模块，多半是扫面坏了"
     values, consulted, unenforced = _ability_values_and_consultations(corpus)
     # 地板两格都钉在"今天以下"：5 枚 = 4 枚真被闸门问过的 + 1 枚在册说明的，4 处 = 五处少一处。
@@ -3078,7 +3078,7 @@ def _acts_declared_legal_by_a_phase() -> set[str]:
             collect(node.body)
             collect(node.orelse)
 
-    for path in sorted(Path("src/wolfengine").glob("*.py")):
+    for path in sorted((REPO / "src/wolfengine").glob("*.py")):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "LegalSet":
                 for kw in node.keywords:
@@ -3198,7 +3198,7 @@ def test_every_stored_fact_value_has_a_word_in_the_table_that_renders_it():
     与 #207、#208 不同，这一具今天没有缺口：它是地板，管的是"加了第四枚死因忘了配词"和
     "删了一格词"这两种将来，两者今天都不会被任何一条测试发现。
     """
-    src = Path("src/wolfengine")
+    src = (REPO / "src/wolfengine")
     rosters = {
         "CAUSE_ZH": _literal_values((src / "state.py").read_text(encoding="utf-8"), "DeathCause"),
         "TEAM_ZH": _literal_values((src / "state.py").read_text(encoding="utf-8"), "Winner"),
@@ -3311,7 +3311,7 @@ def test_only_conftest_installs_the_httpx_send_traps():
     这套仓库的账已经付过一次（`#153`、`#201`）。
     """
     sites = []
-    for f in sorted(Path("tests").glob("*.py")):
+    for f in sorted((REPO / "tests").glob("*.py")):
         tree = ast.parse(f.read_text(encoding="utf-8"))
         for n in ast.walk(tree):
             if (isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.func.attr == "setattr"
@@ -3405,11 +3405,11 @@ def _suppression_markers(roots: tuple[str, ...]) -> list[str]:
     """
     hits = []
     for root in roots:
-        for path in sorted(Path(root).rglob("*.py")):
+        for path in sorted((REPO / root).rglob("*.py")):
             lines = path.read_text(encoding="utf-8").splitlines(keepends=True) + [""]
             for tok in tokenize.generate_tokens(iter(lines).__next__):
                 if tok.type == tokenize.COMMENT and SUPPRESSION_RX.search(tok.string):
-                    hits.append(f"{path}:{tok.start[0]} {tok.string.strip()}")
+                    hits.append(f"{repo_key(path)}:{tok.start[0]} {tok.string.strip()}")
     return hits
 
 
@@ -3516,7 +3516,7 @@ def _unread_locals(roots: tuple[str, ...]) -> list[str]:
     """
     cells: list[str] = []
     for root in roots:
-        for f in sorted(Path(root).rglob("*.py")):
+        for f in sorted((REPO / root).rglob("*.py")):
             if "__pycache__" in f.parts:
                 continue
             text = f.read_text(encoding="utf-8")
@@ -3524,7 +3524,7 @@ def _unread_locals(roots: tuple[str, ...]) -> list[str]:
                 if not isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     continue
                 stored, read, declared = _stored_locals(n)
-                cells += [f"{f}:{ln} {name}" for name, ln in stored.items()
+                cells += [f"{repo_key(f)}:{ln} {name}" for name, ln in stored.items()
                           if name not in read and name not in declared
                           and not name.startswith("_")]
     return sorted(cells)
@@ -3744,12 +3744,12 @@ RENUMBER_GROUPS = ("手册", "归档", "tests", "scripts")
 def _renumber_corpus() -> dict[str, list[Path]]:
     """按 `#262` 的口径分成四组的语料：手册页（README 与 `docs/` 里除归档那本）、归档自己、
     测试、脚本。分成组是因为旧名册抄的正是"手册"那一组，而今天那组对这些文件是 0 枚。"""
-    docs = sorted(Path("docs").glob("*.md"))
+    docs = sorted((REPO / "docs").glob("*.md"))
     return {
-        "手册": [f for f in docs if f.name != "iterations.md"] + [Path("README.md")],
-        "归档": [Path("docs/iterations.md")],
-        "tests": sorted(f for f in Path("tests").rglob("*.py") if "__pycache__" not in f.parts),
-        "scripts": sorted(Path("scripts").rglob("*.py")),
+        "手册": [f for f in docs if f.name != "iterations.md"] + [(REPO / "README.md")],
+        "归档": [(REPO / "docs/iterations.md")],
+        "tests": sorted(f for f in (REPO / "tests").rglob("*.py") if "__pycache__" not in f.parts),
+        "scripts": sorted((REPO / "scripts").rglob("*.py")),
     }
 
 
@@ -3897,7 +3897,7 @@ def test_the_pinned_module_constants_have_exactly_one_definition_in_tests():
     这一条自己不收语料：它只数 `ast` 里的模块级绑定，不读 `docs/`。
     """
     defs: dict[str, list[str]] = {}
-    for f in sorted(Path("tests").glob("*.py")):
+    for f in sorted((REPO / "tests").glob("*.py")):
         for st in ast.parse(f.read_text(encoding="utf-8")).body:
             if isinstance(st, (ast.Assign, ast.AnnAssign)) and st.value is not None:
                 tgt = st.targets[0] if isinstance(st, ast.Assign) else st.target
@@ -4053,3 +4053,123 @@ def test_no_module_level_path_constant_resolves_against_the_current_directory():
         "——换成 `Path(__file__).resolve().parents[1]` 打头；"
         "模块级求值的那一枚会在 collection 期就把整本判死，红都不出")
 
+FS_HANDLES = ("exists", "glob", "is_dir", "is_file", "iterdir", "mkdir", "open", "read_bytes",
+              "read_text", "readlink", "resolve", "rglob", "samefile", "stat", "touch",
+              "write_bytes", "write_text")
+
+
+def _ast_parents(tree: ast.AST) -> dict[int, ast.AST]:
+    """`id(子) -> 父`。这一面要问「这一枚 `Path(…)` 落地的是哪一面」，答案在它**上面**那一格，
+    而 `ast.walk` 只往下走。"""
+    return {id(c): p for p in ast.walk(tree) for c in ast.iter_child_nodes(p)}
+
+
+def _touches_the_filesystem(node: ast.AST, parents: dict[int, ast.AST]) -> bool:
+    """`Path("相对")` 这一格往上爬：当场取数算「收」，拼给下游算「不收」。
+
+    沿 `/` 链往上（`Path("x") / "y" / "z"` 的根在最外层，`.read_text()` 也挂在最外层）；
+    撞到 `FS_HANDLES` 里的方法、或撞到 `open(…, Path("x"))` 的实参位，判「当场」；
+    撞到别的一切（赋值、普通函数实参、`return`、容器元素、`.name`/`.stem` 这类只取名字的属性）
+    判「拼给下游」——那一枚的根由接住它的那一方决定，本闸门不去抢。
+    """
+    cur = node
+    while True:
+        up = parents.get(id(cur))
+        if up is None:
+            return False
+        if isinstance(up, ast.Attribute):
+            return up.attr in FS_HANDLES
+        if isinstance(up, ast.BinOp) and isinstance(up.op, ast.Div):
+            cur = up
+            continue
+        if isinstance(up, ast.Call):
+            return (ast.unparse(up.func).split(".")[-1] == "open"
+                    and any(a is node for a in up.args))
+        return False
+
+
+def _function_body_relative_path_calls(src: str) -> list[str]:
+    """某一本文档之外的源面里，函数体内**当场取数**的相对 `Path(…)` 调用点：`"行号 LITERAL_REL"`。
+
+    与 `_cwd_relative_path_consts` 同一口径的两处不同，都是这一面自己要求的：
+    其一，宿主从模块级绑定换成**函数体内的一次调用点**，坏法也跟着从"collection 期带走整本"
+    换成"运行时读到别处"；其二，沿派生链问根在这一面做不了（函数里的局部名没有名册可查），
+    所以只收调用点自己那一截字面、且只看它当场落不落盘，f-string 只看开头那一截（同 `#282` 量的那一支）。
+    `Path` 的四种拼写在 `_is_path_call` 里已经抄过一遍，这里第二次抄——把它抽成模块级常量要动
+    `_is_path_call` 那一行的行数，而本文件 4055 行以上有按行号点了它的归档读数（`#262`、`#310`）。
+    """
+    out: set[str] = set()
+    for host in ast.walk(ast.parse(src)):
+        if not isinstance(host, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        parents = _ast_parents(host)
+        for node in ast.walk(host):
+            if not isinstance(node, ast.Call) or not node.args:
+                continue
+            if ast.unparse(node.func) not in ("Path", "pathlib.Path",
+                                              "PurePath", "pathlib.PurePath"):
+                continue
+            first = node.args[0]
+            if isinstance(first, ast.JoinedStr):
+                first = first.values[0] if first.values else first
+            lit = first.value if isinstance(first, ast.Constant) else None
+            if not isinstance(lit, str) or PurePosixPath(lit).is_absolute():
+                continue
+            if _touches_the_filesystem(node, parents):
+                out.add(f"{node.lineno} LITERAL_REL")
+    return sorted(out)
+
+
+def test_the_function_body_path_probe_names_each_form_on_its_own():
+    """函数体那一面的尺先要有牙：只收当场落盘的那几枚，五种不收的形状各问过一次。
+
+    合成一本不落仓库（同 `#310` 的口径）。`B` 钉 `__file__` 锚的不进桶，`C` 钉自带根的那截
+    不进桶，`E` 的入参是一个名字、这一面问不出根，`G` 拼给下游的函数实参不进桶；
+    `H` 把**已知漏判**钉成一个读数：赋值给局部名、下一行才 `H.read_text()`，本闸门沿局部绑定
+    问不到它，所以它不进桶。谁将来把这一面加宽到沿局部绑定问根，那一格会红着提醒他一起改登记。
+    """
+    src = (
+        "import pathlib\n"
+        "def f(x, root, _helper):\n"
+        '    A = pathlib.Path("src/wolfengine").read_text()\n'
+        "    B = pathlib.Path(__file__).resolve().parents[1]\n"
+        '    C = pathlib.Path("/tmp").exists()\n'
+        '    D = pathlib.Path(f"docs/{x}.md").read_text()\n'
+        "    E = pathlib.Path(root).read_text()\n"
+        "    F = open(pathlib.Path('README.md'), encoding='utf-8')\n"
+        "    G = _helper(Path('scripts'))\n"
+        '    H = pathlib.Path("tests")\n'
+        "    return A, B, C, D, E, F, G, H.read_text()\n"
+    )
+    assert _function_body_relative_path_calls(src) == \
+        ["3 LITERAL_REL", "6 LITERAL_REL", "8 LITERAL_REL"], \
+        "字面、f-string 首截、裸 `open` 实参这三形要收；`__file__`／绝对／变量入参／拼给下游／" \
+        "赋值后隔行取数那五形不要收（最后一形是在册的漏判）"
+
+
+def test_no_function_body_path_call_touches_the_filesystem_through_the_cwd():
+    """`#311`：tests＋scripts 函数体里当场取数的相对 `Path(…)` 要跟着仓库走，不跟着 cwd 走。
+
+    `#310` 钉的是模块级绑定——那一形在 collection 期就把整本带走。这一面是**运行时读错地方**：
+    模块级换好锚之后从仓库外敲那五本，仍红 48 枚（两形读数与逐枚处置见 `#311` 那一节）。
+
+    面只取「当场落盘」那一形，是量过之后定的：宽一形（函数体内所有相对 `Path(…)`）今值收 3 枚，
+    全在 `tests/test_cli.py`，且三枚都是拼给 `_doc_block` 的——它自己写了「相对就补仓库根」
+    （`tests/test_cli.py:1329`）。把这三枚也换锚，要么把 `_doc_block` 那个相对分支弄成死代码，
+    要么把那一本按行号点了它的 14 处归档读数全部顶号，两样都比这一形漏掉的贵。
+    名册零豁免：今值是空集。扫描面的地板同 `#310` 那一条——根解错就 glob 到 0 本，
+    "全 0"配 rc 0 看着像一次干净的负结果。
+    """
+    books = [f for face in PATH_ANCHOR_FACES for f in sorted((REPO / face).glob("*.py"))]
+    assert len(books) >= 40 and (REPO / "src" / "wolfengine").is_dir(), (
+        f"扫描面异常：{len(books)} 本，src 目录在不在={(REPO / 'src' / 'wolfengine').is_dir()}"
+        "——这条断言的 rc 0 只在面真的扫到东西时才算读数")
+    offenders = [f"{f.relative_to(REPO)}:{hit}" for f in books
+                 for hit in _function_body_relative_path_calls(f.read_text(encoding="utf-8"))]
+    assert not offenders, (
+        f"函数体内当场取数、又拿当前目录当根的相对 `Path(…)` {len(offenders)} 枚：{offenders}"
+        "——换成 `(REPO / …)`；`REPO` 住在 `tests/conftest.py`，跟着这本书在仓库里的位置走")
+
+
+# 这一本把 import 放在文件尾是不顶号：它上面有按行号点了本文件的归档读数（同 `#262`、`#310` 那笔账）。
+from conftest import REPO, repo_key

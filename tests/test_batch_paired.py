@@ -82,7 +82,7 @@ def _reachable_config_reader(field: str, src: dict[str, str]) -> str:
     `src` is deliberately the tree minus `config.py`, so this is the only way a read inside the
     dataclass's own file can enter the evidence.
     """
-    tree = ast.parse(Path("src/wolfengine/config.py").read_text(encoding="utf-8"))
+    tree = ast.parse((REPO / "src/wolfengine/config.py").read_text(encoding="utf-8"))
     for cls in (n for n in tree.body if isinstance(n, ast.ClassDef)):
         for meth in (n for n in cls.body
                      if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))):
@@ -119,7 +119,7 @@ def _readers(field: str, src: dict[str, str]) -> list[str]:
 def _src_outside_config() -> dict[str, str]:
     """The whole `src/` tree except `config.py`, as filename -> text."""
     return {f.name: f.read_text(encoding="utf-8")
-           for f in sorted(Path("src/wolfengine").rglob("*.py")) if f.name != "config.py"}
+           for f in sorted((REPO / "src/wolfengine").rglob("*.py")) if f.name != "config.py"}
 
 
 def test_a_field_named_only_inside_prose_has_no_reader():
@@ -1631,3 +1631,5 @@ def test_two_arms_sharing_one_name_stop_before_the_directory(tmp_path):
         asyncio.run(batch.run_batch(twins, games=1, seed0=1, out_dir=out, mock=True))
     assert str(why.value) == "配置臂重名", str(why.value)
     assert not out.exists(), f"门口就该停，目录却已经摊开了：{out}"
+# 这一本把 import 放在文件尾是不顶号：它上面有按行号点了本文件的归档读数（同 `#262`、`#310` 那笔账）。
+from conftest import REPO
