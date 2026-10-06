@@ -435,3 +435,30 @@ async def test_only_the_transport_that_owns_its_client_closes_it(monkeypatch):
     await t.aclose()
     assert borrowed.is_closed is False, "借来的客户端被 aclose() 关了，别的调用方下一秒就用不上"
     await borrowed.aclose()
+
+
+def test_redact_hands_the_name_it_was_given_down_to_every_value(monkeypatch):
+    """`redact()` 的键名那一半跟着部署走，值那一半只认出厂名——嵌套里的明文因此能穿过去。
+
+    失效方向是静默的：`REDACT_PATTERNS` 按**键名**盖，`_scrub_string` 按**值**擦，而后者拿到的
+    永远是 `Config.api_key_env` 的类属性。改名部署下 `require_key()` 从第三个名字读键、发出去，
+    端点把它回显进 `usage` 某一格的**值**里，键名不在那七枚之内，值又不是出厂名读到的那一个——
+    两层防护各自让过去，明文一路进落盘的那本 dict。所以这一格问的不是"盖没盖住键名"，
+    而是"名字有没有跟着走进递归"。第二向（不交名字）留在断言里当负控制：
+    它证明这条用例的力气来自那个实参，不来自环境里恰好有两个哨兵。
+    """
+    alt = "OTHERSENTINELNOTKEY"
+    factory = "FACTORYSENTINELNOTKEY"
+    monkeypatch.setenv("WOLF_OTHER_KEY_ENV", alt)
+    monkeypatch.setenv(Config().api_key_env, factory)
+
+    payload = {"usage": [{"echo": f"Bearer {alt}"}], "counts": (f"seen {alt}",)}
+
+    named = redact(payload, "WOLF_OTHER_KEY_ENV")
+    assert named["usage"][0]["echo"] == "Bearer <elided>", \
+        f"名字没跟着递归进列表里的 dict：{named!r}"
+    assert named["counts"] == ["seen <elided>"], f"元组那一支没拿到名字：{named!r}"
+    assert alt not in repr(named)
+
+    unnamed = redact(payload)
+    assert alt in repr(unnamed), "负控制：不交名字时明文还在——上面那格的红只能是名字带来的"

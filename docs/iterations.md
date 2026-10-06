@@ -15112,3 +15112,54 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
   由当年的名单盖上去的，不是重渲染时由今天的名单盖的；所以「7 处」说的是那份旧产物的形状，
   而同一节下面那句 remedy 已经写明"下一次 M0 重跑预期能把这些格读回来"。文档面无缺陷，**这一片不改任何句子**。
   代理那一格的教训登记成价：它报的"过时"来自把渲染时机当成盖值时机——**子代理给的分类要自己读那条判据的取数点**。
+
+## `#315` 把部署的密钥变量名接到落盘那一步：递归两支交名、落盘边界改必填、两个调用方各交一次
+
+- **票面前提与现读**：`#314` 那一节把这一格记成"这一片没做的事"，理由是 `CallResult` 这一族不携带 config，
+  所以"传名字"在落盘那一步结构上做不到。现读推翻了一半。做不到的是**构造**那一步——拼 `CallResult` 的地方
+  手上只有 transport；而**渲染**那一步的两个调用方都坐在 `src/wolfengine/actors.py:143` 上，那一句里就有
+  `as_response_dict` 要交的那个名字。第二枚同形的 `as_response_dict` 调用点在 `src/wolfengine/actors.py:149`。
+  **所以这一片接的是参数链，不是新字段**：给 `CallResult` 补一格 config 会把行顶起来，而 `#314` 刚把这一本上
+  按行号挂着的号钉好。
+- **处置**（三本 src，逐具行数中性，`git diff --numstat` 读数为 7/7、5/5、2/2）：
+  - `src/wolfengine/transport.py:41` 那一支 dict 分支把 `redact` 的第二个实参补上了。
+  - `src/wolfengine/transport.py:45` 那一支 list/tuple 同样把 `redact` 往下交。
+  - `src/wolfengine/transport.py:47` 那枚 `_scrub_string` 不再退回签名上的出厂名默认值。
+  - `src/wolfengine/llm.py:64` 的 `as_response_dict` 从此收一个**没有默认值**的 `key_env`。
+  - `src/wolfengine/llm.py:75` 那一格的 `redact` 因此拿得到部署名。
+  - `src/wolfengine/llm.py:168` 那一支的 `ContextTooLong` 自己把名字交了。
+  - 同一函数里紧接的那条 `last_error` 写在 `src/wolfengine/llm.py:169`，两份各擦一遍所以各补一次。
+  - `tests/test_no_secrets.py` 里 `::test_every_scrub_call_site_in_the_production_face_names_the_variable`
+    把 `#314` 留给 `redact()` 自己的那格豁免收回：`tests/test_no_secrets.py:519` 的 `loose` 现在一枚无名调用点
+    都不许有，带名字的下界抬到 `tests/test_no_secrets.py:522` 那个 `named` 地板（4→5），再补一条面级的
+    `tests/test_no_secrets.py:524`：`sites` 这一族只许住在 transport 那一本里。
+- **证人与两向**（计数是证人，秒数是脏读数）：RED 那趟 `19:56:13Z` 定向三本 `4 failed`，其中一枚是
+  `TypeError`（`redact()` 收到第二个位置实参）——这一枚的红来自签名加宽而不是泄漏，登记成形状红，另三枚是
+  真的明文穿过（回显里带着改名部署的那个哨兵）。GREEN 那趟 `20:04:02Z` 同三本 `59 passed`、rc 0（7.99s，
+  起点负载 1.53），`20:04:32Z` 再三本 actor/wiring 加两本文档闸门 `299 passed`、rc 0（23.16s，同一负载）。
+  用例内建的负控制在
+  `tests/test_transport.py::test_redact_hands_the_name_it_was_given_down_to_every_value` 的第二向：不交名字时
+  明文必须还在。这一句把力气归给那个实参，不归给环境里恰好有两个哨兵。
+- **刀账**（A 棒 10 具 + B 棒 2 具，逐具按"红在哪一本"记账；脚本、散列与逐趟秒数只住搁板账）：
+  - KT0 空刀（把同一串字节再写一遍）：定向 `209 passed`、全量裁决 `1278 passed`、rc 0 —— 写盘这条路本身不造红。
+    电池脚本把这一格印成 MISSED，那是它自己只按"定向绿"归类的分支，登记成脚本的形状 bug，判决不取它。
+  - KT1（dict 支不往下交名）→ CAUGHT 2 枚；KT2（list 支）→ CAUGHT 1 枚；KT3（`redact()` 自己那一支退回出厂名）
+    → CAUGHT 5 枚，第五枚正是 `test_no_secrets` 里这一片收回豁免后要问的那一句。
+  - KT4（交的是硬编码的名字）→ CAUGHT 4 枚、**两本都有读者**。起草时我预期它闸门独红，被现量证伪：按出厂名
+    擦值的两枚用例同时红。**变异预期只能来自读过的断言**，这一条在这一片又记了一次。
+  - KT5（落盘那一格退回出厂名）→ CAUGHT 2 枚，第二枚是 `test_wiring` 里 `#86` 立的那条参数层闸门：`key_env`
+    一旦没有读者它自己就红——"必填"这件事在这里第一次有了机械读者。
+  - KT6 / KT7（两支 error arm 各退回出厂名）→ 各自 CAUGHT 1 枚，红的恰是同名的那一形参数，两形各有独占读者。
+  - KT8（actor 那一层把名字接成一个不含键的字段，类型仍对）→ 定向 `209 passed`、全量裁决 `1278 passed` ⇒
+    **MISSED**：actor 层没有改名证人，保护它的是漏交名字时炸出来的 `TypeError`，不是测试。
+  - KT9（给落盘边界补回出厂名默认值）→ 定向 `209 passed`、全量裁决 `1278 passed` ⇒ **MISSED**：那句"不补默认值"
+    是设计主张不是断言，它的读者与 KT8 同一枚。
+  - KT11 / KT12 把 `#314` 那两具同形刀在新签名上重放：落在非 200 正文那一支的 CAUGHT 2 枚（行为与闸门各一枚），
+    落在"200 而 body 不可解析"那一支的 CAUGHT 1 枚——**只有闸门红**。`#314` 当年量到的是整套全绿，这一片收了
+    豁免之后那一格第一次有了独占读者，而它仍只能由形状判据认领（那句 error 由解码异常拼出来，话里只有位置没有正文）。
+- **今值**：`1278 passed` 是这一片之前那棵树的整套读数（`#314` 记的是 `1274`，多出的四枚正是这一片补的三条用例
+  经一次参数展开成四枚，两本对得上）。提交后另有一趟重放，读数与判决记在那一格里。
+- **这一片没做的事**：`scripts/calibrate.py:68` 那一枚委托 `transport_redact` 仍不交名字，出厂名默认值因此还有
+  一枚真调用方——改名部署下那份探针报告只剩按**键名**盖的那一半防护。把同一条判据从 `_scrub_string` 加宽到
+  那一枚转手函数的调用点是下一片，记成 `#316`；先要定价的是测试里那枚故意的无名调用（上面那条负控制）会不会
+  被闸门收进去。

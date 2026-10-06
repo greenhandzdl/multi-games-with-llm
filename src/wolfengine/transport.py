@@ -30,21 +30,21 @@ REDACT_PATTERNS = ("authorization", "api_key", "apikey", "x-api-key", "secret", 
 TIME_DEPENDENT_STATUSES = (408, 429)
 
 
-def redact(obj: Any) -> Any:
-    """Replace credential-shaped values, and the literal key inside any string.
+def redact(obj: Any, key_env: str = Config.api_key_env) -> Any:
+    """Replace credential-shaped values, and the literal key of the variable `key_env` names.
 
     Applied to exception text as well as payloads: `httpx` will happily echo a request in
     a `RemoteProtocolError` message, and that text is what ends up in a log line.
     """
     if isinstance(obj, dict):
         return {
-            k: ("<elided>" if any(t in str(k).lower() for t in REDACT_PATTERNS) else redact(v))
+            k: ("<elided>" if any(t in str(k).lower() for t in REDACT_PATTERNS) else redact(v, key_env))
             for k, v in obj.items()
         }
     if isinstance(obj, (list, tuple)):
-        return [redact(v) for v in obj]
+        return [redact(v, key_env) for v in obj]
     if isinstance(obj, str):
-        return _scrub_string(obj)
+        return _scrub_string(obj, key_env)
     return obj
 
 
@@ -54,8 +54,8 @@ def _scrub_string(s: str, key_env: str = Config.api_key_env) -> str:
     The name comes from `Config`, not from a list of names written here: `require_key()` will
     read whatever `api_key_env` says, so a deployment that renames the variable used to send a
     key this scrubber never looked up — while the endpoint's echo of it went straight into
-    `error`, and from there into the log. The default is the factory name because `redact()`
-    has no config in hand; every call site that does have one passes it — this function's own.
+    `error`, and from there into the log. `redact()` hands the deployed name down, so this
+    default only covers a caller that has none; every call site that does have one passes it — this function's own.
     """
     value = os.environ.get(key_env)
     if value and value in s:

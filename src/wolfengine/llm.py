@@ -61,9 +61,9 @@ class CallResult:
     def ok(self) -> bool:
         return not self.error
 
-    def as_response_dict(self) -> dict[str, Any]:
+    def as_response_dict(self, key_env: str) -> dict[str, Any]:
         """What goes into `Event.response`. Whitelisted: latency and token counts, never
-        headers, because this dict is written to disk."""
+        headers. `key_env` has no default, because this dict is written to disk."""
         return {
             "text": self.text,
             "prompt_tokens": self.prompt_tokens,
@@ -72,7 +72,7 @@ class CallResult:
             "latency_s": round(self.latency_s, 3),
             "attempts": self.attempts,
             "backoffs": list(self.backoffs),
-            "usage": redact(self.raw_usage),
+            "usage": redact(self.raw_usage, key_env),
         }
 
 
@@ -165,8 +165,8 @@ class LLM:
             if res.is_length_error:
                 # Deliberately not retried here: the fix is fewer prompt bytes, which only
                 # the assembler can produce. Retrying the same prompt is a 400 loop.
-                raise ContextTooLong(redact(res.error)[:200])
-            last_error = redact(res.error)[:200] or f"status {res.status}"
+                raise ContextTooLong(redact(res.error, self.cfg.api_key_env)[:200])
+            last_error = redact(res.error, self.cfg.api_key_env)[:200] or f"status {res.status}"
             last_upstream = res.is_upstream_error
             if attempt >= self.max_retries_per_call:
                 break

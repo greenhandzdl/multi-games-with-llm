@@ -495,14 +495,15 @@ def _scrub_call_sites(src: str, rel: str) -> list[tuple[int, str, bool, str]]:
 
 
 def test_every_scrub_call_site_in_the_production_face_names_the_variable():
-    """擦值调用点要么把名字交出去，要么点名说是谁豁免的——`redact()` 内部那一处是唯一的豁免。
+    """擦值调用点一枚都不许无名——上一片留给 `redact()` 的那格豁免，这一片收回了。
 
     `transport.py` 的 `_scrub_string()` 签名带一个出厂名默认值，那句 docstring 是一条关于
     **所有调用点**的主张，而它此前零读者：改名部署下少传一个名字，那一路就静默退回出厂名，整套离线
     一条不红。现量的两向：`#314` 的两具同形刀里，落在非 200 正文那一支的能红（有一条用例点名改过
     名字的键），落在"200 而 body 不可解析"那一支的整套 1272 passed 全绿——那一格写不出行为证人
     （它擦的那串由 `JSONDecodeError` 拼出来，而这条异常的话里只有位置没有正文），所以这一格只能由
-    形状判据认领。豁免写成"归属哪个函数"而不是"参数长什么样"，宽谓词会把将来任何一处漏擦都放过去。
+    形状判据认领。豁免按"归属哪个函数"划，宽谓词会把将来任何一处漏擦都放过去；名字接进落盘那一步
+    之后 `redact()` 自己也把名字交了，那一格就没有结构上的理由留下，判据收成"一枚都不许无名"。
     第二参数光"有"还不够：第一版判据只数参数个数，K174 那具刀（把名字换成从类上直接取的那一枚）在它
     面前是绿的，实测 45 passed——"交了个名字"和"交的是部署改名之后的那个名字"不是一件事。
     """
@@ -515,12 +516,13 @@ def test_every_scrub_call_site_in_the_production_face_names_the_variable():
             if "_scrub_string" not in text:
                 continue
             sites += _scrub_call_sites(text, str(book.relative_to(ROOT)))
-    loose = [s for s in sites if not s[2] and s[1] != "redact"]
+    loose = [s for s in sites if not s[2]]
     assert not loose, f"这些擦值调用点没交出跟着部署走的名字，改名部署下会退回出厂名：{loose}"
-    exempt = [s for s in sites if not s[2]]
-    assert len(exempt) == 1, f"豁免假定 `redact()` 里只有一处无名调用，实测 {exempt}"
-    assert len([s for s in sites if s[2]]) >= 4, \
-        f"只扫到 {len([s for s in sites if s[2]])} 处带名字的调用点：语料或谓词坏了，这条在发空集合格证"
+    named = [s for s in sites if s[2]]
+    assert len(named) >= 5, \
+        f"只扫到 {len(named)} 枚带名字的调用点：语料或谓词坏了，这条在发空集合格证"
+    assert {s[3] for s in sites} == {"src/wolfengine/transport.py"}, \
+        f"擦值只住在正本那一本里，别处再长出一枚要先说清它替谁擦：{sites}"
 
 
 def test_the_scrub_site_probe_fires_on_each_shape_and_only_on_the_exempt_owner():

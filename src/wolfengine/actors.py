@@ -140,13 +140,13 @@ class LlmActor:
         # No latency bookkeeping here: `LLM.complete` already samples the transport's own
         # measurement, and sampling it twice would double the weight of every call.
         if not call.ok:
-            return Proposal(failure=call.error, response=call.as_response_dict(),
+            return Proposal(failure=call.error, response=call.as_response_dict(self.cfg.api_key_env),
                             request_meta=meta)
         parsed = parse_action(call.text)
         return Proposal(
             action=parsed.action, raw=call.text, rung=parsed.rung,
             deviations=parsed.deviations, parse_errors=parsed.errors,
-            response=call.as_response_dict(), request_meta=meta,
+            response=call.as_response_dict(self.cfg.api_key_env), request_meta=meta,
         )
 
 

@@ -154,3 +154,56 @@ def test_the_book_answers_for_one_seat_without_mixing_seats():
     assert book.median_prefix("3:day_speech") == 5.0
     assert book.median_prefix("7:day_speech") == 80.0
     assert book.median_prefix("9:day_speech") is None
+
+
+# --------------------------------------------------- the deployed key name reaching what hits disk
+ALT_ENV = "WOLF_OTHER_KEY_ENV"
+ALT = "OTHERSENTINELNOTKEY"
+
+
+async def test_the_usage_dict_written_to_disk_erases_a_renamed_deployers_value(monkeypatch):
+    """`as_response_dict()` 落盘那一格今天只按出厂名擦值，而它的调用方手上就有 config。
+
+    `usage_from()` 按白名单放行**值**（类型写的是 `dict[str, Any]`），端点把回显的密钥放进
+    `prompt_tokens` 那一格时，键名不在 `REDACT_PATTERNS` 里，只有值那一半能拦住它——而拦住它
+    需要知道这次部署把键放在哪个名字下。这里故意让 `total_tokens` 保持原样：正控制是"计数还是要
+    记进日志"，清空 usage 也能让明文消失，那种绿不算证人。
+    """
+    monkeypatch.setenv(ALT_ENV, ALT)
+    t = ScriptedTransport(ok(raw_usage={"prompt_tokens": f"Bearer {ALT}", "total_tokens": 7}))
+    llm = LLM(t, Config(api_key_env=ALT_ENV))
+
+    call = await llm.complete([{"role": "user", "content": "x"}], max_tokens=140,
+                              temperature=0.9, phase_key="3:discuss")
+    usage = call.as_response_dict(ALT_ENV)["usage"]
+    assert usage["total_tokens"] == 7, "正控制：白名单里的计数不许靠清空整格变绿"
+    assert ALT not in repr(usage), f"改名部署的明文进了落盘那一格：{usage!r}"
+    assert "<elided>" in usage["prompt_tokens"]
+
+
+@pytest.mark.parametrize("length_error", [False, True], ids=["retry-then-error", "raise-too-long"])
+async def test_both_error_arms_erase_a_renamed_deployers_value(monkeypatch, length_error):
+    """`complete()` 里两份 `redact(res.error)` 各擦一遍，改名部署下各自会静默漏。
+
+    两形的差别不是"擦得干不干净"而是**谁拿到那句**：一形进 `CallResult.error`（落进事件的
+    `response`），另一形进 `ContextTooLong` 的异常文本（沿调用栈往上被打印）。把联结只补在其中
+    一处，另一处照旧只认出厂名——所以两形各自要一条，共用一个 parametrize 是因为断言完全同形。
+    """
+    monkeypatch.setenv(ALT_ENV, ALT)
+    kw = {"status": 400, "is_length_error": True} if length_error else {"status": 502}
+    t = ScriptedTransport(bad(error=f"upstream saw {ALT}", **kw))
+    llm = LLM(t, Config(api_key_env=ALT_ENV))
+
+    if length_error:
+        with pytest.raises(ContextTooLong) as got:
+            await llm.complete([{"role": "user", "content": "x"}], max_tokens=140,
+                               temperature=0.9, phase_key="3:discuss")
+        seen = str(got.value)
+    else:
+        call = await llm.complete([{"role": "user", "content": "x"}], max_tokens=140,
+                                  temperature=0.9, phase_key="3:discuss")
+        seen = call.error
+
+    assert seen, "正控制：那句原因还是要记的，不许靠擦成空串变绿"
+    assert ALT not in seen, f"这一支的擦值没跟着 api_key_env：{seen!r}"
+    assert "<elided>" in seen
