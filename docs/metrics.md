@@ -101,7 +101,9 @@ mock（seed 1–30，`tests/test_day_cap.py` 的那个桌）在上限 6 下最�
 > → 实测 `{"recorded":58,"turns":21,"by_assigned":{"accuse":5,"probe":4,"align":2,"listen":2,
 > "defend":7,"pivot":1},"obeyed_first_try":1.0,"obeyed_final":1.0}`。
 > **mock 桌上 `by_assigned` 与 `speech_acts` 逐格相同**不是巧合也不是 bug：替身座位就照
-> `legal.assigned_act` 出牌（`src/wolfengine/actors.py:233`）。所以这一格的分辨力要等真端点，离线能钉
+> `legal.assigned_act` 出牌（`src/wolfengine/actors.py:233`）。所以这一格的分辨力不在 mock 桌上；真端点
+> 已经跑过三局，但那批日志住在 gitignored 的 `data/` 里、不随仓库走，要在它们身上问出一句话得先让日志与
+> 仓库同行。离线能钉
 > 的是接线与两口径的分离——`test_a_forked_act_moves_the_final_rate_and_leaves_the_first_try_one_alone`
 > 改一条 speech 的 `payload.act`，`obeyed_final` 掉下来而 `obeyed_first_try` 纹丝不动；两格一起动就说明
 > 其中一格读错了东西。
@@ -438,8 +440,9 @@ suspect。常数齐了而一局里没有可比调用时 verdict 是 `not_evaluab
 
 `null` 与 `0.0` 在这块里是两个相反的结论：前者是"端点从没回答过"，后者是"回答了，一次都没复用"。
 `--mock` 桌写出的 `response` 是空的（`{}`，直接读一份 mock 日志确认过形状），所以一份纯替身
-日志上这块 `calls` 为 0、比值 `null`——替身桌没有成本账本，这是它本来就该说的话。真读数要等端点开
-（探过：2 秒内没有 TCP 响应）；在此之前这块的形状由伪造日志钉住：
+日志上这块 `calls` 为 0、比值 `null`——替身桌没有成本账本，这是它本来就该说的话。真读数在 2026-09-24 端点恢复后已经拿到过一次：那三局真桌每一次回答都只带三个 token 键，
+`cached_tokens` 压根不在场（`#96`），所以真桌上这块是 `null`——它说的是"没一次报过"，不是"还没跑过"；至于**为什么不报**仍要等 M0 体检重采。
+这块的形状仍由伪造日志钉住：
 `test_audit_says_when_the_endpoint_never_answered_about_the_cache` 钉"全没报"那一档必须印 `null`，
 `test_a_usage_block_written_into_the_log_moves_the_reuse_ratio` 钉"只补一半"之后 `reported` 与 `silent`
 还分得开。

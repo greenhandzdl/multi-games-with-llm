@@ -211,7 +211,7 @@ wolf compare data/plumbing --axis temperature --json -o data/plumbing/A-vs-B.md 
   把"没测到"合并成"测了且没问题"的地方。
 
   > 复现（全程离线：`--mock` 批 + 把 `actor_kinds` 那一格改成真桌标签的测试夹具
-  > `tests/test_batch_paired.py::_as_real_table`；`OK` 路径要求非合成桌，真桌数据要等端点）：
+  > `tests/test_batch_paired.py::_as_real_table`；`OK` 路径要求非合成桌，而真桌那三局的日志住在 gitignored 的 `data/` 里、不随仓库走，所以配方拿夹具把标签改成真桌）：
   > `wolf batch --configs A,B --set B.regions.c_total=250 --games 2 --seed0 5 --mock --out /tmp/clipin`
   > 然后 `PYTHONPATH=src:tests .venv/bin/python -c "import pathlib,test_batch_paired as T;T._as_real_table(pathlib.Path('/tmp/clipin'))"`，
   > 再 `wolf compare /tmp/clipin --axis regions.c_total`
