@@ -460,12 +460,12 @@ def _names_the_deployed_variable(arg: ast.expr) -> bool:
                 and isinstance(arg.value, ast.Name) and arg.value.id == "Config")
 
 
-def _scrub_call_sites(src: str, rel: str) -> list[tuple[int, str, bool, str]]:
+def _scrub_call_sites(src: str, rel: str, target: str | set[str] = "_scrub_string", at: int = 1) -> list[tuple[int, str, bool, str]]:
     """每一处 `_scrub_string(...)` 的调用点：行号、归属函数、有没有交出**跟着部署走**的名字、出处。
 
-    归属按最近的 enclosing function 算，模块顶层那一档记成 `<module>`——不然"写在函数体外面的一处漏擦"
-    会整类躲掉：判据看不见的那一类既不红，也不进分母（`#226`/`#242` 那一族）。挂在对象上的那一形
-    （`t._scrub_string(...)`）也算调用点。
+    `target` 是被调用者的名字：默认正本里那一枚 `_scrub_string`，加宽的那一支把进口别名那一组交给它
+    （由 `_scrub_alias_names` 现算），`at` 是名字在实参里的下标。归属按最近的 enclosing function 算，模块
+    顶层那一档记成 `<module>`——不然"写在函数体外面的一处漏擦"会整类躲掉：判据看不见的那一类既不红也不进分母（`#226`/`#242` 那一族）。挂在对象上的那一形（`t._scrub_string(...)`）也算调用点。
     """
     tree = ast.parse(src)
     parent: dict[ast.AST, ast.AST] = {}
@@ -479,15 +479,15 @@ def _scrub_call_sites(src: str, rel: str) -> list[tuple[int, str, bool, str]]:
                 return node.name
         return "<module>"
 
-    out: list[tuple[int, str, bool, str]] = []
+    names, out = ({target} if isinstance(target, str) else set(target)), []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
         f = node.func
         called = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else "")
-        if called != "_scrub_string":
+        if called not in names:
             continue
-        given = node.args[1] if len(node.args) >= 2 else next(
+        given = node.args[at] if len(node.args) > at else next(
             (k.value for k in node.keywords if k.arg == "key_env"), None)
         named = given is not None and _names_the_deployed_variable(given)
         out.append((node.lineno, owner_of(node), named, rel))
@@ -553,3 +553,75 @@ def test_the_scrub_site_probe_fires_on_each_shape_and_only_on_the_exempt_owner()
     # 负控制：散文里出现这个形状不是调用点
     assert probe('"""这一形写在 docstring 里。"""\n', "g.py") == []
     assert probe("# 这一形写在注释里。\n", "h.py") == []
+
+
+def _scrub_alias_names(src: str) -> set[str]:
+    """这一本里绑到正本 `transport.redact` 的那几个名字，别名也算。
+
+    只认 `from …transport import redact [as 名]` 那一形：本地同名的函数、从别处进口的同名函数都不进
+    语料，否则判据会把"另一本里恰好同名的东西"当成擦值点。`from wolfengine import transport` 再打
+    `transport.redact(…)` 的那一形不在这一族里——现测全仓库 0 枚，真要长出来由 `_scrub_call_sites`
+    的属性分支收，只是别名集合得先认识那种写法。
+    """
+    names: set[str] = set()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.ImportFrom) and (node.module or "").endswith("transport"):
+            for alias in node.names:
+                if alias.name == "redact":
+                    names.add(alias.asname or "redact")
+    return names
+
+
+def _borrowed_sites(src: str, rel: str = "a.py") -> list[tuple[int, str, bool, str]]:
+    """按别名集合调用同一枚尺子——判据只住一处，正控制才有意义（`#153` 那一族）。"""
+    names = _scrub_alias_names(src)
+    return _scrub_call_sites(src, rel, names) if names else []
+
+
+def test_the_alias_probe_fires_on_the_borrowing_shapes_and_only_on_them():
+    """七形各一具合成证人：正控制不靠仓库里恰好有几枚借用点。
+
+    仓库会被修干净，而尺比形状窄那种错在修干净之后是沉默的。最后两形是"不该进语料"的负控制：
+    本地同名函数与别处的同名进口，收进来就是把判据的射程从"借正本擦值"改成了"凡叫 redact 都管"。
+    """
+    assert _borrowed_sites("from t.transport import redact\n\n\ndef f(o):\n    return redact(o)\n") == \
+        [(5, "f", False, "a.py")], "借用正本的无名形没收到"
+    assert _borrowed_sites("from t.transport import redact\n\n\ndef f(o, env):\n    return redact(o, env)\n")[0][2], \
+        "位置形没认成带名字"
+    assert _borrowed_sites(
+        "from t.transport import redact\n\n\ndef f(o, env):\n    return redact(o, key_env=env)\n"
+    )[0][2], "关键字形没认成带名字"
+    assert _borrowed_sites(
+        "from t.transport import redact as scrub\n\n\ndef f(o, env):\n    return scrub(o, env)\n"
+    )[0][2], "改过名的那枚别名没进语料"
+    assert _borrowed_sites(
+        "from t.transport import redact\n\n\ndef f(o):\n    return redact(o, Config.api_key_env)\n"
+    )[0][2] is False, "从类上直接取的那一枚被当成了名字——出厂名会盖掉部署名"
+    assert _borrowed_sites("def f(o):\n    return redact(o)\n") == [], "本地同名函数被当成借用正本"
+    assert _borrowed_sites("from elsewhere import redact\n\n\ndef f(o):\n    return redact(o)\n") == [], \
+        "别处进口的同名函数被当成借用正本"
+
+
+def test_every_borrowed_scrubber_call_site_in_the_production_face_names_the_variable():
+    """把交名判据的语料面从 `_scrub_string` 加宽到"借正本 `redact()` 的那几本"。
+
+    `#315` 那条判据按字面名收，正本自己的 `redact()` 一枚都不在它的语料里——现量的账（20:24:48Z 的
+    AST 普查，`census316/`）：全仓库把正本进口再调用的只有四本，无名的一共四枚。`scripts/calibrate.py:68`
+    那枚是转手，本片把 `KEY_ENV` 补上；其余三枚住在 `tests/` 里，它们的无名正是被测试的形状——
+    `test_transport.py:463` 那一枚 `unnamed` 是故意的负控制，它要证明不交名字时明文还在——非无名不可。
+    所以加宽按**面**切、不按归属函数切：按函数豁免是 `#314` 刚收回的那种，将来任何一处新漏都会躲进去；
+    生产面（`src/` 与 `scripts/`）一枚不许无名，将来任何一本新进口正本的自动进分母。测试面整面不扫，
+    因为这条主张是关于"脚本发请求读哪一枚变量、擦值就得擦同一枚"，而测试不往磁盘写端点的回声。
+    地板按下界钉（`#313` 的账：地板要按面各钉），面级名册另钉一本都不许多出来。
+    """
+    sites: list[tuple[int, str, bool, str]] = []
+    for face in ("src", "scripts"):
+        for book in sorted((ROOT / face).rglob("*.py")):
+            if "__pycache__" in book.parts:
+                continue
+            sites += _borrowed_sites(book.read_text(encoding="utf-8"), str(book.relative_to(ROOT)))
+    loose = [s for s in sites if not s[2]]
+    assert not loose, f"这些借用正本的调用点没交出跟着部署走的名字，改名部署下会退回出厂名：{loose}"
+    assert len(sites) >= 4, f"只扫到 {len(sites)} 枚借用点：语料或谓词坏了，这条在发空集合格证"
+    assert {s[3] for s in sites} == {"src/wolfengine/llm.py", "scripts/calibrate.py"}, \
+        f"借用擦值正本的那几本变了，先说清新来的那一本替谁擦：{sorted({s[3] for s in sites})}"

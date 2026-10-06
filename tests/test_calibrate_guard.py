@@ -227,7 +227,7 @@ def test_the_credential_key_names_have_one_author(cal, monkeypatch):
     """键名名单与遮罩逻辑都不许有第二处字面量：正本改一枚、抄本静默少一枚，是"单一作者"那一族。
 
     两样东西各钉一支。① `cal.redact` 必须把活交给 `transport.redact`——按注入的哨兵数它有没有被
-    调用，这里还留着一份自己的实现就摸不到哨兵；这条与被指派的元组那条是同一动作的两面，元组那条
+    调用、且交的是脚本自己那枚 `KEY_ENV`——桩按两个参数收，少交名字当场 `TypeError`；这条与被指派的元组那条是同一动作的两面，元组那条
     管"抄本会漂移"，这条管"抄本不许存在"。② 七枚键名在这个文件里一律不得以带引号的字面量出现，
     两种引号都数——当年那份 `CRED_KEYS` 就是这么长出来的。
 
@@ -237,11 +237,31 @@ def test_the_credential_key_names_have_one_author(cal, monkeypatch):
     from wolfengine import transport
 
     calls: list = []
-    monkeypatch.setattr(cal, "transport_redact", lambda obj: calls.append(obj) or obj)
+    monkeypatch.setattr(cal, "transport_redact", lambda obj, key_env: calls.append((obj, key_env)) or obj)
     cal.redact({"usage": []})
-    assert calls == [{"usage": []}], "redact() 没有交回正本：这个文件里还留着一份自己的实现"
+    assert calls == [({"usage": []}, cal.KEY_ENV)], "redact() 没把活和脚本自己那枚变量名一起交回正本"
 
     body = (ROOT / "scripts" / "calibrate.py").read_text(encoding="utf-8")
     for name in transport.REDACT_PATTERNS:
         found = body.count(f'"{name}"') + body.count(f"'{name}'")
         assert found == 0, f'scripts/calibrate.py 里写着 "{name}" 的字面量 {found} 处'
+
+
+def test_the_script_scrubs_the_variable_it_sends_from(cal, monkeypatch):
+    """转手那一行必须把名字交出去：脚本发请求读 `KEY_ENV`，擦值就得擦同一枚。
+
+    `scripts/calibrate.py` 把遮罩整个交回正本（`test_the_credential_key_names_have_one_author`
+    钉住了这件事），可转手那一行只打了第一个参数，正本于是退回签名上那个出厂名默认值。今天两枚名字
+    必然相等——命令行上没有通路能改 `api_key_env`，它躺在 `config.py:66` 那张 `FORBIDDEN_AXIS`
+    名单里——所以这不是一条正在漏的明文，被钉住的是**耦合**：从哪一枚变量取密钥，就从哪一枚变量擦值。
+    证人只能靠注入改名来造（`#290` 那一族的合成证人），仓库里没有任何一条部署通路能让两者分叉；
+    真让脚本自己长出改名通路的那一天，这一条不必改判据就会跟着变红。
+    """
+    alt = "OTHERSENTINELNOTKEY"
+    monkeypatch.setattr(cal, "KEY_ENV", "WOLF_OTHER_KEY_ENV")
+    monkeypatch.setenv("WOLF_OTHER_KEY_ENV", alt)
+
+    out = cal.redact({"echo": f"Bearer {alt}"})
+
+    assert out["echo"] == "Bearer <elided>", f"脚本擦的不是它发出去的那枚变量：{out!r}"
+    assert alt not in repr(out), f"改名部署下明文穿过了体检报告的遮罩：{out!r}"

@@ -65,7 +65,7 @@ def redact(obj):
     file. Everything below this line keeps its old line number on purpose — the archive points at
     the definition here by number.
     """
-    return transport_redact(obj)
+    return transport_redact(obj, KEY_ENV)
 
 
 def report_sections(features, stream, ratio, tp, lat, temps) -> dict:
