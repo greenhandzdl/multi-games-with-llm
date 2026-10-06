@@ -330,3 +330,22 @@ def test_the_batch_side_still_cannot_claim_a_person_at_its_table():
             assert "--human" not in opts, (
                 f"{name} 也接了 --human：批次侧那句结构性结论作废，"
                 f"§十五 在那里需要一个真的过滤器（并把这条用例改成断言它）")
+
+
+# ------------------------------------------------------------------ 替身到底覆盖哪几席（`#298`）
+def test_a_substitute_sits_on_every_chair_except_the_one_a_person_sits_in():
+    """`--mock` 桌交给人打字的那一席拿到的是人，其余每一席都有替身——数目按 `seat_count` 现算。
+
+    这一格补的是 `#297` 登记下的"真、主人待查"：`tests/test_human_seat.py` 的页眉写着真人上桌是
+    "全仓库唯一没有替身的一条链"，可数那几席的断言一直不存在（那条页眉是散文，不是尺）。
+    数目故意不写死：出厂的名册是九席，可"九"属于 `Config`，写进断言就会在下一次改桌宽时烂在这里。
+    """
+    from wolfengine.actors import HumanActor, MockActor
+
+    cfg = cli.build_config()
+    seats = cli.make_actors(cfg, SEED, mock=True, human=3)
+    assert sorted(seats) == list(range(1, cfg.seat_count + 1)), f"座位号该连着铺满：{sorted(seats)}"
+    assert [s for s, a in seats.items() if isinstance(a, HumanActor)] == [3]
+    mocked = [s for s, a in seats.items() if isinstance(a, MockActor)]
+    assert len(mocked) == cfg.seat_count - 1, f"除真人那一席之外每一席都该有替身：{mocked}"
+    assert mocked == [s for s in range(1, cfg.seat_count + 1) if s != 3]
