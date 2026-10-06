@@ -15101,3 +15101,14 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
   (8) 提交前工作树自查：`docs/iterations.md`、`src/wolfengine/transport.py`、`tests/test_no_secrets.py`
       三本之外无改动、无未跟踪文件（`git status --porcelain --untracked-files=all` 只回这三行 M），
       `git diff --stat` 记 169 增 2 删——那 2 删全在替换掉的那两行 docstring 上。
+- **补记（提交后那两趟，`19:42:07Z`—`19:44:11Z`）**：(a) 重放——提交落下的那棵树与工作树逐字节相同
+  （`git diff --quiet` rc 0，那一行的号是 `1551e0d`），同一棵树上全量再跑一趟 **1274 passed、rc 0**
+  （123.47s，起点负载 7.11、终点 9.67），与 (7) 那趟的计数逐字相同。(b) 顺带把文档面关于擦值的主张普查一遍
+  （只读，交给一只只读子代理列名册、我自己复核承重的两格）：README 与手册四本里点名的共 14 处，
+  唯一被疑"过时"的是 `docs/calibration.md` 体检完整性那一节里那句「**另有 7 处的值被 redact 抹去**」——
+  它列的七枚键名（`tokenize`、`has_cached_tokens`、`usage_keys_seen`、`en_tokens_per_char` 等）
+  对今天的 `REDACT_PATTERNS` 一枚都不匹配，于是代理判它"present-tense 的假话"。**复核推翻**：
+  那一枚数由 `elided_paths` 数的是**已落盘的 sidecar 里值恰为 `<elided>` 的格子**，那些字串是采集那一刻
+  由当年的名单盖上去的，不是重渲染时由今天的名单盖的；所以「7 处」说的是那份旧产物的形状，
+  而同一节下面那句 remedy 已经写明"下一次 M0 重跑预期能把这些格读回来"。文档面无缺陷，**这一片不改任何句子**。
+  代理那一格的教训登记成价：它报的"过时"来自把渲染时机当成盖值时机——**子代理给的分类要自己读那条判据的取数点**。
