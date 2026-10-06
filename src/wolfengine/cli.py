@@ -774,7 +774,7 @@ def _parse_run_set(pairs: list[str]) -> dict[str, Any]:
 def _roster(cfg: Config, seat_actor, *, human: int | None):
     """把 `cfg.seat_count` 张椅子摆好，`human` 那一席交给打字的人。
 
-    全仓库唯一一处构造 `HumanActor`（`tests/test_run_with_human.py` 在磁盘上数那个调用点）。这条
+    `src/` 里唯一一处构造 `HumanActor`（`tests/test_run_with_human.py` 在磁盘上数那个调用点；测试自己摆的座位不算第二处拼法）。这条
     判据存在的理由不是审美：座位表一旦有两处拼法，"这一席坐着人"就有了两个写者，而日志里
     `actor_kinds` 只有一份——两者不一致时读侧看到的仍是引擎说的那一份。
 

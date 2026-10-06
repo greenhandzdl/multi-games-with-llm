@@ -5441,3 +5441,34 @@ def test_the_roster_reconciler_fires_on_the_owner_cell_and_on_each_wrong_number(
     twice = legal + "\n" + legal
     assert _roster_split_defects({"README.md": twice}, counts) != [], \
         "同一页上有两份一模一样的分布数就是两句主张，要点名哪一份算数，不许各读各的"
+
+
+# ---------------------------------- 手册里「audit 只有一处外部输入」那句的具名账（`#297`）
+def _value_taking_knobs(sub: str) -> dict[str, str]:
+    """{子命令上那些"要吃一个值"的旋钮: 它的参数串}，从活的 `build_parser()` 上读。
+
+    为什么不复用 `#210` 那把 `_knob_roster`：它的口径是"每个旋钮都得在手册里出现过"，开关和取值
+    在它眼里同一形；这一格要的恰恰是两者的分别——README 那句话管的是"除日志本身之外还要从哪里拿
+    数据"，一个 `store_true` 的开关不往里递东西。判据取 `nargs != 0`（argparse 把开关和常量都记成
+    0，吃值的记成 `None`），所以它是从活的对象上读出来的分类，不是把参数名抄成一份第二名单。
+    """
+    out = {}
+    for act in _subparsers()[sub]._actions:
+        if act.option_strings and act.nargs != 0 and not isinstance(act, argparse._HelpAction):
+            out[act.dest] = " ".join(act.option_strings)
+    return out
+
+
+def test_the_manuals_claim_that_audit_takes_exactly_one_external_input_has_a_roster():
+    """README 那句「`audit` 里唯一一处**要显式递进去**的外部」输入从此有名册：往 `audit` 上再加
+    一个吃值的旋钮——哪怕手册跟着把它教过了——这一格会红。
+
+    为什么这一条值得单独立着，而 `#210` 那道旋钮闸门不算它的主人：`#210` 管的是"每个旋钮都要在
+    手册里出现过"，加一个 `--whatever` 只要在手册某处补一句话它就绿了，而 README 这一句里的"唯一"
+    会被同一次改动顶掉——顶掉它的人不会知道要去改另一本页上的旧句子。位置参数 `file` 不进这一格
+    （它没有 `option_strings`），开关也不进（口径在上面那一段）：被管的是"还要从哪里拿数据"。
+    """
+    knobs = _value_taking_knobs("audit")
+    assert knobs, "名册空着＝这一条什么都没扫到：`_value_taking_knobs` 或子命令名先坏了，别读成'零外部输入'"
+    assert knobs == {"calibration": "--calibration"}, (
+        f"README 那句「`audit` 里唯一一处**要显式递进去**的外部」需要改口，多出来的那一格是：{knobs}")
