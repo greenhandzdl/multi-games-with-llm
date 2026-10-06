@@ -133,8 +133,8 @@ def test_the_citation_list_is_recorded_once(written):
     malformed / uncited，`agent._write` 原样抄进 meta），前者是同一个 `action` 上再抄一遍。
     实测 11:00:47Z 扫 `data/**/*.jsonl`：553 条带 `evidence` 的记录里，把三份清单各自去重排序后
     `evidence == valid` 553/553、`evidence == cited` 553/553，一条不差——因为它们是同一次
-    `check_legality` 的两个出口，不是两个来源。而读者只有一支笔有（`metrics.m4_citation_integrity`
-    与 `m5_style_diagnostics`、`batch` 的 uncited 聚合读 meta，11:00:47Z 三处），另一支的读者是
+    `legality.check_action` 的两个出口，不是两个来源。而读者只有一支笔有（`metrics._objected_ids`
+    与 `metrics.m4_hallucination_rates`、`batch` 的 uncited 聚合读 meta；11:00:47Z 三处，08:00:17Z 复核仍三处），另一支的读者是
     0 个产品读点（11:00:48Z：唯一的两处 `["evidence"]` 在 schema.py 的 `out` 上，不是 payload）。
     这一格和 `potion` 那一条是同一个判据：第二支笔不许活过这一关。#110/#111/#113 删掉三份双写
     走的也是这条路——删的是**抄的那一份**，被抄的那一份留着并补上读者。

@@ -23,7 +23,7 @@ from .events import Event, Kind
 from .info import eid
 
 # Per-day forgetting curve. 0.85 is a judgement call, not a measurement, so it lives in
-# one place and is part of config_hash via `belief_version` in the caller.
+# one place — and, unlike the fields in `Config`, it is not inside `config_hash`.
 DAY_DECAY = 0.85
 
 ACT_WEIGHT = {

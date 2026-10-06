@@ -1283,7 +1283,7 @@ def test_only_one_arm_having_the_knife_count_is_named_rather_than_summed(tmp_pat
     """一臂有读数、一臂没有：`—` 只许盖在没读数那一臂头上，也不许把两臂合起来说一句。
 
     跨格合并最容易滑过去的正是"把没有的那一臂算进有的里面"（证人那一栏由
-    `test_a_log_without_the_caps_in_its_logs_says_no_rather_than_zero` 钉过同样的形状，这里是
+    `test_an_arm_without_the_caps_in_its_logs_says_no_rather_than_zero` 钉过同样的形状，这里是
     第二格）。这一条也是 `all(... is None)` 的判据：写成 `any(...)` 时 A 臂那两个数会被整行
     抹成"没有读数"，而两臂全缺的那一条用例分辨不出这两种写法。
     """

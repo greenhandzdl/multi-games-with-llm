@@ -686,8 +686,8 @@ def test_m1_refuses_to_score_a_stand_in_table(golden):
 
 
 def test_m1_keeps_an_unfinished_game_out_of_the_denominator(golden):
-    """`aborted` games are counted separately rather than folded into a win rate (plan §8 M1):
-    dropping them silently would favour whichever side the timeout happened to hit."""
+    """An unfinished game is counted separately rather than folded into a win rate (plan §8 M1):
+    dropping it silently would favour whichever side the timeout happened to hit."""
     _, res, events, _ = golden
     half = metrics.Game(path=res.path, meta={"actor_kinds": ["llm"]}, events=events[:-1])
     out = metrics.m1_win_rate([half, metrics.read_game(res.path)])

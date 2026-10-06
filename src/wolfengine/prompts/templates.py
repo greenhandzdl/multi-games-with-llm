@@ -65,7 +65,7 @@ EXAMPLE = """【示例】下面四条编年史和它们的编号都是虚构的�
 # The ids the example above shows. Derived from the text rather than typed out again so the
 # two cannot drift: an id that left the example but stayed in this set would silently stop
 # being counted as a copy. A seat that cites one of these copied the contract, it did not
-# remember an event, and `metrics.m4` reports the two apart for that reason.
+# remember an event, and `m4_hallucination_rates` reports the two apart for that reason.
 EXAMPLE_EVENT_IDS = frozenset(re.findall(r"\[(e\d+)\]", EXAMPLE))
 
 

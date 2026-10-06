@@ -36,8 +36,8 @@ from .transport import LLMTransport, redact
 
 
 class EndpointUnavailable(RuntimeError):
-    """The endpoint is unhealthy. Surfaced to game.py as terminal="aborted", never as a
-    behaviour finding, and never retried into a fallback action."""
+    """The endpoint is unhealthy. Surfaced to game.py as terminal="aborted_endpoint", never
+    as a behaviour finding, and never retried into a fallback action."""
 
 
 class ContextTooLong(RuntimeError):

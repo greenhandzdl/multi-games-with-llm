@@ -407,15 +407,15 @@ def _literal_values(src: str, name: str) -> set[str]:
 
 
 def test_the_win_check_names_its_key_space_as_teams_and_has_no_role_twin():
-    """#80：`winner_for` 读的键是**阵营**，参数却叫 `alive_roles`、docstring 说"which roles
-    remain alive"，旁边还站着一个按职业建键的 `alive_role_counts`。
+    """#80：`winner_for` 读的键是**阵营**，参数却曾叫 `alive_roles`、docstring 曾说"which roles
+    remain alive"，旁边还曾站过一个按职业建键的 `alive_role_counts`。
 
     三条腿各管一种错法，都不靠子串搜索：
     * 键空间：函数体里从那个计数参数上取的每个字符串键，必须是 `roles.Team` 的取值之一。
       这一腿今天就是绿的，它管的是**将来**——有人往屠边判据里加一句 `alive.get("seer", 0)`。
-    * 名字与注解：那个参数得叫 team、注解得写 `Counter[Team]`，docstring 得提到阵营。今天红。
+    * 名字与注解：那个参数得叫 team、注解得写 `Counter[Team]`，docstring 得提到阵营。落笔时红。
     * 孪生：`rules.py` 里不许再有"用 `role_of` 建 Counter"这个**形状**（不是"那个名字不许多一处"，
-      换个名重抄一遍照样是把整局当场判狼赢的入口留着）。今天红。
+      换个名重抄一遍照样是把整局当场判狼赢的入口留着）。落笔时红，孪生已随 `#80` 删掉。
 
     为什么名字值得一条守卫：`Counter` 按职业建键时压根没有 "god" 这个键，`get("god", 0)` 永远是
     0，屠边在第一次 `check_win` 就判狼赢——`tests/test_rules.py` 里那格把后果钉成了读数。
@@ -573,7 +573,7 @@ def _module_defs_and_production_reads(
     `#159` 认类、`#83` 认 import，`X = (...)` 这一形一直没进过名册。
     读者那一张表现在**扣掉了模块级赋值的左端**：常量的落点行自己就是一个 `ast.Name`，不扣的话每一具
     常量都自带一个读者，探测永不发光。两把尺在同一棵树上的差是实测过的（01:08:24Z）：不扣报 **0 处**
-    零读者，扣了报 **3 处**（`events.KINDS`、`metrics.SEAT_REF`、`persona.SPEECH_ACTS`）。函数不受
+    零读者，扣了报 **3 处**（`events.KINDS`、`metrics.SEAT_REF`、`persona.SPEECH_ACTS`；后来的处置见归档 `#160` 那一节：两删一搬）。函数不受
     这一格影响——`def` 的名字不是 `ast.Name`，所以 `#155` 那条判据的读数一格没动。
 
     `const_roots`（`#160` 加宽到 `scripts/` 时补的那一格）把**候选面**与**扣账面**绑在一起。先前扣账
@@ -639,7 +639,7 @@ def test_every_module_level_engine_helper_is_called_by_the_product_or_is_a_manua
     """`#155`：`#81` 那条闸门的读者名册里有 `tests/`，于是"只有自己的用例在养它"的生产码它能放行。
 
     现测三处（21:53Z）：`report.cluster_bootstrap_rate`（三个调用全在 `test_report_stats.py`，产物链
-    只走 `_diff` 那一支）、`render_live.frame_text`（三十七处点名都在测试里，`watch()` 直接调 `draw`）、
+    只走 `cluster_bootstrap_rate_diff` 那一支）、`render_live.frame_text`（三十七处点名都在测试里，`watch()` 直接调 `draw`）、
     `metrics.read_dir`（src 里只剩 `__all__` 那一行，CLI 的目录入口是 `batch.read_arm`）。前两处已按
     "要么接上、要么删掉"处置完：`cluster_bootstrap_rate` 删了，连带它那条理论 deff 锚的断言一起没
     （`test_report_stats.py` 页眉记着这个缺口）；`frame_text` 搬进 `tests/live_frame.py`——读者只有测试
@@ -703,7 +703,7 @@ def test_no_module_level_engine_constant_is_left_without_a_reader():
     """`#160`：`#81`→`#159` 那一族数过函数、方法、类、import，唯独没数过**模块级赋值左边的名字**。
 
     这一格不是补一个"更完整"的名单，是收一处真话：`metrics.SEAT_REF` 与 `persona.SPEECH_ACTS` 都从
-    初始提交 `aa0d646` 活到今天，中间那一整轮死名清理（`#81` 九处死函数、`#83` 导入、`#85` 同名类、
+    初始提交 `aa0d646` 活到这一趟才被删，中间那一整轮死名清理（`#81` 九处死函数、`#83` 导入、`#85` 同名类、
     `#155` 生产链、`#156` 方法层、`#159` 类层）一次都没看过它们。落笔时现测 3 处零读者（01:08:24Z），
     逐条处置见归档那一片。
 

@@ -101,7 +101,7 @@ def test_a_real_draw_is_a_terminal_the_engine_emits_and_m1_refuses_to_score(tmp_
 
 
 def test_a_draw_on_a_real_table_lands_in_excluded_not_in_the_denominator(tmp_path):
-    """同一个终局，换一个桌型：`excluded` 里它占自己那一格，不并进 `aborted`、也不留在分母里。
+    """同一个终局，换一个桌型：`excluded` 里它占自己那一格，不并进 `aborted_*`、也不留在分母里。
 
     这里改了 manifest 的 `actor_kinds` 为 `["llm"]` —— 整份日志只动那一个字段，为的是在没有
     端点的情况下问出"真桌上平局怎么算"。改字段这件事本身由上一条测试盯着：mock 桌确实进不了

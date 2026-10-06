@@ -186,7 +186,7 @@ def test_no_seat_is_warned_about_phrases_nobody_used_yet(tmp_path):
     手术刀：把 `if repeat_fragments:` 去掉、无条件 append。反向对照在同一族里：上一条
     证明非空时那一行确实在。
 
-    W4（无条件 append）的红集是**两条**而不是这一条：`the_fourth_speaker` 里"前三个座位不许
+    W4（无条件 append）的红集是**两条**而不是这一条：`test_the_fourth_speaker_is_asked_not_to_repeat_the_three_before_it` 里"前三个座位不许
     有"那半边也跟着红（10:34:53Z 我先把它写成了一条，量出来是两条）。那条用例读的是门槛，
     这里读的是护栏，两半边各钉一头——写在这是为了下次别再把那一条当成只钉接线。
     """

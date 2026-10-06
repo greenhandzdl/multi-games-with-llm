@@ -360,8 +360,8 @@ def day_limit_reached(state: GameState, max_days: int) -> bool:
     """Pre-registered tie rule (plan §12 R10): running out of days is a draw, and the
     denominator decision had to exist before the batch, not after seeing the result.
     `terminal="draw_day_limit"` games stay in the reported denominator's neighbour —
-    `m1_win_rate` lists them under `excluded`, apart from `aborted`, and never mixes them
-    into a faction win rate.
+    `m1_win_rate` lists them under `excluded`, apart from the three `aborted_*` keys, and
+    never mixes them into a faction win rate.
 
     `>=`, which is the whole content of this function: the cap counts the last day *whole*,
     so 6 means "day 6 ends the game" and not "there is a day 7". There used to be a second

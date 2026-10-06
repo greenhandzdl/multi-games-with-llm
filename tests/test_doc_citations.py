@@ -4165,7 +4165,7 @@ def test_every_shipped_section_pointer_in_code_lands_on_a_real_heading():
 #     第一版只认 `## \`#NNN\`：` 那一形，把 09:39Z 量成的"2 处真缺陷"顶成了 3 处假缺陷——判据的语料面
 #     比判据先错，这条也一起记进 `#279`。
 # 三、去处要有一句：这一族的名字与落点必须在手册里写出来一次（镜像 `#270` 对 plan 指针族做的事）。
-#     今值 0 句——占位形在手册五本里一次都没出现过，所以这一条今天红，README 补的那句是它唯一的读者。
+#     落笔时今值 0 句、这一条红；README 补的那句是它唯一的读者，08:08:40Z 同一条判据现量今值 1 句。
 TICKET_REF = re.compile(r"#(\d{1,4}[A-Za-z]?)(?![\dA-Za-z])")
 TICKET_CLAIM = re.compile(r"`#(\d{1,4}[A-Za-z]?)`\s*的?(?:那一?节|这一?节|一节)")
 TICKET_HEAD = re.compile(r"^#{1,6}\s+(.*)$")

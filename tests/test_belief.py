@@ -1,7 +1,7 @@
 """Engine belief: the ledger, the 对跳 inference, and the decay.
 
-The claim here that deserves the most suspicion is "`_apply_contested_seer_claims` is what
-makes the ledger worth having". It was dead code for most of this session: it keyed off an
+The claim here that deserves the most suspicion is "`_contest_seers` is what makes the
+ledger worth having". It was dead code for most of this session: it keyed off an
 event kind nothing ever emits, so two seats could both jump as seer and neither would be
 discounted. These tests are what make that claim checkable.
 """
