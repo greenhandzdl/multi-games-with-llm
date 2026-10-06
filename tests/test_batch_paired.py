@@ -186,11 +186,6 @@ def test_an_unimplemented_knob_is_refused_for_the_right_reason():
 NESTED_UNREAD = ("tokens.warn", "tokens.force_compact")
 
 
-def _src_texts() -> dict[str, str]:
-    return {f.name: f.read_text(encoding="utf-8")
-            for f in sorted(Path("src/wolfengine").rglob("*.py")) if f.name != "config.py"}
-
-
 def _leaf_hits(leaf: str, src: dict[str, str]) -> list[str]:
     """读取点 = `.leaf` 属性访问，**或** `"leaf"` 这个字符串常量。
 
@@ -247,7 +242,7 @@ def test_the_no_reader_list_and_the_source_agree_in_both_directions():
     没人读的集合必须和名单**相等**——接上代码的那一格会自己从名单里掉出去，新增而没接的那一格
     会自己挤进来。
     """
-    src = _src_texts()
+    src = _src_outside_config()
     nested = [k for k in report.flatten(Config()) if "." in k]
     unread = sorted(k for k in nested if not _leaf_hits(k.split(".")[-1], src))
     assert unread == sorted(Config().inert_leaves), (

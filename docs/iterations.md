@@ -638,8 +638,8 @@ manifest"——那是凭空假设，方向也错了（抽掉 guard 之后通知�
 
 W2 那格 set1/set2 的 SURVIVED 是**看过断言**声明的（上一轮 V2 在这里凭空猜错，改的是声明不是测试）：
 `grep "⚠|lines\[-1\]|not in page"` 在这两套里只命中 `tests/test_cli.py` 的上面那条，而
-`test_render_live.py:123` 数的是 `lines` 的条数。`test_render_live.py:136` 数的是 `whys` 的条数。
-`test_render_live.py:209` 与 `test_render_live.py:213` 各从 `splitlines()` 里按 `正在：` 取一行。多印一行动不了它们。
+`test_render_live.py:123` 数的是 `lines` 的条数。`test_render_live.py:135` 数的是 `whys` 的条数。
+`test_render_live.py:210` 与 `test_render_live.py:214` 各从 `splitlines()` 里按 `正在：` 取一行。多印一行动不了它们。
 同一轮也要记下没做的：**这一轮没有一具去打"单一只"那条结构断言**
 （`test_the_recorded_nothing_sentence_has_one_owner` 在本表里五具全绿），它的形状与 `#52` 的 V3 相同、
 由那一具代过，但它自己这一轮没有靶子，别把它的强度算进上表。
@@ -2586,7 +2586,7 @@ PK 发言确实是 3、5 号，防止"永远不说无人出局"这种退化修�
 各一具），每次还原后 `cmp` 全部 BYTE-IDENTICAL，两半都在一次性 `PYTHONPYCACHEPREFIX` 里跑（`#79`），
 `cmp` 在还原之后做（它只证明树干净，不证明跑的是哪份代码，证据是红名单）。
 
-**K5 这一具要如实写**：它红在 `tests/test_house_wired.py:52`（`asked == [1] * 9`，"平票后又开了一轮复投：
+**K5 这一具要如实写**：它红在 `tests/test_house_wired.py:55`（`asked == [1] * 9`，"平票后又开了一轮复投：
 每座被问 [2, 2, …] 次"），而不是红在我这一轮加强的那半句上。单独钉住 K5 取样两次（`/tmp/mut87_k5.py`，
 11:09:42Z）：用现在这版整句断言跑，红在 :52；把那半句退回改前的 `"平票" in summary` 再跑，**还是红在 :52**。
 所以那处加强不是 K5 的证人，它只是把句子也钉住了——K5 的证人一直是"复投波没开"那一条。写在这里是因为
@@ -8517,7 +8517,7 @@ README 里 `tests/test_cli.py` 那一行：被计数闸门认出来的那个数�
 * `board`（`game.py:99` 写）：**接线了**——`cli.py:369` 那串键名多了它，`tests/test_cli.py:470` 两条下标读钉住它。
 * `reproducibility_note`（当时写在 `game.py` 的第 115 行，`#181` 把这一格删掉了）：扫面里除写它自己那一次，**零出现**。
 * `created_utc`（`batch.py:209`）、`pair_keys`（`batch.py:210`）、`n_logs`（`batch.py:221`）：同上，只剩写它们的那一行。
-* `rows`（`batch.py:221`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:288` 读清单里那一格；`tests/test_wiring.py::test_every_real_settlement_renders_the_very_sentence_it_was_written_with` 读的是另一份文档的 `rows`）——不是缺陷。
+* `rows`（`batch.py:221`）：`src` 里零下标读，`tests` 里有两处（`tests/test_batch_paired.py:284` 读清单里那一格；`tests/test_wiring.py::test_every_real_settlement_renders_the_very_sentence_it_was_written_with` 读的是另一份文档的 `rows`）——不是缺陷。
 
 两层豁免各自当场拦下一次误判：`render_html.py:208` 那个 `class="board"` 和 `tests/test_calibrate_guard.py:51` 那个 `"rows": […]` 都是**另一个命名空间里的同名**，若算成读者，`board` 和 `rows` 会被各自销案成假阴性；反方向上，`pair_keys` 与 `n_logs` 被第二层从"零读者"降级成"只被发布"——同一对名字在 `cli.py:577` 有属性级读者（`res.n_logs`、`res.pair_keys[0]`），零的只是清单里那两格。
 
@@ -10880,9 +10880,9 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   斜杠前那一枚，第二枚根本不进扫描——它不是被判成对，而是**根本没被判**。
 * 先量代价再动正则（**11:20:14Z**）：全语料成对形三处，加宽后扫描数 316 → 319，报红一处。
 * **更正 `#222` 记下的"一处在今天就是 MISS"**：那一枚号本身是对的，缺的是名字——`test_render_live.py:123`
-  那一行写的是 `lines`、`test_render_live.py:136` 那一行写的是 `whys`，而句子只点了前者，所以第二枚
+  那一行写的是 `lines`、`test_render_live.py:135` 那一行写的是 `whys`，而句子只点了前者，所以第二枚
   领不到证据。这一族的名字是"没人点名的指针"，不是过期号，两种红的修法不一样。
-* 同一条句子里那第二对也是靠不住的背书：`test_render_live.py:209` 与 `test_render_live.py:213` 两枚
+* 同一条句子里那第二对也是靠不住的背书：`test_render_live.py:210` 与 `test_render_live.py:214` 两枚
   都只因为 `splitlines` 这个词里含 `lines` 才绿。两处都改句子（每枚号各自点名），不改闸门——这条规矩
   见 `#108`。
 * 剩下的一处成对形 `phases.py:227/273` 是真配对（两行都写着 `pending_pk` 与 `_publish`），留着当活体样本，
@@ -11259,7 +11259,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 
 * 尺面因此多一条要往下传的口径：`EXECUTED` 只否证"没走到"，而**一条看着目录的断言看不见那个目录本身被谁建**。凡是"在门口就停"这类判据，取样路径必须在被审的那个东西的下一层，否则 MISSED 的刀会把一条空断言读成一条通过。这条与 `#237` 那三条结构性盲区不同类——那三条是尺子看不见，这一条是写用例的人自己把窗口开错了位置。
 
-* 普查的今值（不是上一片的算术）。这一片之前那趟回显 `BRANCH_CENSUS side=src files=25 cells=711 executed=650 never_executed=61`，八格全在名册里；这一片之后那趟（**02:05:13Z** 起跑，读完那本日志是 **02:11:09Z**，末行自报 `1 failed, 1155 passed in 334.68s (0:05:34)`）回显 `BRANCH_CENSUS side=src files=25 cells=711 executed=658 never_executed=53`——格数一字没动、执行数 +8、缺席数 −8，八格在新名册里剩 0 格。那一趟唯一那条 FAILED 是 `#171` 的在册闸门，本节末尾那三块登记就是它的处置，所以这一趟读数是"本节还没落盘"那一刻的读数。tests 侧同一趟回显 `cells=945 executed=877 never_executed=68`，比上一趟多一格而缺席数没动——多的那一格是本片自己写进去的：`tests/test_batch_paired.py:1603` 那一格是 `sibling not in text` 那记断言，坐在那条 `for` 的体首，它落进了执行那一侧。剩下那张工作单这次不由减法得出，按新名册逐本数 NEVER：`rules.py` 七格、`metrics.py` 六格、`actors.py` 六格、`schema.py` 四格、`report.py` 四格、`phases.py` 四格、`legality.py` 两格、`batch.py` 两格、`render_html.py` 一格，合起来 36 格；另有不在进程内那一档的四本——`cli.py` 九格（子进程）、`human.py` 三格与 `render_live.py` 三格（真人 tty）、`transport.py` 两格（真端点）。17 + 36 = 53，与那一趟回显里"从没落到"那一格的读数 53 是同一个数（那三个字段名是尺子自己印的，不是 `src/` 里的键，所以这一片不把它们写成 `src` 的出厂值那一形）；而 44 − 8 = 36 也对得上，因为 44 那一档本来就界定为「进程内、且不含 `#236`/`#237` 补过的两格」。收数与跑次也对得上：这一片之前整本那趟是 `1149 passed`，这一片之后是 1155 passed + 1 failed = 1156 条，多的七条正是上面新增的七条，一条 `def test_` 都没被删掉——那一格 failed 是 `#171`，不是回归。
+* 普查的今值（不是上一片的算术）。这一片之前那趟回显 `BRANCH_CENSUS side=src files=25 cells=711 executed=650 never_executed=61`，八格全在名册里；这一片之后那趟（**02:05:13Z** 起跑，读完那本日志是 **02:11:09Z**，末行自报 `1 failed, 1155 passed in 334.68s (0:05:34)`）回显 `BRANCH_CENSUS side=src files=25 cells=711 executed=658 never_executed=53`——格数一字没动、执行数 +8、缺席数 −8，八格在新名册里剩 0 格。那一趟唯一那条 FAILED 是 `#171` 的在册闸门，本节末尾那三块登记就是它的处置，所以这一趟读数是"本节还没落盘"那一刻的读数。tests 侧同一趟回显 `cells=945 executed=877 never_executed=68`，比上一趟多一格而缺席数没动——多的那一格是本片自己写进去的：`tests/test_batch_paired.py:1607` 那一格是 `sibling not in text` 那记断言，坐在那条 `for` 的体首，它落进了执行那一侧。剩下那张工作单这次不由减法得出，按新名册逐本数 NEVER：`rules.py` 七格、`metrics.py` 六格、`actors.py` 六格、`schema.py` 四格、`report.py` 四格、`phases.py` 四格、`legality.py` 两格、`batch.py` 两格、`render_html.py` 一格，合起来 36 格；另有不在进程内那一档的四本——`cli.py` 九格（子进程）、`human.py` 三格与 `render_live.py` 三格（真人 tty）、`transport.py` 两格（真端点）。17 + 36 = 53，与那一趟回显里"从没落到"那一格的读数 53 是同一个数（那三个字段名是尺子自己印的，不是 `src/` 里的键，所以这一片不把它们写成 `src` 的出厂值那一形）；而 44 − 8 = 36 也对得上，因为 44 那一档本来就界定为「进程内、且不含 `#236`/`#237` 补过的两格」。收数与跑次也对得上：这一片之前整本那趟是 `1149 passed`，这一片之后是 1155 passed + 1 failed = 1156 条，多的七条正是上面新增的七条，一条 `def test_` 都没被删掉——那一格 failed 是 `#171`，不是回归。
 
 * 文档对齐那一半红了两把、又把自己那把尺撞了一次。〈条数〉与〈收集数〉两把闸门各红一次（**02:01:38Z** 那趟两条 FAILED），报的是同一句事实被抄在两本里：`tests/test_log_recovery.py` 的 46/57 与 `tests/test_actor_contract.py` 的 8——README〈测试〉那一节三处、归档里"重跑这一片"那一句一处，四个数全是**活主张**，跟着顶成 48/59/9，改的是句子不是尺。顶完再跑闸门（**02:02:55Z** 那趟，末行 `1 failed, 217 passed`），红的是第三把：`#171` 那条"从手册消失的那一行要先在这里逐字在册"把这三句改了数字的行当成了摘走。它本来就备了这一记——只有计数数字被重数过、且锚点在往上三行的窗口里点名，就算在册。所以处置是把那三句**顶数之后**的那一行登记在本节末尾（旧数写在交代行里，不进围栏），锚用 `#171` 自己那枚 `2b57a58`；这一族的两把尺因此各让了一次：〈条数〉〈收集数〉按今天的数绿着，在册闸门按重数过的形绿着，而"当年的原形"这一层由本节把它换成"当年那个数是几"的一句活话——原形不再抄第二遍，因为抄一次就会被下一次顶数顶成假主张（`#188` 那一轮记的就是这一形）。
 
@@ -11322,7 +11322,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 
 * 普查的今值（重测，不是减法）。这一片之前那一趟回显 `executed=667 never_executed=44`（`#240` 末尾记的就是那一趟）；这一片之后那趟 **04:11:10Z**—**04:14:57Z** 起跑、末行自报 `1176 passed in 225.73s (0:03:45)`，回显 `BRANCH_CENSUS side=src files=25 cells=711 executed=678 never_executed=33`——格数一字没动、执行 +11、缺席 −11，与新增的十一枚正控制同数。十一枚正控制各自回了命中，但命中的次数不是一个数：`metrics.py` 里 n-gram 那一格回 6 次，标定旁车、单枚重复与 `batch.py` 那两格各回 2 次，其余各 1 次——正控制数的是"走到那一行的次数"，不是"用例数"，所以它给的是"有人走到"，给不了"只有一条用例走到"。tests 侧同一趟回显 `cells=945 executed=877 never_executed=68`，三个数一字没动——这一片的十一格加的都是断言与调用，没有新分支体，名册因此一格没长。剩下那 33 格按本分布：actors 6、cli 9、human 3、metrics 1、phases 4、render_html 1、render_live 3、schema 4、transport 2。尺子仍住在仓库外（`/tmp/trace239/`，内容哈希记在本项目记忆里，这里不重述——重述一枚十六进制前缀就会撞 `#221` 那枚提交锚闸门，它按形状认锚、问的却是"这一版提交存不存在"），所以这组 711/678/33 不能从新克隆复算，`#237` 末尾那张"要不要把尺子收进仓库"的票还欠着。
 
-* 这一片还量出尺子自己的第五个盲区，读数口径因此要改写。普查的 trace 只武装在 call 阶段那一次包裹上，夹具的 setup 不在窗口里，于是**只由 module/session 级夹具走到的 src 行会被念成从没落到**。这一片当场证了一格：`actors.py:187` 那一格写的是 `self.script[self.i]`，也就是被脚本喂着的那枚 `MockActor` 取出下一条动作的那一行，call 窗口那一趟念它 NEVER，而协议窗口（setup 与 call 与 teardown 都武装）那一趟 **04:08:25Z**—**04:10:14Z** 在同一批 27 枚规格上回显了 200 次命中。走那一格的是 `play_authored`，它被 `tests/test_golden_game.py` 的 `golden` 夹具与 `tests/test_render_live.py` 的 `gold`（装饰器写在 `tests/test_render_live.py:43`，是 module 级）这类夹具调用，setup 整个落在旧窗口之外。同一趟里另外 26 枚规格两窗皆 0，所以进程内那一档 16 格里只有这一格是量法造成的假缺席，真欠证人的是 15 格。结论落在读法上：拿只武装在 call 阶段的尺子念出来的"没落到"，含义只能写成"**call 阶段从没落到过**"，这一条口径从这一片起跟着每一次普查读数一起写。
+* 这一片还量出尺子自己的第五个盲区，读数口径因此要改写。普查的 trace 只武装在 call 阶段那一次包裹上，夹具的 setup 不在窗口里，于是**只由 module/session 级夹具走到的 src 行会被念成从没落到**。这一片当场证了一格：`actors.py:187` 那一格写的是 `self.script[self.i]`，也就是被脚本喂着的那枚 `MockActor` 取出下一条动作的那一行，call 窗口那一趟念它 NEVER，而协议窗口（setup 与 call 与 teardown 都武装）那一趟 **04:08:25Z**—**04:10:14Z** 在同一批 27 枚规格上回显了 200 次命中。走那一格的是 `play_authored`，它被 `tests/test_golden_game.py` 的 `golden` 夹具与 `tests/test_render_live.py` 的 `gold`（装饰器写在 `tests/test_render_live.py:44`，是 module 级）这类夹具调用，setup 整个落在旧窗口之外。同一趟里另外 26 枚规格两窗皆 0，所以进程内那一档 16 格里只有这一格是量法造成的假缺席，真欠证人的是 15 格。结论落在读法上：拿只武装在 call 阶段的尺子念出来的"没落到"，含义只能写成"**call 阶段从没落到过**"，这一条口径从这一片起跟着每一次普查读数一起写。
 
 * 方向纪律照旧要再说一遍，因为这一片的读数最容易被读成覆盖面：`EXECUTED` 只否证"这一格在 call 阶段从来没被走到"，它不否证"没有哪条断言读过它"；这一片的十一格两样都办了（普查给了走到，刀给了有人读），剩下那一档只欠前一样，而且那一样的读数现在还带着上面那个口径。这一片没有配反向刀——地板分支大多只有一向（空输入进来的那支），两向都钉那件事在 `#240` 里是专门一趟两具刀量的，这一片没量就不声称。端点两格、真人 tty 六格、子进程九格一格没动，前两档欠的是 key 与端口。`tests` 侧那 68 格仍然没人管，它不属于"产品链有没有证人"这一问。发布那一步在本节落笔时还没走，所以这一节不预写自己没跑过的数——整本末行、推送回显与克隆自证按 `#239` 立的那条规矩记在本笔自己的提交说明里。
 
@@ -12373,7 +12373,7 @@ B 的探针行与语句行不同（事件数才有意义），A 不是。凡是"
 K_off 把过滤条件换成 `False`（幸存者强制为 0 枚）、K_on 换成 `True`（过滤不排除任何一枚）、
 K_not 换成 `not (…)`（取反；可迭代对象为空时 K_not 与 K_off 同值，所以 K_not 红也证明今天至少
 一枚幸存者）。CAUGHT 按屋里老规矩：报出来的失败位置要落进**这一条** `assert` 的语句区间，不是
-"pytest 非零退出"。正控制 `tests/test_house_wired.py:53`（`VOTE_RESULT` 那一枚）的 K_off 是 CAUGHT。
+"pytest 非零退出"。正控制 `tests/test_house_wired.py:57`（`VOTE_RESULT` 那一枚）的 K_off 是 CAUGHT。
 
 **v1 的归属判据是坏的（自己这一片的 bug，读数没错、分类全错）**：`caught()` 只认 `tests/<名>.py:行:`,
 而 `--tb=line` 打的是绝对路径，于是 13 枚**全部**被分成"无牙"——包括正控制那一枚明明红了。发现它
@@ -12383,7 +12383,7 @@ v2 重跑同一批 13 枚，逐条判定（`census267/knife267v2.json`，计数�
 
 ```
 位置                                    聚合    K_off  K_on  K_not  判定                                行内名字
-tests/test_batch_paired.py:1169        sum     红      绿     红      有牙                            `games_a`
+tests/test_batch_paired.py:1164        sum     红      绿     红      有牙                            `games_a`
 tests/test_cli.py:419                  len     红      红     红      有牙                            `stats`
 tests/test_cli.py:424                  sum     绿      红     红      单向有牙（今日分子为 0）         `turns`
 tests/test_cli.py:426                  len     红      红     红      有牙                            `n_speech`
@@ -12393,7 +12393,7 @@ tests/test_golden_game.py:527          sum     红      红     红      有牙 
 tests/test_golden_game.py:531          sum     绿      红     红      单向有牙                        `invented`
 tests/test_golden_game.py:532          sum     红      红     红      有牙                            `flags`
 tests/test_golden_game.py:779          sum     绿      红     红      单向有牙                        `by_phase_role`
-tests/test_house_wired.py:53           sum     红      红     红      有牙（正控制）                  `VOTE_RESULT`
+tests/test_house_wired.py:57           sum     红      红     红      有牙（正控制）                  `VOTE_RESULT`
 tests/test_human_seat.py:465           any     绿      绿     绿      短路遮蔽，由 K_id 对解除＝有牙   `ACT_SYNONYMS`
 tests/test_render_html.py:292          len     绿      红     红      单向有牙（`and` 那一侧无关）    `spectator`
 ```
@@ -12412,7 +12412,7 @@ tests/test_render_html.py:292          len     绿      红     红      单向�
 `tests/test_golden_game.py:787`，另一处 `tests/test_cli.py:520` 断言的是这个键**不在**），两枚今天
 都读 0——`docs/metrics.md` 里那一行却写着"`m3_gate.fallback_rate` 已经拥有那个数"。非零方向的证人
 一条没有，这一格登记为后续 `#269`：在已经能造出 truthy `result.fallback` 的那条链上
-（`tests/test_batch_paired.py:1527` 就在翻它）补一枚读数非零的对账证人，并按屋里规矩给 audit 的
+（`tests/test_batch_paired.py:1529` 就在翻它）补一枚读数非零的对账证人，并按屋里规矩给 audit 的
 计数那一格下刀证明它抓得住。**这一片没动那两枚 `fallback_rate` 断言，也没动 `src/wolfengine/metrics.py:592`
 里那行除以 `n` 的算术**。
 
@@ -14236,7 +14236,7 @@ A 类标签把枚数写死成「这 7 枚号」，`12:54:09Z` 那趟逐条实际
   是历史：那一行现在是交回，坐着的是正本那一份。
 
 **补记（同一笔的第二刀，`07:32:21Z` 闸门面 293 passed）：删掉一个名字之后，替它说话的那句散文没人管**。
-`tests/test_calibration_loader.py:186` 那条用例的 docstring 在讲"抄本不额外保住任何证据"时写的是
+`tests/test_calibration_loader.py:185` 那条用例的 docstring 在讲"抄本不额外保住任何证据"时写的是
 「redact 按 `CRED_KEYS` 的键名清洗」——那七枚键名的清洗逻辑本笔已经收拢到正本，这个名字在代码里不存在了，
 而那句话还在替一份已经不存在的名单解释一次处置的正当性。它是我自己在本笔里造出来的第二处残渣，改口成
 "按正本那七枚键名"（行内改、行数不变）。**这一形今天没有任何尺子管**：标识符那把尺（`#274`/`#275`）扫的是
@@ -14292,7 +14292,7 @@ A 类标签把枚数写死成「这 7 枚号」，`12:54:09Z` 那趟逐条实际
   `src/wolfengine/metrics.py:854` 的 `m4_hallucination_rates`、`src/wolfengine/batch.py:286` 的 `uncited`。
 - `tests/test_belief.py:3`：那句点名的 helper 写成旧形「_apply_contested_seer_claims」，真主人在
   `src/wolfengine/belief.py:164`，调用点同一本 `src/wolfengine/belief.py:119`，两处写的都是 `_contest_seers`。
-- `tests/test_batch_paired.py:1286`：那句点的用例不存在，那一行现在写的是全名
+- `tests/test_batch_paired.py:1281`：那句点的用例不存在，那一行现在写的是全名
   `test_an_arm_without_the_caps_in_its_logs_says_no_rather_than_zero`（主语是臂，不是日志）。
 - `tests/test_anti_repeat.py:189`：那句用截短形点一条用例，`#215` 那条"片段读者看不见"的规矩要求写全，
   那一行现在写的是 `test_the_fourth_speaker_is_asked_not_to_repeat_the_three_before_it`。
@@ -14596,3 +14596,62 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
   这与"不预写自己没跑过的数"是同一条规矩的两个方向。
 - **这一片没做的事**：没有把 `tests` 面收进任何判据，没有动那 5 对 helper，也没有跑收拢；`ALPHA_ONLY`／`NEAR_DEL`
   在 `tests` 面为 0 只量了一次，没有第二把口径复核。
+
+## `#308`：那 5 对里真双写的四对收拢成委托——判据是"体逐字相同 ≠ 可合并"，先量自由名解到哪条模块绑定上
+
+- **这一片问的**：`#307` 登记了 5 对同形 helper，收拢的第一步不是删，是**可合并性**。两份体逐字相同只证明"读法
+  一样"，不证明"合了不动读数"：同名符号在两侧可能各自解到**不同**的模块级绑定上（一侧 `import json as J`、
+  另一侧没有那条），把体搬到一起就会把另一侧的读数挪走。所以先量两侧体里的自由名各自解到本模块的哪一条绑定，
+  再决定动不动。尺在 `census308/merge308.py`（`11:11:10Z`，rc 0）：**同一绑定 8 枚／不同绑定 0 枚／模块级找不到
+  8 枚**。0 枚「不同绑定」是这一片敢动手的根据；那 8 枚「找不到」逐枚读正文都是内置类型与内置函数，登记成尺的
+  限界——它只比模块级绑定，不查 builtins 两侧是否同名同物。
+- **逐对处置（四合、一不合）**：
+  1. `_src_texts` ⇄ `_src_outside_config`（同一本 `test_batch_paired.py` 内）：删前者，两处调用点改指后者。
+     这是最便宜的一对，也是唯一不需要跨本 import 的一对。
+  2. `_load_calibrate`（`test_calibration_loader.py`）⇄ `_load`（`test_calibrate_guard.py`）：委托走
+     `from test_calibrate_guard import _load as _load_calibrate`。两侧体只差的那一条是注释——正是 `#307`
+     那列「只差字面量」量出来的那种形状。这一刀顺带把委托方两枚只为它活着的模块级绑定顶成零读者：
+     `import importlib.util` 与 `ROOT` 一起摘掉，`Path` 留着（夹具签名还在读它）。
+  3. `_house`（`test_last_words.py`）⇄ `_house`（`test_house_wired.py`）：删委托方那一份，主人那一份的
+     docstring 收进委托方原来说明"为什么只能换整张 board"的那两句（含点 `test_rules` 走同一路的那句），
+     依据还是「名册住在它的主人那一本，不抄第二份」；`import dataclasses` 跟着摘。
+  4. `_one_night`（`test_render_live.py`）⇄ `_one_night`（`test_render_html.py`）：删直播侧那一份，改 import
+     主人那一份。两侧 docstring **不是**同一条句子（主人那本写的是"两份日志都量不出差别"的来路，直播侧写的
+     是"同一量法"），所以留哪一份是有取舍的：留被指的那一份，而直播侧那句"改读 `evs` 在这一块屏幕上同样是
+     等价变异"本来就住在调用它的用例 docstring 里，没丢。`PUBLIC`、`Event` 两枚 import 被这一刀顶成零读者，
+     逐枚数过才从 import 行删掉（`EventLog`、`Kind` 仍在用）。
+  5. `_pointer_corpus`（`test_doc_citations.py`）⇄ `_corpus`（`test_doc_tables.py`）：**不合，登记**。尺说它
+     可合并（两侧自由名都解到同一绑定），但那一对的双写其实在**模块级那一面**：委托方的 `DOCS` 与 `ROOT` 只
+     为这一条函数活着（现测 `DOCS` 在 `test_doc_tables.py` 里只出现在 2 行），搬走函数就把这两枚顶成零读者，
+     而模块级常量的双写归 `#160`、`#204` 那一层判据管——那是另一片的账，不在这里顺手收。收拢后重跑尺，这一对
+     仍是 `EXACT`，登记成已知项而不是待办。
+- **今值**（`census308/ruler-after-merge-1127Z.txt`，`11:27:48Z`，rc 0）：旧面重放 `SAME_AS_305= yes`、抽取对账
+  `PROVEN (11/11)`；`tests` 面 `DEFS` 1678→1674、`EXACT` 10→6（同文件内 3→2）、`NEAR_SUB` 14 不变、地板→1 那一格
+  124 不变、单语句体 235→233；三棵 `DEFS` 2086→2082、`EXACT` 17→13、合计对 32→28、新对 26→22、旧对消失 0。
+  掉下去的 4 枚 `EXACT` 恰好是合掉的 4 对，一对不多、一对不少——这是这一片唯一能把"只动了想动的东西"钉成
+  读数的尺；`NEAR_SUB` 一格没动，说明收拢没有把任何一对推成"只差字面量"那种新形状。
+- **削正本**（`census308/knives308.py`，`11:25:58Z`→`11:27:01Z`，5 具 5/5）：删掉主人那一份，委托方必须跟着红。
+  K1 删 `_load`、K2 删 `_house`、K3 删 `_one_night` 都是 rc 2、红在 collection（委托方的 import 直接接不到东西）；
+  K4 删同本那枚 `_src_outside_config` 只能红在调用点（rc 1，3 failed 70 passed，同本没有 import 可断）；K5 是
+  恒红负控制——删主人自己那本里委托方从不 import 的 `_md`，跑同一本委托方必须绿（rc 0，24 passed），这一具
+  证明前四具的红是那一带的、不是"脚本碰了文件、清了缓存"造出来的。每具落盘前后各量一次 sha256，五具全部
+  `还原=True`。
+- **这一片的价（自己付的，登记）**：
+  (a) 第一趟刀的边界找错了层次：`cut()` 用"下一行空白"找函数体尾，而 docstring 里本来就有空白行，于是 K2/K3
+      根本没落盘——那一趟的 3/5 不是判决，只是尺自己的形状 bug（`11:25:04Z`）。改成按 AST 的 `lineno`／
+      `end_lineno` 数边界之后才是 5/5。**锚点层次错了不会伪装成红，它会伪装成"刀没落下"。**
+  (b) 顶歪的行号指针：这一片把 5 本 .py 的若干行往上顶了 1～5 行，手册里 16 处指向它们的行号指针当场被行号
+      闸门判红（`11:30:15Z` 那一趟 1 failed 292 passed）。处置是逐枚等长改号（`census308/repoint308.py`：14 行
+      行内替换、总行数 14598 不变），改之前先按闸门报的行号读回目标行、确认它点名的 token 真在那儿。这条是
+      `#307` 那句"不收面"的同一件事的另一面：**helper 收拢不改变任何行为，但它改变行号，而行号是活的证据。**
+  (c) 最慢的那本闸门先让位于秒级探针：`11:30:15Z` 那趟红只红在四本里最慢的一本，而 pytest 的截断 repr 里只
+      看得见 3 枚、实际 16 枚。改成直接调闸门内部的取数函数把全名单印出来（`census308/probe308_cites.py`），
+      再回闸门——先拿到"有几枚"，再决定改哪几行。
+- **读数与负载**：受影响的五本单跑 193 passed（rc 0，`11:21:52Z`→`11:22:28Z`）；文档闸门四本 293 passed
+  （rc 0，`11:32:51Z`→`11:34:26Z`，93.44s）；全量离线 1265 passed（rc 0，`11:34:34Z`→`11:38:40Z`，244.19s）。
+  后两趟 `uptime` 现取共驻负载 17.25 与 25.09，秒数只当脏读数；计数 1265 与 `#307` 那趟相同，本片没有增减
+  任何用例。跨本 import 那一族现共 17 条（`11:39:41Z` 现测，含函数体内那 4 条），本片新增 3 条。
+- **这一片没做的事**：没有给"跨本委托"立新判据——现在兜住它的只有 `#165`、`#166` 那两把测试侧死名探测（管
+  "委托方 import 了没人用的名字"），没有一把管"主人那一份被删了"这种反向腐烂，K1–K3 只是这一片的证人、不是
+  常驻尺；`_pointer_corpus` ⇄ `_corpus` 那对的模块级双写没有动；手册里指向 `tests/*.py` 的行号指针族仍然只在
+  改动时被闸门兜住，没有换成名字形。

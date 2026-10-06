@@ -18,9 +18,9 @@
 
 from __future__ import annotations
 
-import dataclasses
 import random
 
+from test_house_wired import _house  # 翻房规这件事住在主人那一本，不抄第二份
 from wolfengine import game, phases
 from wolfengine.agent import Agent
 from wolfengine.actors import MockActor
@@ -47,16 +47,6 @@ def _table(tmp_path, *, name: str = "lw.jsonl"):
 def _kill(state, seat: int, *, night: int, cause: str) -> None:
     state.seats[seat].alive = False
     state.deaths.append(Death(seat=seat, day=night, night=night, cause=cause))
-
-
-def _house(state, **kw) -> None:
-    """翻一条房规，其余原样。
-
-    `HouseRules` 是冻结的，`GameState.house` 又是只读属性（它返回 `board.house`），所以改房规
-    只能换整张 board——`test_rules.py` 里翻房规走的也是这条路。
-    """
-    state.board = dataclasses.replace(
-        state.board, house=dataclasses.replace(state.board.house, **kw))
 
 
 def _spoken(log, seat: int | None = None) -> list[int]:

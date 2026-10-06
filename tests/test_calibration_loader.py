@@ -16,15 +16,13 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 
 import pytest
 
+from test_calibrate_guard import _load as _load_calibrate  # 载入点住在主人那一本，不抄第二份
 from wolfengine import metrics
-
-ROOT = Path(__file__).resolve().parents[1]
 
 COMPLETE = {"D_decode_tok_s": 41.2, "per_call_fixed_overhead_s": 0.83,
             "P_prefill_tok_s_best_observed": 3664.2}
@@ -240,13 +238,6 @@ def test_m7_does_not_call_an_empty_batch_ok():
 
 
 # ------------------------------------------------------------------ 写侧：sidecar 得真的有这一块
-def _load_calibrate():
-    spec = importlib.util.spec_from_file_location("calibrate", ROOT / "scripts" / "calibrate.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
 @pytest.fixture(scope="module")
 def cal():
     return _load_calibrate()

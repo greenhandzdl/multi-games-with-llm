@@ -32,12 +32,13 @@ import pytest
 
 from wolfengine import render_live
 from wolfengine.compress import render_line
-from wolfengine.events import PUBLIC, Event, EventLog, Kind, LogDamage
+from wolfengine.events import EventLog, Kind, LogDamage
 
 from live_frame import frame_text
 
 sys.path.insert(0, str(Path(__file__).parent))
 import test_golden_game as G
+from test_render_html import _one_night  # 那张合成桌住在主人那一本，不抄第二份
 
 
 @pytest.fixture(scope="module")
@@ -297,24 +298,6 @@ def test_the_frame_announces_a_peaceful_night_once(gold):
         assert sum("平安夜" in l for l in rows) == 1, doc.count("平安夜")
         peace = next(i for i, l in enumerate(rows) if "平安夜" in l)
         assert "天亮了，第1天开始" in rows[peace], rows[peace - 1:peace + 2]
-
-
-def _one_night(private_death: bool) -> list[Event]:
-    """一夜三行的合成桌：天黑宣告 →（只有 5 号看得见的那一枚倒人）→「天亮了」。
-
-    与 `test_render_html.py` 里同一张桌子的同一量法：金样本和 data/ 的 19 枚夜间死讯全是公开落盘
-    （2026-10-03T05:40Z 现读），所以"读 `events` 还是读 `evs`"在真日志上是等价变异，这一格只能靠
-    喂进来的事件作证。
-    """
-    rows = [Event(seq=1, kind=Kind.PHASE, day=1, phase="night_wolf",
-                  visibility=PUBLIC, payload={})]
-    if private_death:
-        rows.append(Event(seq=2, kind=Kind.DEATH, day=1, phase="night_witch",
-                          visibility=frozenset({5}), actor=5,
-                          payload={"seat": 4, "cause": "poison"}))
-    rows.append(Event(seq=3 if private_death else 2, kind=Kind.PHASE, day=1,
-                      phase="day_speech", visibility=PUBLIC, payload={}))
-    return rows
 
 
 def test_a_privately_recorded_night_death_does_not_make_a_peaceful_night():
