@@ -136,7 +136,7 @@ async def play(
     *,
     cfg: Config,
     deal_seed: int,
-    out_dir: str | Path = "data",
+    out_dir: str | Path,
     game_id: str | None = None,
     transport: Any = None,
     actors: dict[int, Actor] | None = None,

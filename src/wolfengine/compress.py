@@ -234,7 +234,7 @@ def plan_fold(
     est,
     start_window: int = WINDOW_BOUNDARIES[-1],
     min_window: int = 4,
-    b2_cap: int = 1500,
+    b2_cap: int,
     shrink: int = 0,
 ) -> FoldPlan:
     """Pick the verbatim window by folding **whole days**, then let `shrink` cut it further.

@@ -4173,3 +4173,38 @@ def test_no_function_body_path_call_touches_the_filesystem_through_the_cwd():
 
 # 这一本把 import 放在文件尾是不顶号：它上面有按行号点了本文件的归档读数（同 `#262`、`#310` 那笔账）。
 from conftest import REPO, repo_key
+
+
+def test_an_engine_default_value_does_not_copy_its_config_or_cli_author():
+    """`#322`：`plan_fold` 的 `b2_cap` 与 `play` 的 `out_dir` 各带一枚出厂值，抄的是别处已有的那两个作者。
+
+    `b2_cap` 复述的是 `config.py` 里 `RegionBudget.b2` 那格，`out_dir` 复述的是 CLI `wolf run --out` 的
+    `default`（它自己的帮助文本用 `%(default)s` 念那个值）。两格今天没有任何调用方走签名里的默认值，于是
+    「1500」和「data」在两个地方相等而没有任何东西核对——改一处，另一处悄悄不跟上。摘掉签名里这两枚，值就
+    只剩一个作者；调用方照旧怎么传都行，只是不再由签名替它编一个。
+
+    摘的是这两枚，不是「所有没人走的默认值」：其余那些没有第二个作者——哨兵 `None`、「取前几个」这类本模块
+    自己的口径。它们的处置理由在 `#322` 那一节逐条写着。
+    """
+    import inspect
+
+    for fn, param in ((compress.plan_fold, "b2_cap"), (game.play, "out_dir")):
+        default = inspect.signature(fn).parameters[param].default
+        assert default is inspect.Parameter.empty, (
+            f"{fn.__module__}.{fn.__name__}({param}) 又有了出厂值 {default!r}——那个值的主人在 "
+            "`config.RegionBudget` 与 CLI 的 `--out`，签名里不该留第二份")
+
+
+def test_the_missing_default_predicate_also_reads_a_real_default():
+    """上一条那种「等于 empty」的断言，真值那一支也得读得出来，否则它是一把从不开火的枪。"""
+    import inspect
+
+    def with_default(b2_cap: int = 1500) -> int:
+        return b2_cap
+
+    def without_default(b2_cap: int) -> int:
+        return b2_cap
+
+    assert inspect.signature(with_default).parameters["b2_cap"].default == 1500
+    assert inspect.signature(without_default).parameters["b2_cap"].default is inspect.Parameter.empty
+
