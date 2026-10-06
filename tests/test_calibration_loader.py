@@ -183,7 +183,7 @@ def test_a_flat_copy_of_the_listing_does_not_outvote_the_raw_block(tmp_path):
 
 def test_the_writer_stores_the_listing_only_in_the_raw_block(cal):
     """上面那对读者要成立，写侧就得只留一个落点：派生出来的扁平清单不再进 sidecar。
-    它与 `features` 由同一个 `declared_models()` 从同一格算出，而 redact 按 CRED_KEYS 的键名
+    它与 `features` 由同一个 `declared_models()` 从同一格算出，而 redact 按正本那七枚键名
     清洗，`models_endpoint` / `body` / `data` / `id` 一格都不在名单上，所以抄本不额外保住任何证据。"""
     lat = [{"k": 1, "prefix_reps": 130, "wall_s": 3.2, "agg_prefill_tps": 3600.0},
            {"k": 2, "prefix_reps": 130, "wall_s": 5.0}]
