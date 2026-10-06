@@ -15376,3 +15376,84 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
   - `scripts/calibrate.py` 自己那枚 wrapper 的元数主张不在本片（`#315` 量过"桩的元数也是主张"）：它今天只在一处
     委托正本并交出 `KEY_ENV`，普查在册。
   - `#302` 那笔仍在：普查尺与刀住在记忆目录里，不在版本控制里，克隆自证带不上它们。
+
+## `#319` 擦值层的散文追不上代码：13 句改口落在 16 行上，其中「取值的写法只有一处」量成 3 枚、且出生那天就是 3 枚
+
+- **票面前提与现读**：`#317`／`#318` 摘掉擦值层那两枚出厂名默认值之后，少交名字的一路从"静默退回出厂名"
+  变成当场 `TypeError`；可解释"为什么要交名"的那些句子还是无时态的现在时，把摘掉之前的形状讲成今天的样子。
+  本片先量分母再改句子，立不立尺的账放在最后。`22:05:29Z` 只读普查（AST 解到绑定，面是 `src/`＋`scripts/`）
+  读到读环境的写法共 3 枚：`src/wolfengine/config.py:215` 那一枚从 `self.api_key_env` 取，
+  `src/wolfengine/transport.py:60` 那一枚从形参 `key_env` 取，`scripts/calibrate.py:109` 那一枚从 `KEY_ENV` 取
+  ——三枚的名字都从配置来，改名以后都跟着走。下标那一形 `os.environ[` 同面 0 枚（`22:25:43Z` 逐字节 grep，
+  唯一命中在 `src/wolfengine/__pycache__` 里那本旧字节码，它带的是模块头改口之前那版字节码）。
+- **强主张那一枚是出生时就假的**：`tests/test_no_secrets.py:411` 原先写着「取值的写法只有一处」，句里点名
+  的写法是 `os.environ.get`。同一把尺按 `git show` 回读两版：`2858868`（`#313` 立作者唯一性那道闸门的那一笔）
+  3 枚、`3adbdef`（`#147` 把清洗名单接上 `api_key_env` 的那一笔）4 枚——它不是被 `#317` 之后顶烂的。
+  为什么从没一条判据红过：那道闸门钉的是"出厂名被手写的地方只剩作者"，这一句钉的是"读环境的写法只有一处"，
+  同一个「只有一处」挂在两个分母上；`#297` 那一族的语料面是手册页里"范围词与唯一式主张同一行"，而这一枚
+  住在 `tests/` 的 docstring 里，从没进过那把尺的面。
+- **`Config.api_key_env` 那一形还剩几枚**（`22:07:20Z` 同一趟普查按绑定分三桶，80 本）：活代码 0 枚、判据
+  自己的合成证人 2 枚、散文 3 枚。合成证人那两枚是喂给谓词的源码串，一枚里写着 `_scrub_string`
+  （`tests/test_no_secrets.py:547`），另一枚里写着 `redact`（`tests/test_no_secrets.py:598`）；它们主张的正是
+  "从类上取的名字该被判掉"，留着。13 句落笔后重跑同一把尺（`22:18:03Z`）：活代码 0、合成证人 2、散文 2。
+  掉下去的那一枚是 `tests/test_no_secrets.py:174`——原先那半句把 `key_env` 的来路说成从类属性供给，而
+  `#317`／`#318` 之后它由调用点交进来；这句话既写错了来路，也把那一形留在了散文桶里。
+- **恒定词那把尺的账**（`22:05:29Z`，面是四本擦值层的书，词表"只有一处／永远／只按／只认／照旧／退回／
+  今天只／只剩"）：命中 29 行，本片处置 9 行，其余逐行读过留下，两族理由——判据本体与反事实句（说的本来就是
+  "摘掉之前"），以及别族的、已带票号的历史读数。**这把尺的漏收口径一并登记**：改口另有 4 处不在这 29 行里，
+  因为它们是不带恒定词的现在时主张或英文模块头：`tests/test_no_secrets.py:174` 那半句写着 `key_env`、
+  `tests/test_transport.py:307` 那半句写着 `TypeError`、`tests/test_llm.py:186` 那句写着 `complete`，
+  `src/wolfengine/config.py:4` 那半句写着 `os.environ`。无恒定词的时态面没有尺，那四处靠通读而不是靠普查收的。
+- **处置**（13 句、16 行、5 本；全部行内改，五本的行数一字未动，被本归档和判据点名的行号逐字节留在原位）：
+  - `tests/test_no_secrets.py` 五句：`tests/test_no_secrets.py:411` 把「只有一处」换成 `os.environ.get` 的读数；
+    `tests/test_no_secrets.py:342` 摘掉「82 个提交」那枚会腐烂的计数，`monkeypatch` 那半句理由与提交数无关；
+    `tests/test_no_secrets.py:453` 把类属性那句改成过去式，`Config.api_key_env` 从此只作为签名上曾有过的东西
+    被点名；`tests/test_no_secrets.py:501` 给「所有调用点」那条主张补上它自己的失效方向——少传名字从
+    `#317` 起当场 `TypeError`，交错一枚（字面量或从类上取的那一枚）才静默；`tests/test_no_secrets.py:174`
+    改写来路那半句，`key_env` 由调用点交进来。
+  - `tests/test_transport.py` 三句：`tests/test_transport.py:307` 把两处 `error=` 的"在出厂名下擦值"换成
+    "要么不交名当场 `TypeError`、要么交错一枚名字"（那一句折在两行上，306 行是它的上半句）；
+    `tests/test_transport.py:441` 的标题从"只认出厂名"改成"在 `#318` 之前只认出厂名"，`redact` 的键名那一半
+    与值那一半各归各位；`tests/test_transport.py:444` 把"失效方向是静默的"改成"曾是"，helper 拿的那一枚写成
+    过去式并点名两枚默认值的去处，`require_key()` 那半句的推演留在原处。
+  - `tests/test_llm.py` 三句：`tests/test_llm.py:165` 从"今天只按出厂名擦值"改成"在 `#315` 动刀前只按出厂名
+    擦值"，`as_response_dict()` 那一格的时态跟着 `#315` 走；`tests/test_llm.py:186` 那句从"改名部署下各自会
+    静默漏"换成结构主张（"两处都擦干净"要两处各自有证人），`complete()` 里两份遮罩的账没量过归因就不写；
+    `tests/test_llm.py:190` 同族改口，那个 `parametrize` 两形各自要一条的理由不变。
+  - `tests/test_calibrate_guard.py:254` 一句：转手那一行补上时态锚（`#316` 之前"退回签名上那枚出厂名默认值"
+    那一路），并点名那两枚默认值 `#317`／`#318` 也一并摘了；紧邻那句 `config.py:66` 的 `FORBIDDEN_AXIS` 依据没动。
+  - `src/wolfengine/config.py:4` 那半句改成不钉死某一种取法：模块头原先写的是下标那一形，而代码里从没存在过
+    它（见上面 0 枚那一格），现在写的是 `os.environ` 里查名字、"a missing key fails loudly"。
+- **两向与刀账**（电池 `census319/knife319.py`，两具；规矩同 `#318`：锚点唯一 → 行数中性 → sha 变 → 按字节
+  还原并证 sha 回到基线；env 继承进程环境、只覆写 `PYTHONPATH`／`PYTHONDONTWRITEBYTECODE`，每具另印被测树的
+  路径（`#289` 的混树那笔）。`22:13:25Z`→`22:13:42Z`，负载 2.01→1.94，结束时两本散列逐一与基线相符）：
+  - K1 把 `src/wolfengine/transport.py:60` 那一枚形参 `key_env` 的取值换成字面量出厂名 → CAUGHT 9 枚，分布在四本里：
+    `test_the_factory_key_name_has_exactly_one_author`、`test_the_scrubber_follows_whatever_env_var_the_config_names`、
+    `test_redact_hands_the_name_it_was_given_down_to_every_value`、
+    `test_the_usage_dict_written_to_disk_erases_a_renamed_deployers_value`、
+    `test_both_error_arms_erase_a_renamed_deployers_value` 两形、
+    `test_a_renamed_key_is_erased_by_whichever_except_arm_echoes_it` 两形、
+    `test_the_script_scrubs_the_variable_it_sends_from`。这一具不证新行为——`#317`／`#318` 之后交名面早有
+    主人；它在这里量的是"机械可判的那一半有人钉"，连 `#313` 那道作者唯一性闸门一起算在内。
+  - K2 散文刀（只在 `tests/test_llm.py:165` 那句 `as_response_dict` 的 docstring 里换时态措辞，代码一字未动，落盘后 sha 已变）→
+    `74 passed`、rc 0。**散文面没有机械读者**，这一格登记成不立尺的代价而不是漏收：任何"docstring 不许写
+    现在时"的尺子只能钉这 13 句的措辞本身，下一次改口就得同时改判据——`#271`／`#312` 那一族的规矩是量出
+    这个价就不收。
+- **不立尺判决**：两向的价格都量过了。要钉的东西（取值写法跟着部署走）K1 有 9 枚读者，再加一道尺是重复立尺
+  （`#153`：判据只住一处）；要钉的措辞（散文的时态）K2 证了它没有读者，也不该有。与 `#301` 同判：`.py` 散文里
+  点名的代码名字这一面不立尺。本片给 `#297` 那一族补一处限界登记——**同名不同分母的「只有一处」不会让任何
+  一边变红**，取词形状看不见分母，只有把两个分母都数一遍才知道谁在撒谎。
+- **今值**（计数是证人，秒数是脏读数）：全量 `1283 passed`、rc 0（`22:15:41Z` 起读，86.09s，起点负载 1.84），
+  与 `#318` 的 `1283` 同值——本片一条用例未增未删，改动全在 docstring 与注释的行内。定向四本
+  （`tests/test_no_secrets.py`＋`tests/test_transport.py`＋`tests/test_llm.py`＋`tests/test_calibrate_guard.py`）
+  `74 passed`、rc 0（`22:12:23Z`，负载 2.39），与 `#318` 电池前那格 KT0 的基线同值。
+  **落笔之后复跑**：文档两本 `149 passed`、rc 0（`22:32:48Z`→`22:33:04Z`，负载 2.44／2.30／2.33），
+  全量 `1283 passed`、rc 0（`22:33:08Z` 起读，86.65s，起点负载 2.41／2.29／2.33）。
+- **这一片没做的事**：
+  - 无恒定词的现在时主张没有尺（上面那 4 处靠通读），英文 docstring 面同样不在任何一把尺的面上。
+  - `from wolfengine import transport` 再打 `transport.redact(...)` 的属性形仍不进别名语料（现测 0 枚，
+    `#316`／`#318` 登记过的那条边界不变）。
+  - `scripts/calibrate.py` 自己那本的头注释里手写着出厂名两枚：`scripts/calibrate.py:7` 那句
+    "Reads the key from the environment only" 与 `scripts/calibrate.py:10` 那行 `export` 示例，`WOLF_LLM_API_KEY`
+    在散文里逐字站着；`#313` 只放行了作者那一格，散文里的手写名不在本片射程。
+  - `#302` 那笔仍在：普查尺与刀住在记忆目录里，不在版本控制里，克隆自证带不上它们。

@@ -162,7 +162,7 @@ ALT = "OTHERSENTINELNOTKEY"
 
 
 async def test_the_usage_dict_written_to_disk_erases_a_renamed_deployers_value(monkeypatch):
-    """`as_response_dict()` 落盘那一格今天只按出厂名擦值，而它的调用方手上就有 config。
+    """`as_response_dict()` 落盘那一格在 `#315` 动刀前只按出厂名擦值，而它的调用方手上就有 config。
 
     `usage_from()` 按白名单放行**值**（类型写的是 `dict[str, Any]`），端点把回显的密钥放进
     `prompt_tokens` 那一格时，键名不在 `REDACT_PATTERNS` 里，只有值那一半能拦住它——而拦住它
@@ -183,11 +183,11 @@ async def test_the_usage_dict_written_to_disk_erases_a_renamed_deployers_value(m
 
 @pytest.mark.parametrize("length_error", [False, True], ids=["retry-then-error", "raise-too-long"])
 async def test_both_error_arms_erase_a_renamed_deployers_value(monkeypatch, length_error):
-    """`complete()` 里两份 `redact(res.error)` 各擦一遍，改名部署下各自会静默漏。
+    """`complete()` 里两份 `redact(res.error)` 各擦一遍，所以"两处都擦干净"要两处各自有证人。
 
     两形的差别不是"擦得干不干净"而是**谁拿到那句**：一形进 `CallResult.error`（落进事件的
     `response`），另一形进 `ContextTooLong` 的异常文本（沿调用栈往上被打印）。把联结只补在其中
-    一处，另一处照旧只认出厂名——所以两形各自要一条，共用一个 parametrize 是因为断言完全同形。
+    一处，另一处要么不交名当场 `TypeError`、要么交错一枚名字（两枚出厂名默认值已被 `#317`／`#318` 摘掉，"退回出厂名"这一路不存在了）——所以两形各自要一条，共用一个 parametrize 是因为断言完全同形。
     """
     monkeypatch.setenv(ALT_ENV, ALT)
     kw = {"status": 400, "is_length_error": True} if length_error else {"status": 502}

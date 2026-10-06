@@ -1,7 +1,7 @@
 """Engine configuration.
 
 The API key VALUE never lives here — only the name of the environment variable that
-holds it. Transport reads `os.environ[api_key_env]` at call time and fails loudly.
+holds it. The name is looked up in os.environ at call time, and a missing key fails loudly.
 """
 
 from __future__ import annotations

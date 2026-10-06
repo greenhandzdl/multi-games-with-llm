@@ -171,7 +171,7 @@ def _env_names_the_code_reads() -> set[str]:
     `os.environ.get(self.api_key_env)`——间接，但确实是配置）。
 
     KNOWN_LIMIT：经过一个变量传进去的名字不收。`transport.py` 擦的是**值**，取值的写法是
-    `os.environ.get(key_env)`，名字由 `Config.api_key_env` 供给（调用点传进来，默认值是出厂名），
+    `os.environ.get(key_env)`，名字由调用点交进来（擦值那两本的出厂名默认值已被 `#317`／`#318` 摘掉，
     所以这条看不见它——`WOLF_LLM_API_KEY` 仍然是靠 `config.py` 那个带 `env` 的字段默认值被记成
     有读者的。以前清洗表里还躺着第二个名字，它既没人配置也没人擦，是这一族的第一次；现在名单
     只剩一处来源，这条限界的含义也跟着变了：样例的广告权只可能来自配置，不可能来自清洗表。
@@ -339,7 +339,7 @@ def test_the_truncation_probe_reads_both_shapes(full_and_shallow_clone):
 def test_the_history_gate_refuses_to_sign_a_truncated_corpus(full_and_shallow_clone, monkeypatch):
     """历史判据在环境答不出时要停笔：跳过真的发生，且只在截断时发生。
 
-    为什么拿 monkeypatch 而不是本仓库——本机有 82 个提交的完整历史，这一支在这里永远走不到，
+    为什么拿 monkeypatch 而不是本仓库——本机带整段完整历史，这一支在这里永远走不到，
     而"一支没有读者的跳过"正是 `#153` 那一课（一具永远跳过的刀能无声杀掉一整格）。所以两向都在
     现造的仓库上各测一次，真实克隆里的那一次读数另外记进归档（`#189` 的做法：`git clone --depth 1`
     重跑，看这两条报的是 skipped 而不是 passed）。
@@ -408,7 +408,7 @@ def _hand_written_key_name_sites(src: str, rel: str) -> list[str]:
 def test_the_factory_key_name_has_exactly_one_author():
     """`#147` 把擦值的那一步接上了 `api_key_env`，却没管**谁在往变量里放东西**。
 
-    取值的写法（`os.environ.get`）只有一处，名字由配置供给，改名以后它跟着走；可测试侧要是不
+    取值的写法（`os.environ.get`）不止一处——`#319` 那趟 AST 普查在 `config.py`、`transport.py`、`scripts/calibrate.py` 各量到一枚，名字都从配置来，改名以后它们跟着走；可测试侧要是不
     手抄一遍名字去 `setenv`，改了名的人就会看到"值没被擦掉"这种红，而真正坏的是那句对账。
     这条把"手抄"收成像，并要求剩下的唯一一处就是作者本人。
 
@@ -450,8 +450,8 @@ def _names_the_deployed_variable(arg: ast.expr) -> bool:
     """交给它的那个表达式，真的跟着部署走吗。
 
     两形"看着是名字、其实永远是出厂名"要拒：字符串字面量，和**从类上直接取**的那一枚
-    （`Config.api_key_env` 读的是字段默认值，实例改名之后它不变——正是 `_scrub_string` 签名上那个
-    默认值的拼写）。从实例上取的都放行（`self.cfg.api_key_env`、`CONF.api_key_env`、`Config()` 打头
+    （`Config.api_key_env` 读的是字段默认值，实例改名之后它不变——擦值两本的签名上曾各带一枚它的默认值，
+    `#317`／`#318` 把它们摘了；`#319` 现量这一形在活代码里 0 枚，只剩判据的合成证人还写着它）。从实例上取的都放行（`self.cfg.api_key_env`、`CONF.api_key_env`、`Config()` 打头
     的那一枚），以及局部名——静态读不出它绑的是谁，但它的失效方向是"当场报错"，不是"静默退回出厂名"。
     """
     if isinstance(arg, ast.Constant):
@@ -498,7 +498,7 @@ def test_every_scrub_call_site_in_the_production_face_names_the_variable():
     """擦值调用点一枚都不许无名——上一片留给 `redact()` 的那格豁免，这一片收回了。
 
     `transport.py` 的 `_scrub_string()` 签名过去带一枚出厂名默认值（`#317` 那一片摘的），那句 docstring 是
-    **所有调用点**的主张，而它此前零读者：改名部署下少传一个名字，那一路就静默退回出厂名，整套离线
+    **所有调用点**的主张，而它此前零读者：改名部署下少传一枚名字从 `#317` 起当场 `TypeError`，交错一枚（字面量或从类上取的那一枚）才静默——那一路擦的还是出厂名，整套离线
     一条不红。现量的两向：`#314` 的两具同形刀里，落在非 200 正文那一支的能红（有一条用例点名改过
     名字的键），落在"200 而 body 不可解析"那一支的整套 1272 passed 全绿——那一格写不出行为证人
     （它擦的那串由 `JSONDecodeError` 拼出来，而这条异常的话里只有位置没有正文），所以这一格只能由

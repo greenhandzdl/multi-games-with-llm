@@ -303,8 +303,8 @@ async def test_a_renamed_key_is_erased_by_whichever_except_arm_echoes_it(monkeyp
     """两条 `except` 分支各自有一份擦值调用，所以各自要有证人。
 
     上面那条走的是"有响应、但响应是坏的"那一条分支；这里两条分别把异常丢进**超时**分支和
-    **什么都没回来**分支——两处的 `error=` 是各写一遍的，把联结只补在其中一处，另一处照样在
-    出厂名下擦值、对改过名字的部署静默失效。
+    **什么都没回来**分支——两处的 `error=` 是各写一遍的，把联结只补在其中一处，另一处要么不交名
+    当场 `TypeError`（`#317`／`#318` 摘掉两枚出厂名默认值之后就没有"退回出厂名"这一路了）、要么交错一枚名字。
     """
     alt = "OTHERSENTINELNOTKEY"
     monkeypatch.setenv("WOLF_OTHER_KEY_ENV", alt)
@@ -438,10 +438,10 @@ async def test_only_the_transport_that_owns_its_client_closes_it(monkeypatch):
 
 
 def test_redact_hands_the_name_it_was_given_down_to_every_value(monkeypatch):
-    """`redact()` 的键名那一半跟着部署走，值那一半只认出厂名——嵌套里的明文因此能穿过去。
+    """`redact()` 的键名那一半跟着部署走，值那一半在 `#318` 之前只认出厂名——嵌套里的明文因此能穿过去。
 
-    失效方向是静默的：`REDACT_PATTERNS` 按**键名**盖，`_scrub_string` 按**值**擦，而后者拿到的
-    永远是 `Config.api_key_env` 的类属性。改名部署下 `require_key()` 从第三个名字读键、发出去，
+    失效方向曾是静默的：`REDACT_PATTERNS` 按**键名**盖，`_scrub_string` 按**值**擦，而后者过去拿
+    的是 `Config.api_key_env` 的类属性（两枚出厂名默认值从 `#317`／`#318` 起摘了，名字改走形参）。改名部署下 `require_key()` 从第三个名字读键、发出去，
     端点把它回显进 `usage` 某一格的**值**里，键名不在那七枚之内，值又不是出厂名读到的那一个——
     两层防护各自让过去，明文一路进落盘的那本 dict。所以这一格问的不是"盖没盖住键名"，
     而是"名字有没有跟着走进递归"。第二向留在断言里当负控制：两枚调用只差那个实参，
