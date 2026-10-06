@@ -13940,3 +13940,67 @@ A 类标签把枚数写死成「这 7 枚号」，`12:54:09Z` 那趟逐条实际
 - **中途一趟口径偏差按 `#228` 那族登记在册**：`04:58:52Z` 那一趟我多敲了一个 `--ignore=tests/test_live_path.py`，
   回的是 `1231 passed`。那个数不是缺陷，是另一把口径（少 27 枚），它和 1258 不可互换——同一棵树上换一个
   ignore 就换一个数，所以本节只署 1258 那一趟，1231 那一趟连同它少掉的那一文件记在这里，不留作读数。
+
+## `#296`：手册里那串"究竟等了多久"逐枚落回出厂常数——唯一的缺陷不在这串数上，在一句把开桩名册写小了的文件头
+
+- **来源**：`#294` 收掉"要等真端点"那三句之后，README〈测试〉一节里还剩两类主张没定性——一类是「套件里有两条
+  在真实时间里等完了 `1.5 + 3.0` 两次退避⋯⋯全仓库唯一能分辨'真的睡了'的一条」，另一类是「全仓库只有它和
+  `tests/test_calibrate_rehearsal.py` 真的开 socket」。票面写的是"先量再立尺"。量完是**一枚缺陷、两格已有主人、
+  普查器自己三处形状 bug**。
+
+- **现量（开桩名册，两趟同口径）**：`05:09:25Z` 现扫 `tests/`，造 socket 的形状落在 **2 本**。
+  `tests/test_loopback_endpoint.py:50` 那一行是桩的 `BaseHTTPRequestHandler`。
+  `tests/test_loopback_endpoint.py:84` 那一行起的是 `ThreadingHTTPServer`。
+  `tests/test_calibrate_rehearsal.py:59` 那一行也是 `BaseHTTPRequestHandler` 的子类。
+  `tests/test_calibrate_rehearsal.py:146` 那一行起 `ThreadingHTTPServer`。
+  `tests/test_calibrate_rehearsal.py:158` 那一行是裸的 `socket.socket`，同一本里它的下一格才是"占端口又关掉"的用法。
+  开子进程的形状落在 8 本，两集合的交是 **1 本**。`05:10:30Z` 同口径复扫，逐格相同。
+
+- **那一枚缺陷与定性**：README 那句"两本"是对的；错的是 `tests/test_loopback_endpoint.py` 文件头第一句，它把
+  "开真 socket"说成了全工程只此一家——名册的两个作者里，**说得窄的那一个**才是缺陷。按 `#110`／`#153` 的
+  单一定义规矩，把那一句收窄到这一本真正独有的那一格（在子进程里跑 CLI、量的是进程退出码），
+  不在原地重述"两本"：抄一份名册就是给同一个事实第三个作者，明天多一本开桩时它先烂。名册的作者只留 README 一处。
+
+- **常数对账（这一串数每一枚都有主人）**：手册那一段串下来的五个数逐枚落回代码——
+  `1.5 + 3.0` 来自 `src/wolfengine/llm.py:124` 现读的 `backoff_base` 与 `src/wolfengine/llm.py:173`
+  那行的 `backoff_base` 上乘 `2 ** attempt`，预算是 `max_retries_per_call = 2`，两次退避合起来 4.5；
+  `tests/test_live_path.py:141` 的 `took >= 4.4` 是它的下界，同向；
+  「19.5s 内判 `aborted_endpoint`」来自 `src/wolfengine/config.py:117` 的 `connect_timeout_s = 5.0`
+  乘 3 次尝试再加 4.5；「45s 一个回合」是 `src/wolfengine/config.py:111` 的 `llm_timeout_floor_s = 45.0`；
+  「`12.23` 对着 `< 20.0` 只剩 7.8 秒」的那枚阈值住在 `metrics.M3_GATE`，`#273` 那把尺已经逐趟对表。
+  这些不是"孤立攒的秒数"：`#274`／`#292` 那条"墙钟读数要带共驻负载"的规矩管的是**没有常数主人**的漂移数，
+  这一片每一枚都从出厂常数现算得出来，所以不摘、不改口。
+
+- **两格已有主人，不立新尺（`#254`）**：「全仓库唯一能分辨真的睡了的一条」这一格的主人是 `#276` 立的
+  `test_exactly_one_case_in_the_suite_asserts_that_time_was_actually_spent`（名册下界那一枚就是
+  `test_live_path.py` 那条），手册那句"唯一"已经在被逐趟复测；「19.5 < 45」那根不变量的主人住在
+  `tests/test_transport.py:220` 的 `test_the_default_numbers_let_the_endpoints_verdict_win_the_race`——
+  它不抄常数，从 `inspect.signature` 现读 `max_retries_per_call` 与 `backoff_base`，再乘 `Config` 的
+  `connect_timeout_s` 与 `llm_timeout_floor_s` 比大小，今天量到的还是 19.5 < 45，与手册逐字同数。
+  改天有人拧 `connect_timeout_s`，红的是那条断言而不是那句散文——这正是它不需要第二个主人的理由。
+
+- **普查器自己的三处形状 bug（这一趟它报过一次假警报）**：
+- 只走进 `test_*` 函数体，于是报「`test_actor_contract.py` 里没有 sleep」。真相在那本的**类方法**里：
+  `tests/test_actor_contract.py:67` 的 `await asyncio.sleep(self.sleep_s)`，默认值坐在
+  `tests/test_actor_contract.py:53` 那个形参上（`sleep_s: float = 0.05`），由
+  `tests/test_actor_contract.py:104`／`tests/test_actor_contract.py:117` 两处各带 0.05 上桌——手册「那两条 50ms」逐字对。
+- 耗时断言的取词过收：33 枚命中里多数是 `latency_p95_s` 这类**键名**，不是"等了多久"的断言。
+- 假 sleep 没分类：`tests/test_llm.py:48` 那个 `async def sleep(delay)` 是注入用的记录器，
+  当成"退避被换成空操作"的证据读会读反。
+  三处与 `#289` 的协议层、`#291` 的嵌套 def 同族：判据往上一层，语料就换一层形状。这一趟没拿它的任何 0
+  当结论，缺陷是被文本通道与逐格读文件读出来的——「控制不红，语料上的 0 一律不取」。
+
+- **处置与账**：`src/` 与 `scripts/` 一字未动，判据本体一字未动；`tests/` 侧只改了那一行文件头
+  （`tests/test_loopback_endpoint.py` 仍 208 行，`git diff --stat` 1 insertion / 1 deletion，行号闸门那一族不必顶任何
+  一个号，中性不是洁癖，价见 `#261`）；文档面加的就是这一节。那把逐枚对账的尺子住在本次用完即弃的枚举器脚本里，
+  不进仓库（判据只住一处，语料的读数已由本节落笔）。
+
+- **补记（落笔后的两趟现量）**：文档面四本 `05:19:33Z` 起读、`05:20:01Z` 回 `292 passed`、rc 0，起读那一刻
+  `uptime` 现读 1 分钟负载 3.98。整套离线 `05:20:20Z` 起读、`05:21:52Z` 回 `1258 passed`、rc 0，起读那一刻
+  负载 4.28——与 `#295` 同数，这一片判据本体一字未动，同数就是它只改了一行文件头、加了一节归档的证据。
+  墙钟那一格不引：两趟起读负载不同带，秒数不参与比较。
+- **本节自己撞上形状禁令那一趟（`05:15:32Z`，1 failed 291 passed）**：红的是「按行号互指 markdown 页」
+  那一把尺收下了本节头一版写的 7 枚**不带文件名的**行号引用。它报的号逐枚都对，错的是写法——裸的那一形
+  正则认不出它在指哪一本，形状禁令（`#217` 立的）因此不收它，而"没人能核对的指针"正是这一族腐烂的方式。
+  改法是把每一枚写成带文件名的整形，并且一句只指一行：这一节现在每行各点一行，两趟之后 292 passed。
+  这与 `#279` 那条教训同形（补引用要按判据的取词单位写句子），只是这次撞上的不是取词单位而是**取文件单位**。
