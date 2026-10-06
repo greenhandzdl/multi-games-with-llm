@@ -497,7 +497,7 @@ def _scrub_call_sites(src: str, rel: str, target: str | set[str] = "_scrub_strin
 def test_every_scrub_call_site_in_the_production_face_names_the_variable():
     """擦值调用点一枚都不许无名——上一片留给 `redact()` 的那格豁免，这一片收回了。
 
-    `transport.py` 的 `_scrub_string()` 签名带一个出厂名默认值，那句 docstring 是一条关于
+    `transport.py` 的 `_scrub_string()` 签名过去带一枚出厂名默认值（`#317` 那一片摘的），那句 docstring 是
     **所有调用点**的主张，而它此前零读者：改名部署下少传一个名字，那一路就静默退回出厂名，整套离线
     一条不红。现量的两向：`#314` 的两具同形刀里，落在非 200 正文那一支的能红（有一条用例点名改过
     名字的键），落在"200 而 body 不可解析"那一支的整套 1272 passed 全绿——那一格写不出行为证人
@@ -625,3 +625,25 @@ def test_every_borrowed_scrubber_call_site_in_the_production_face_names_the_vari
     assert len(sites) >= 4, f"只扫到 {len(sites)} 枚借用点：语料或谓词坏了，这条在发空集合格证"
     assert {s[3] for s in sites} == {"src/wolfengine/llm.py", "scripts/calibrate.py"}, \
         f"借用擦值正本的那几本变了，先说清新来的那一本替谁擦：{sorted({s[3] for s in sites})}"
+
+
+def test_the_scrub_helper_takes_no_factory_default_for_the_name_it_erases_by():
+    """`_scrub_string` 的 `key_env` 必填：少交一枚名字要炸，不许静默退回出厂名。
+
+    现量的账（21:07:48Z 的 AST 普查，80 本）：这枚 helper 的真调用点只有正本自己那一本的五枚，每一枚都把
+    名字显式交进去，所以签名上那枚出厂名默认值今天**没有任何调用方走到**——它是 `#86` 那一族在"默认值"
+    这一档的对应物。摘掉之后少交名字当场 `TypeError`，而不是悄悄擦错一枚变量（`#315` 给 `as_response_dict`
+    立的正是同一形）。
+    边界要说白：`redact()` 那一层的默认值**留着**，它有三枚测试调用方走它，其中一枚是故意的负控制，它要证的
+    就是名字不交出去时明文还在。所以这一条只钉一本的一个签名，不写成"擦值层都不许带默认值"——后者会把那枚
+    合法的默认值一起顶红，那是 `#287` K4 那一族付过的过收价。第二格就是把这条边界变成读数：它换了也要红。
+    """
+    import inspect
+
+    from wolfengine import transport
+    param = inspect.signature(transport._scrub_string).parameters["key_env"]
+    assert param.default is inspect.Parameter.empty, \
+        f"`_scrub_string` 的 key_env 又带上了默认值 {param.default!r}：少交名字的那一路会静默退回出厂名"
+    kept = inspect.signature(transport.redact).parameters["key_env"]
+    assert kept.default == Config.api_key_env, \
+        f"`redact()` 那一层的默认值换了：故意的负控制读的就是这一格，先说清它现在替谁交名：{kept.default!r}"
