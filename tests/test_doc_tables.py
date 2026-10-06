@@ -20,11 +20,9 @@ MUTATION NOTE：这一片没有新的生产代码——闸门整个住在测试�
 
 from __future__ import annotations
 
-import pathlib
 import re
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-DOCS = sorted((ROOT / "docs").glob("*.md")) + [ROOT / "README.md"]
+from test_doc_citations import DOCS  # 语料清单住在主人那一本，不抄第二份
 SEP = re.compile(r"^\|[\s:|-]+\|$")
 SPLIT = re.compile(r"(?<!\\)\|")          # 分列只数**没有**反斜杠挡着的竖线
 FENCE = "```"

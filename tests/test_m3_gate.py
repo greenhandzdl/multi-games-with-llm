@@ -21,6 +21,7 @@ import pytest
 from wolfengine import batch, cli, metrics
 from wolfengine.config import Config
 from wolfengine.events import Event, Kind, empty_notice, meta_notice
+from test_golden_game import _NO_TABLE, _OPENED_ONLY_LLM  # 那两具空局住在主人那一本，不抄第二份
 
 # 一局"活着"的发言轮：9 个互不相同的开头、每条都点具体座位、act 是指派里的攻击性动作。
 # 措辞是真量过的（`collapse_round`=0.043、`opening_distinct_rate`=1.0），不是随手写的相似句——
@@ -672,14 +673,11 @@ def test_a_folder_of_two_config_tables_gets_no_gate(tmp_path, key, capsys):
 
 
 # ------------------------------------------------- 一份文件里没有一局，却被数成一局（#99）
-_NO_TABLE = metrics.Game(path=Path("/tmp/no-table.jsonl"), meta={}, events=[])
+#: 这一族只在这里定义 `_OPENED_ONLY` 一具；`_NO_TABLE` 与 `_OPENED_ONLY_LLM`
+#: 和 `tests/test_golden_game.py` 里那两枚逐字同形，`#309` 把它们收成了一份主人家。
 #: `write_meta()` 落在第一条事实之前，于是"开局后被打断"正好留下这一种字节。
 _OPENED_ONLY = metrics.Game(path=Path("/tmp/opened-only.jsonl"),
                             meta={"game_id": "opened-only"}, events=[])
-#: 同一形状，但页眉登记的是真端点：`is_synthetic` 这道门**放行**它，于是它从"多一局"变成了"多一局可用的"。
-_OPENED_ONLY_LLM = metrics.Game(path=Path("/tmp/opened-only-llm.jsonl"),
-                                meta={"game_id": "opened-only-llm", "actor_kinds": ["llm"]},
-                                events=[])
 
 
 def test_a_hollow_llm_log_does_not_join_the_usable_pool():

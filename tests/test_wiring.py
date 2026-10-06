@@ -3878,3 +3878,36 @@ def test_a_parametrized_column_pytest_passes_is_still_judged_as_read():
     assert got == ["test_both_unread(role)", "test_both_unread(seat)",
                    "test_stacked_unread(role)"], got
     assert not any("both_read" in h for h in got), "负控制那一格被收了进来"
+
+
+SINGLE_HOME_CONSTANTS = {
+    "DOCS": "test_doc_citations.py",
+    "_NO_TABLE": "test_golden_game.py",
+    "_OPENED_ONLY_LLM": "test_golden_game.py",
+}
+
+
+def test_the_pinned_module_constants_have_exactly_one_definition_in_tests():
+    """`#309` 收拢的这三枚模块级常量，在 tests 里只许有主人那一本那一次定义。
+
+    两向的坏法不同，所以两条断言都要在。多一处定义＝有人图方便又内联一份，两份会各自漂
+    （收拢前现量：`test_doc_citations.py` 那份语料清单有 19 处读点，`test_doc_tables.py` 那份只有 1 处，
+    加一列文档时改到谁那一本全看手边）；少一处定义＝主人那一份被删或改名，委托方的
+    `from … import …` 会在 collection 期炸掉一整本，而这条断言先它一步点名是谁。
+    这一条自己不收语料：它只数 `ast` 里的模块级绑定，不读 `docs/`。
+    """
+    defs: dict[str, list[str]] = {}
+    for f in sorted(Path("tests").glob("*.py")):
+        for st in ast.parse(f.read_text(encoding="utf-8")).body:
+            if isinstance(st, (ast.Assign, ast.AnnAssign)) and st.value is not None:
+                tgt = st.targets[0] if isinstance(st, ast.Assign) else st.target
+                if isinstance(tgt, ast.Name) and tgt.id in SINGLE_HOME_CONSTANTS:
+                    defs.setdefault(tgt.id, []).append(f"{f.name}:{st.lineno}")
+    for name, owner in sorted(SINGLE_HOME_CONSTANTS.items()):
+        homes = defs.get(name, [])
+        assert len(homes) == 1, (
+            f"`{name}` 在 tests 里有 {len(homes)} 处模块级定义：{homes}"
+            f"——第二份就是 `#309` 收拢掉的那种双写")
+        assert homes[0].startswith(f"{owner}:"), (
+            f"`{name}` 唯一那处定义在 {homes[0]}，主人应是 {owner}"
+            f"——删掉或挪走主人那一份，委托方那本 import 不到东西")

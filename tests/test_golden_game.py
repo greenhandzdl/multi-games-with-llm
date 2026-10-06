@@ -696,8 +696,8 @@ def test_m1_keeps_an_unfinished_game_out_of_the_denominator(golden):
     assert out["good_win_rate"] is None and "分母为空" in out["note"]
 
 
-#: 两种"文件在、局不在"的形状，与 `tests/test_m3_gate.py` 的 `#99` 那一节同形：这里钉的是**胜率**
-#: 这一层的第二个读者（`m1_win_rate` 的 `n_games` 和 `comparison.md` 的「局数」那一格）。
+#: 两种"文件在、局不在"的形状只在这里定义一次，`tests/test_m3_gate.py` 里 `#99` 那一节的用例借这一份。
+#: 这里钉的是**胜率**这一层的第二个读者（`m1_win_rate` 的 `n_games` 和 `comparison.md` 的「局数」那一格）。
 _NO_TABLE = metrics.Game(path=Path("/tmp/no-table.jsonl"), meta={}, events=[])
 #: 页眉登记的是真端点：`is_synthetic` 这道门**放行**它，所以它会溜进 `usable` 并把 `excluded`
 #: 顶出一格 "unfinished": 1 —— 一个从来没打过牌的字节，被说成"打完了没分出胜负"。
