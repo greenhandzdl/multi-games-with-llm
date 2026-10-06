@@ -119,7 +119,7 @@ def test_redact_elides_values_by_key_name_and_by_literal_content(tmp_path, monke
 
     out = redact({"headers": {"Authorization": f"Bearer {sentinel}"},
                   "error": f"POST failed with header Authorization: Bearer {sentinel}",
-                  "usage": {"prompt_tokens": 10}})
+                  "usage": {"prompt_tokens": 10}}, Config().api_key_env)
     blob = json.dumps(out, ensure_ascii=False)
     assert sentinel not in blob, "credential survived redact (value or in-string)"
     assert "<elided>" in blob and out["usage"]["prompt_tokens"] == 10, \
@@ -608,7 +608,7 @@ def test_every_borrowed_scrubber_call_site_in_the_production_face_names_the_vari
     `#315` 那条判据按字面名收，正本自己的 `redact()` 一枚都不在它的语料里——现量的账（20:24:48Z 的
     AST 普查，`census316/`）：全仓库把正本进口再调用的只有四本，无名的一共四枚。`scripts/calibrate.py:68`
     那枚是转手，本片把 `KEY_ENV` 补上；其余三枚住在 `tests/` 里，它们的无名正是被测试的形状——
-    `test_transport.py:463` 那一枚 `unnamed` 是故意的负控制，它要证明不交名字时明文还在——非无名不可。
+    `test_transport.py:463` 那一枚 `unnamed` 从 `#318` 起也交了名——擦值层不带默认值，不交名当场炸。
     所以加宽按**面**切、不按归属函数切：按函数豁免是 `#314` 刚收回的那种，将来任何一处新漏都会躲进去；
     生产面（`src/` 与 `scripts/`）一枚不许无名，将来任何一本新进口正本的自动进分母。测试面整面不扫，
     因为这条主张是关于"脚本发请求读哪一枚变量、擦值就得擦同一枚"，而测试不往磁盘写端点的回声。
@@ -634,9 +634,9 @@ def test_the_scrub_helper_takes_no_factory_default_for_the_name_it_erases_by():
     名字显式交进去，所以签名上那枚出厂名默认值今天**没有任何调用方走到**——它是 `#86` 那一族在"默认值"
     这一档的对应物。摘掉之后少交名字当场 `TypeError`，而不是悄悄擦错一枚变量（`#315` 给 `as_response_dict`
     立的正是同一形）。
-    边界要说白：`redact()` 那一层的默认值**留着**，它有三枚测试调用方走它，其中一枚是故意的负控制，它要证的
-    就是名字不交出去时明文还在。所以这一条只钉一本的一个签名，不写成"擦值层都不许带默认值"——后者会把那枚
-    合法的默认值一起顶红，那是 `#287` K4 那一族付过的过收价。第二格就是把这条边界变成读数：它换了也要红。
+    这一条只钉 helper 那一个签名：`redact()` 那一格 `#317` 当时登记成"留着"的边界（它有三枚测试调用方走默认
+    值，其中一枚是故意的负控制），`#318` 把这三枚各交了名、把边界一并摘了，那一格从此由隔壁那条用例钉。
+    `#287` K4 那一族付过的过收价（判据宽一分，红在两处）就是当时不并格的理由。
     """
     import inspect
 
@@ -644,6 +644,23 @@ def test_the_scrub_helper_takes_no_factory_default_for_the_name_it_erases_by():
     param = inspect.signature(transport._scrub_string).parameters["key_env"]
     assert param.default is inspect.Parameter.empty, \
         f"`_scrub_string` 的 key_env 又带上了默认值 {param.default!r}：少交名字的那一路会静默退回出厂名"
-    kept = inspect.signature(transport.redact).parameters["key_env"]
-    assert kept.default == Config.api_key_env, \
-        f"`redact()` 那一层的默认值换了：故意的负控制读的就是这一格，先说清它现在替谁交名：{kept.default!r}"
+
+
+def test_the_public_scrubber_takes_no_factory_default_for_the_name_it_erases_by():
+    """`redact()` 的 `key_env` 也必填：`#317` 那条"留着"的边界从这一片起收了。
+
+    现量的账（21:32:27Z 按绑定解的 AST 普查，80 本）：正本的真调用点八枚。生产面四枚本来就交名，
+    `scripts/calibrate.py:68` 那一枚交的是 `KEY_ENV`；`tests/` 四枚里三枚走签名上那枚默认值，走到的
+    都是同一个类属性。失效方向和 helper 那格同形而更大：`require_key()` 读的是实例上的名字，默认值却
+    永远是出厂名，改名部署下明文只擦掉一半，而且没有一处调用方会因为忘了交名而变红。摘掉之后这三枚
+    各交一次名，那枚故意的负控制改成交出厂名——它主张的"力气来自那个实参"从此只由实参之差决定，
+    不再混入元数之差。边界跟着挪一格：`redact()` 递归两支交的是形参而不是默认值，这一条不管它们；
+    测试面整面不扫那条（`#316`）也不动，但它的理由今天读出来是两半：测试不往磁盘写端点的回声，
+    加上测试里那枚故意的负控制交的本就是字面量名——`_names_the_deployed_variable` 禁的那一形。
+    """
+    import inspect
+
+    from wolfengine import transport
+    param = inspect.signature(transport.redact).parameters["key_env"]
+    assert param.default is inspect.Parameter.empty, \
+        f"`redact()` 的 key_env 又带上了默认值 {param.default!r}：改名部署下这一路会静默只擦出厂名"

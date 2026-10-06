@@ -30,11 +30,11 @@ REDACT_PATTERNS = ("authorization", "api_key", "apikey", "x-api-key", "secret", 
 TIME_DEPENDENT_STATUSES = (408, 429)
 
 
-def redact(obj: Any, key_env: str = Config.api_key_env) -> Any:
+def redact(obj: Any, key_env: str) -> Any:
     """Replace credential-shaped values, and the literal key of the variable `key_env` names.
 
-    Applied to exception text as well as payloads: `httpx` will happily echo a request in
-    a `RemoteProtocolError` message, and that text is what ends up in a log line.
+    Applied to exception text as well as payloads: `httpx` echoes a request in a
+    `RemoteProtocolError` message, and that text ends up in a log line. `key_env` is required.
     """
     if isinstance(obj, dict):
         return {
