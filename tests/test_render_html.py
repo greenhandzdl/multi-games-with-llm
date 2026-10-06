@@ -765,10 +765,28 @@ _CSS_LONGHAND: dict[str, tuple[str, ...]] = {
 for _side in _CSS_SIDES:
     _CSS_LONGHAND[f"border-{_side}"] = tuple(
         f"border-{_side}-{k}" for k in ("width", "style", "color"))
-# 出现即中止：这几形的层叠算法（!important 的优先、@media 的条件、子选择器的锚）这一格都不会算，
-# 静默按后代选择器算会产出假 DEAD 或假绿，所以宁可让用例红在这里要求扩它。
+# 出现即中止：这几形的层叠算法（!important 的优先、@media 的条件、子选择器的锚、自定义属性的取值）
+# 这一格都不会算，静默按后代选择器算会产出假 DEAD 或假绿，所以宁可让用例红在这里要求扩它。
+# 最后两枚是 `#302` 普查量出来的：那两形曾被按普通属性静默算掉，见 `test_the_cascade_judge_stops_on_forms_it_cannot_compute`。
+# 取用那一枚排在声明那一枚之前：`var(...)` 的括号里必然带着一枚自定义属性名，先撞上 `--` 就会把
+# "这串取用我不会算"报成"这个属性名我不会算"——名单的顺序在这里就是报的诊断。
 _CSS_EXOTIC = ("!important", "@media", "@supports", ":not", ":hover", ":focus", "::",
-               ">", "+", "~")
+               ">", "+", "~", "var(", "--")
+# 名单里每一形一枚夹具，栽的形状就是它自己在真样式表里会长出来的形状。
+_CSS_EXOTIC_FIXTURES = {
+    "!important": "p{color:red !important}",
+    "@media": "@media screen{p{color:red}}",
+    "@supports": "@supports (display:grid){p{color:red}}",
+    ":not": "p:not(.x){color:red}",
+    ":hover": "p:hover{color:red}",
+    ":focus": "p:focus{color:red}",
+    "::": "p::before{color:red}",
+    ">": "p > .x{color:red}",
+    "+": "p + .x{color:red}",
+    "~": "p ~ .x{color:red}",
+    "--": "p{--knob:4px}",
+    "var(": "p{color:var(--knob)}",
+}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -960,3 +978,23 @@ def test_the_cascade_helper_names_a_shadowed_declaration(pair):
                 "border-left:3px solid transparent}", 1), nodes)
     reset = [d for d, _ in dead if d.value == "#0f0e0d"]
     assert len(reset) == 1, [(str(d), who) for d, who in dead]
+
+
+def test_the_cascade_judge_stops_on_forms_it_cannot_compute():
+    """拒绝名单的第一枚证人：名单里的每一形栽进样式表就必须中止，不许静默算过去。
+
+    这一格的来处是 `#302` 那趟 CSS 自定义属性层普查。它量到两侧名册都是 0 格，顺带读到判据自己
+    那一面（`09:14:29Z` 现量）：那两形当时不在名单里，于是 `--knob:4px` 被算成一条属性名为
+    `--knob`、槽位也叫 `--knob` 的普通声明——"声明了没人取"这一向它永远不问；`var(--knob)` 只是
+    `color` 的值字符串，"取了没声明"这一向连读都没读到。尺会算的东西不声明，尺不会算的东西才声明，
+    所以这条用例把名单里每一形逐枚栽一次：不会算就必须大声停，学会算了才许过。
+
+    名单与夹具逐枚对账是这一格的第二半：只断言"名单里今天这些会红"会把证人钉死在今天的名单上，
+    今后往名单里加一形而没给它夹具，用例读到的仍是旧的那几枚——加一形必须同时交一枚能开火的夹具。
+    """
+    assert set(_CSS_EXOTIC) == set(_CSS_EXOTIC_FIXTURES), \
+        (sorted(set(_CSS_EXOTIC) - set(_CSS_EXOTIC_FIXTURES)),
+         sorted(set(_CSS_EXOTIC_FIXTURES) - set(_CSS_EXOTIC)))
+    for exotic, css in _CSS_EXOTIC_FIXTURES.items():
+        with pytest.raises(AssertionError, match=re.escape(f"不会算 {exotic!r}")):
+            _css_decls(css)
