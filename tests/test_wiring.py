@@ -3460,7 +3460,7 @@ def _stored_locals(fn: ast.AST) -> tuple[dict[str, int], set[str], set[str]]:
     """这一层函数落下的简单绑定（名字→首次行号）、全部读取、参数名；class 体整块跳过。
 
     `#256` 把绑定这一侧从"只有 `=`"加宽到四种同样会"赋了没人读"的形状：`for` 的目标、
-    `with … as`、`except … as`、海象 `:=`。元组解包那一档一律不判，口径与 `Assign` 一致。
+    `with … as`、`except … as`、海象 `:=`。元组解包那一档一律不判，口径与 `Assign` 一致；臂捕获那一形也不判（`#295` 量过、登记成边界），它要按臂分作用域才数得对。
     """
     stored: dict[str, int] = {}
     read: set[str] = set()
