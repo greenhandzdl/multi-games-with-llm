@@ -54,8 +54,8 @@ def _scrub_string(s: str, key_env: str = Config.api_key_env) -> str:
     The name comes from `Config`, not from a list of names written here: `require_key()` will
     read whatever `api_key_env` says, so a deployment that renames the variable used to send a
     key this scrubber never looked up — while the endpoint's echo of it went straight into
-    `error`, and from there into the log. The default is the factory name because `redact()` has
-    no config in hand; every call site that does have one passes it.
+    `error`, and from there into the log. The default is the factory name because `redact()`
+    has no config in hand; every call site that does have one passes it — this function's own.
     """
     value = os.environ.get(key_env)
     if value and value in s:

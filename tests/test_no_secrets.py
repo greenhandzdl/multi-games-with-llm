@@ -442,3 +442,112 @@ def test_the_key_name_probe_fires_on_each_shape_and_stays_off_prose():
     assert probe(f'assert "{name}" in err\n', "e.py") == [], "把名字当断言内容收进来了"
     assert probe("from wolfengine.config import Config\n"
                  f'KEY_ENV = Config().api_key_env\n', "f.py") == [], "派生的那一形被误收"
+
+
+# ---------------------------------- 每一处擦值调用点都要交出它擦的是哪个变量的名字
+
+def _names_the_deployed_variable(arg: ast.expr) -> bool:
+    """交给它的那个表达式，真的跟着部署走吗。
+
+    两形"看着是名字、其实永远是出厂名"要拒：字符串字面量，和**从类上直接取**的那一枚
+    （`Config.api_key_env` 读的是字段默认值，实例改名之后它不变——正是 `_scrub_string` 签名上那个
+    默认值的拼写）。从实例上取的都放行（`self.cfg.api_key_env`、`CONF.api_key_env`、`Config()` 打头
+    的那一枚），以及局部名——静态读不出它绑的是谁，但它的失效方向是"当场报错"，不是"静默退回出厂名"。
+    """
+    if isinstance(arg, ast.Constant):
+        return False
+    return not (isinstance(arg, ast.Attribute) and arg.attr == "api_key_env"
+                and isinstance(arg.value, ast.Name) and arg.value.id == "Config")
+
+
+def _scrub_call_sites(src: str, rel: str) -> list[tuple[int, str, bool, str]]:
+    """每一处 `_scrub_string(...)` 的调用点：行号、归属函数、有没有交出**跟着部署走**的名字、出处。
+
+    归属按最近的 enclosing function 算，模块顶层那一档记成 `<module>`——不然"写在函数体外面的一处漏擦"
+    会整类躲掉：判据看不见的那一类既不红，也不进分母（`#226`/`#242` 那一族）。挂在对象上的那一形
+    （`t._scrub_string(...)`）也算调用点。
+    """
+    tree = ast.parse(src)
+    parent: dict[ast.AST, ast.AST] = {}
+    for node in ast.walk(tree):
+        for child in ast.iter_child_nodes(node):
+            parent[child] = node
+
+    def owner_of(node: ast.AST) -> str:
+        while (node := parent.get(node)) is not None:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                return node.name
+        return "<module>"
+
+    out: list[tuple[int, str, bool, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        f = node.func
+        called = f.id if isinstance(f, ast.Name) else (f.attr if isinstance(f, ast.Attribute) else "")
+        if called != "_scrub_string":
+            continue
+        given = node.args[1] if len(node.args) >= 2 else next(
+            (k.value for k in node.keywords if k.arg == "key_env"), None)
+        named = given is not None and _names_the_deployed_variable(given)
+        out.append((node.lineno, owner_of(node), named, rel))
+    return out
+
+
+def test_every_scrub_call_site_in_the_production_face_names_the_variable():
+    """擦值调用点要么把名字交出去，要么点名说是谁豁免的——`redact()` 内部那一处是唯一的豁免。
+
+    `transport.py` 的 `_scrub_string()` 签名带一个出厂名默认值，那句 docstring 是一条关于
+    **所有调用点**的主张，而它此前零读者：改名部署下少传一个名字，那一路就静默退回出厂名，整套离线
+    一条不红。现量的两向：`#314` 的两具同形刀里，落在非 200 正文那一支的能红（有一条用例点名改过
+    名字的键），落在"200 而 body 不可解析"那一支的整套 1272 passed 全绿——那一格写不出行为证人
+    （它擦的那串由 `JSONDecodeError` 拼出来，而这条异常的话里只有位置没有正文），所以这一格只能由
+    形状判据认领。豁免写成"归属哪个函数"而不是"参数长什么样"，宽谓词会把将来任何一处漏擦都放过去。
+    第二参数光"有"还不够：第一版判据只数参数个数，K174 那具刀（把名字换成从类上直接取的那一枚）在它
+    面前是绿的，实测 45 passed——"交了个名字"和"交的是部署改名之后的那个名字"不是一件事。
+    """
+    sites: list[tuple[int, str, bool, str]] = []
+    for face in ("src", "scripts", "tests"):
+        for book in sorted((ROOT / face).rglob("*.py")):
+            if "__pycache__" in book.parts:
+                continue
+            text = book.read_text(encoding="utf-8")
+            if "_scrub_string" not in text:
+                continue
+            sites += _scrub_call_sites(text, str(book.relative_to(ROOT)))
+    loose = [s for s in sites if not s[2] and s[1] != "redact"]
+    assert not loose, f"这些擦值调用点没交出跟着部署走的名字，改名部署下会退回出厂名：{loose}"
+    exempt = [s for s in sites if not s[2]]
+    assert len(exempt) == 1, f"豁免假定 `redact()` 里只有一处无名调用，实测 {exempt}"
+    assert len([s for s in sites if s[2]]) >= 4, \
+        f"只扫到 {len([s for s in sites if s[2]])} 处带名字的调用点：语料或谓词坏了，这条在发空集合格证"
+
+
+def test_the_scrub_site_probe_fires_on_each_shape_and_only_on_the_exempt_owner():
+    """十形各一具合成证人，再加两形负控制。
+
+    正控制不靠仓库里恰好有几枚调用点：仓库会被修干净，而尺比形状窄那种错在修干净之后是沉默的。
+    """
+    probe = _scrub_call_sites
+    assert probe("def chat():\n    return _scrub_string(text)\n", "a.py") == \
+        [(2, "chat", False, "a.py")], "漏传那一形没收到"
+    assert probe("def chat():\n    return _scrub_string(text, env)\n", "b.py")[0][2], "位置形没认成带名字"
+    assert probe("def chat():\n    return _scrub_string(text, key_env=env)\n", "c.py")[0][2], \
+        "关键字形没认成带名字"
+    assert probe("import t\n\ndef chat():\n    return t._scrub_string(text)\n", "d.py") == \
+        [(4, "chat", False, "d.py")], "挂在对象上的那一形没收到"
+    assert probe("def redact(o):\n    return _scrub_string(o)\n", "e.py")[0][1] == "redact", \
+        "豁免按归属函数认，那一形没落进 redact 名下"
+    assert probe("class C:\n    def m(self):\n        return _scrub_string(text)\n", "i.py") == \
+        [(3, "m", False, "i.py")], "方法体里的那一形没收到"
+    assert probe("_scrub_string(o)\n", "f.py") == [(1, "<module>", False, "f.py")], "顶层那一形没收到"
+    # 交了名字、但那名字永远等于出厂名的那两形，和"没交"是同一件事
+    assert probe("def chat():\n    return _scrub_string(text, Config.api_key_env)\n", "j.py") == \
+        [(2, "chat", False, "j.py")], "从类上直接取的那一枚被认成了跟着部署走的名字"
+    assert probe("def chat():\n    return _scrub_string(text, 'SOME_FIXED_NAME')\n", "k.py") == \
+        [(2, "chat", False, "k.py")], "字面量那一枚被认成了名字"
+    assert probe("def chat(self):\n    return _scrub_string(text, self.cfg.api_key_env)\n", "l.py")[0][2], \
+        "生产里那一形（从实例上取）被误拒"
+    # 负控制：散文里出现这个形状不是调用点
+    assert probe('"""这一形写在 docstring 里。"""\n', "g.py") == []
+    assert probe("# 这一形写在注释里。\n", "h.py") == []
