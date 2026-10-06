@@ -37,7 +37,7 @@ from wolfengine.metrics import (
     opening_distinct_rate,
     template_top_fragments,
 )
-from wolfengine.transport import usage_from
+from wolfengine.transport import redact as transport_redact, usage_from
 
 CONF = Config()
 KEY_ENV = CONF.api_key_env
@@ -46,26 +46,26 @@ KEY_ENV = CONF.api_key_env
 UNIT = "Villager Aldric walked to the market and bought bread cheese and rope. "
 
 
-# Keys whose *value* is a credential. Deliberately narrow: matching the bare substring
-# "token" elided half of this script's own findings (usage_keys_seen, has_cached_tokens),
-# i.e. the guard destroyed the evidence it was guarding. Value-level scrubbing below is
-# what actually protects the key.
-CRED_KEYS = ("authorization", "api_key", "apikey", "x-api-key", "secret", "password", "credential")
+# The seven credential key names have one author: `REDACT_PATTERNS` in wolfengine/transport.py.
+# What this script uses is that module's `redact()` — not a second copy of the list, not a second
+# copy of the walk. Why the list stays narrow is the accident this script had: the bare substring
+# "token" once elided half of its own findings (usage_keys_seen, has_cached_tokens), so the guard
+# meant to hide a key destroyed the evidence it guarded. `CRED_KEYS` had been that copy's list.
 
 
 def redact(obj):
-    """Defence in depth: no auth material may ever reach a printed value."""
-    if isinstance(obj, dict):
-        return {
-            k: ("<elided>" if any(t in str(k).lower() for t in CRED_KEYS) else redact(v))
-            for k, v in obj.items()
-        }
-    if isinstance(obj, list):
-        return [redact(v) for v in obj]
-    if isinstance(obj, str):
-        key = os.environ.get(KEY_ENV, "")
-        return obj.replace(key, "<elided>") if key else obj
-    return obj
+    """Defence in depth: no auth material may ever reach a printed value.
+
+    The body is the transport one rather than a second copy of it. The copy had already drifted in
+    the silent direction: it matched a list but not a tuple, so a tuple-valued field passed straight
+    through it and into this script's own report, while `elided_paths()` only finds values that were
+    replaced by the mark — the page header then under-reported the blanked findings by exactly the
+    amount that leaked. Two witnesses in `tests/test_calibrate_guard.py`: a tuple takes the same
+    branch here as in the author, and the seven key names no longer appear as a literal in this
+    file. Everything below this line keeps its old line number on purpose — the archive points at
+    the definition here by number.
+    """
+    return transport_redact(obj)
 
 
 def report_sections(features, stream, ratio, tp, lat, temps) -> dict:
@@ -546,7 +546,7 @@ def twin_line(src: str) -> str:
     而这一页说的是仓库里那一份，所以取子句、不取整句——否则一次 `--from-json` 用相对路径、
     守卫测试用绝对路径，报告就会因为写法分叉。
     """
-    from wolfengine.metrics import load_calibration  # 不进模块级导入：那会把 `CRED_KEYS` 顶到 54，归档里有一处按 53 点它
+    from wolfengine.metrics import load_calibration  # 不进模块级导入：那会把下面那块注释顶到 54，归档里有一处按 53 点它
     verdict = load_calibration(src)
     if verdict["usable"]:
         return TWIN_PROMISE
@@ -634,10 +634,10 @@ def render_md(features, stream, ratio, tp, lat, temps, args, *, provenance: str 
         # read these cells back. "Expected" is a reading of the code above, not a measurement —
         # this report is an offline re-render of an older sidecar, and saying otherwise would be
         # exactly the "claim that lives only in prose" this repo keeps hunting.
-        L.append("  - 上面那句 remedy 的后半已经做了：`CRED_KEYS` 里不再有裸 `token`（就是它当年把 "
-                 "`has_cached_tokens`、`usage_keys_seen` 一起遮掉的），被遮的格子也由 `elided_paths` "
-                 "逐格报出来而不是静默消失。**下一次 M0 重跑预期能把这些格读回来**——这是从代码读出的"
-                 "预期，不是本次重跑实测（本报告是旧 sidecar 的离线重渲染）。\n")
+        L.append("  - 上面那句 remedy 的后半已经做了：那七枚键名只有一个作者（`transport.REDACT_PATTERNS`），"
+                 "名单里没有裸 `token`（就是它当年把 `has_cached_tokens`、`usage_keys_seen` 一起遮掉的），"
+                 "被遮的格子也由 `elided_paths` 逐格报出来而不是静默消失。**下一次 M0 重跑预期能把这些格"
+                 "读回来**——这是从代码读出的预期，不是本次重跑实测（本报告是旧 sidecar 的离线重渲染）。\n")
     if failed:
         def cell(r: dict) -> str:
             # Upstream error bodies contain newlines and pipes; either one silently destroys

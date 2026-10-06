@@ -1,10 +1,10 @@
 """calibrate.py 的自毁守卫：redact 抹掉了什么，必须留在报告上。
 
-背景是真实事故而不是假想：第一版 `CRED_KEYS` 里有裸子串 `"token"`，于是
+背景是真实事故而不是假想：抄本那份 `CRED_KEYS` 里有裸子串 `"token"`，于是
 `usage_keys_seen`、`has_cached_tokens` 这些**结论本身**被写成 `<elided>`，报告把
 "端点没有这个字段"和"我们的防护逻辑把它遮掉了"渲染成同一行字。
 
-键名收窄修好了那一次。这个守卫管的是下一次——往 `CRED_KEYS` 里再加一个会撞上结论的
+键名收窄修好了那一次。这个守卫管的是下一次——往正本 `REDACT_PATTERNS` 里再加一个会撞上结论的
 键，或端点哪天返回一个真含 `api_key` 字段的 usage——都该在 §0 里被点名，而不是静默地
 变成一个看起来可信的空格。
 
@@ -203,3 +203,45 @@ def test_the_twin_line_keeps_its_promise_for_a_sidecar_that_carries_the_block(ca
     assert "取值以孪生件为准" in line, line
     page = (tmp_path / "g.md").read_text(encoding="utf-8")
     assert "尚不构成常数来源" not in page, "同一页不许一边说为准、一边说自己不是来源"
+
+
+# ------------------------------------------------------------------ the copy that diverged
+def test_the_scripts_copy_scrubs_a_tuple_the_way_the_author_does(cal, monkeypatch):
+    """`scripts/calibrate.py` 抄了一份 `redact()`，而抄本在元组那一支上已经和正本分叉。
+
+    正本那一支收 list 与 tuple，抄本只收 list：把一个元组喂给抄本，它整支原样透传，里面那条凭据
+    明文一路进体检报告。失效方向是静默的——`elided_paths()` 只认被换成标记的整值，透传过去的东西
+    在它眼里"什么都没遮"，于是页眉那句"另有 N 处的值被抹去"也跟着少报。这一条按正本的行为钉住：
+    元组归一成列表、值盖掉、明文不许留在 repr 里。
+    """
+    secret = "SENTINELNOTKEY-abc123"
+    monkeypatch.setenv(cal.KEY_ENV, secret)
+
+    out = cal.redact({"usage": (f"Authorization: Bearer {secret}",)})
+
+    assert out["usage"] == ["Authorization: Bearer <elided>"], out
+    assert secret not in repr(out), f"明文穿过了抄本：{out!r}"
+
+
+def test_the_credential_key_names_have_one_author(cal, monkeypatch):
+    """键名名单与遮罩逻辑都不许有第二处字面量：正本改一枚、抄本静默少一枚，是"单一作者"那一族。
+
+    两样东西各钉一支。① `cal.redact` 必须把活交给 `transport.redact`——按注入的哨兵数它有没有被
+    调用，这里还留着一份自己的实现就摸不到哨兵；这条与被指派的元组那条是同一动作的两面，元组那条
+    管"抄本会漂移"，这条管"抄本不许存在"。② 七枚键名在这个文件里一律不得以带引号的字面量出现，
+    两种引号都数——当年那份 `CRED_KEYS` 就是这么长出来的。
+
+    第②支的失效方向是过收：将来若真要往体检请求里写一个同名字段（今天没有，七枚的带引号计数实测
+    全为 0），会被这条挡下，那时要动的判据本身，不是把它放宽。
+    """
+    from wolfengine import transport
+
+    calls: list = []
+    monkeypatch.setattr(cal, "transport_redact", lambda obj: calls.append(obj) or obj)
+    cal.redact({"usage": []})
+    assert calls == [{"usage": []}], "redact() 没有交回正本：这个文件里还留着一份自己的实现"
+
+    body = (ROOT / "scripts" / "calibrate.py").read_text(encoding="utf-8")
+    for name in transport.REDACT_PATTERNS:
+        found = body.count(f'"{name}"') + body.count(f"'{name}'")
+        assert found == 0, f'scripts/calibrate.py 里写着 "{name}" 的字面量 {found} 处'
