@@ -3838,3 +3838,43 @@ def test_the_renumber_price_is_recomputable_and_tells_upstream_from_downstream(t
     for key, (anchor, total, m, a, tt, s, down) in sorted(prices.items()):
         print(f"  {key:<38} 锚点 {anchor:>4} 合计 {total:>3}（手册 {m} · 归档 {a} · "
               f"tests {tt} · scripts {s}）下游 {down}")
+
+
+def test_a_parametrized_column_pytest_passes_is_still_judged_as_read():
+    """`#293`：参数化那一形里"框架全绿、那一格没人读"的这一档，只有 `#86`/`#227` 那把尺管得着。
+
+    04:22:06Z 在仓库外把三种形状各跑一趟（一本一形，免得一处收集错误把另外两形一起吞掉）：柄点名
+    了参数表里没有的那一格，pytest 自己就停在收集期（两形都是 rc 2，报 `function uses no argument`）；
+    而柄与参数表对得上、body 从不读那一格，**pytest 全绿**（rc 0，一条 passed）。后一档是这条用例
+    的对象：框架不报错不等于那一格有用——值被喂进来、断言里一次没出现，那一列从此是装饰，改它
+    不会让任何用例变红。
+
+    三形报两格不报一格。`p/stacked_unread` 钉的是叠两柄那一形（真语料里有这种写法，`#293` 的普查
+    量过；只收第一柄的尺会把第二柄那格整格漏掉）。`p/both_unread` 一柄两格全不读，要报**两枚**——
+    按柄数数的尺在这里会把枚数报错。`p/both_read` 是不该报的那一格，过收方向的负控制（`#251` 那一课：
+    只证"摘掉会红"对收多是沉默的）。
+
+    夹具豁免在这里不许顺手放行那三枚：`seat`/`role` 都不是本仓库声明过的夹具，按 `#227` 收窄后的
+    口径逐枚参数问，它们就是签名谎言。合成键名不带后缀，理由与 `#227` 那条相同。
+    """
+    corpus = {
+        "p/stacked_unread": 'import pytest\n'
+                            '@pytest.mark.parametrize("seat", ["a"])\n'
+                            '@pytest.mark.parametrize("role", ["wolf"])\n'
+                            'def test_stacked_unread(seat, role):\n'
+                            '    assert seat == "a"\n',
+        "p/both_read": 'import pytest\n'
+                       '@pytest.mark.parametrize("seat,role", [("a", "wolf")])\n'
+                       'def test_both_read(seat, role):\n'
+                       '    assert seat == "a" and role == "wolf"\n',
+        "p/both_unread": 'import pytest\n'
+                         '@pytest.mark.parametrize("seat,role", [("a", "wolf")])\n'
+                         'def test_both_unread(seat, role):\n'
+                         '    assert 1\n',
+    }
+    trees = {name: ast.parse(src) for name, src in corpus.items()}
+    hits = _dead_arguments_in(trees, trees, framework_called=True)
+    got = sorted(h.split(" ", 1)[1] for h in hits)
+    assert got == ["test_both_unread(role)", "test_both_unread(seat)",
+                   "test_stacked_unread(role)"], got
+    assert not any("both_read" in h for h in got), "负控制那一格被收了进来"
