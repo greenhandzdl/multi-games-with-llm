@@ -3635,6 +3635,106 @@ def test_the_local_name_ruler_fires_once_and_spares_the_carved_out_shapes(tmp_pa
         f"裸注解、与参数同名，以及 `for`/`with`/`except`/`:=` 的活样本各钉一次不红。实际报出：{got}")
 
 
+def _nested_defs_without_in_scope_reader(roots: tuple[str, ...] = ("src", "tests", "scripts")):
+    """`(候选总数, 名单)`——名单里是**同作用域没人递到它**的嵌套 def。
+
+    嵌套 def 的名字只活在那一层 enclosing 函数里，函数外按同名写的东西都属于别的名字空间
+    （`#205` 那族替付账在这一层的翻版）。所以读者只数 enclosing 函数体内、且**不在它自己子树里**的
+    `ast.Name`(Load) 与 `ast.Attribute.attr`：自己调自己不算被递到，那还是不可达。
+    兄弟嵌套 def 里的引用**算**读者——这一条是有意的宽松，代价写在仓库侧那条用例的句子里：
+    两个互相引用、外面没人递到的那一形（死簇）在这里会被放过，测试侧那一族由 `#166` 的可达性尺管。
+    """
+    out: list[str] = []
+    total = 0
+    for path, tree in _parsed_trees(roots).items():
+        for parent in ast.walk(tree):
+            if not isinstance(parent, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            inner = [s for s in parent.body
+                     if isinstance(s, (ast.FunctionDef, ast.AsyncFunctionDef))]
+            if not inner:
+                continue
+            total += len(inner)
+            for cand in inner:
+                reached = False
+                stack = [parent]
+                while stack:
+                    node = stack.pop()
+                    if node is cand:
+                        continue
+                    stack.extend(ast.iter_child_nodes(node))
+                    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load) \
+                            and node.id == cand.name:
+                        reached = True
+                    elif isinstance(node, ast.Attribute) and node.attr == cand.name:
+                        reached = True
+                if not reached:
+                    out.append(f"{path}:{cand.lineno} {parent.name}.{cand.name}")
+    return total, out
+
+
+def test_a_nested_definition_nothing_in_its_own_scope_hands_over_is_dead():
+    """`#291`：死名探测的函数体那一层——局部名（`#255`/`#256`）有尺，**嵌套 def** 没有。
+
+    `18:48:08Z` 只读普查三棵树：80 本在册 `.py` 全可解析，嵌套 def 共 108 枚（`src` 12／`tests` 90／
+    `scripts` 6），按"同作用域有没有被递到"数读者是 **0 枚零引用**——今天这一层没有死码可删。同场拿两种
+    注入各跑一遍这把尺（`18:48:38Z`）：插一枚没人递到的嵌套 def，候选 108→109、零引用 0→1 且点名的就是
+    那一枚；插一枚当场被 `_ = 名字` 递到的，候选同样涨到 109 而零引用仍是 0。所以这一格不是替一个真缺陷
+    补尺，是给这一层**有了判据**这件事落尺；能不能开火由旁边那条合成用例钉（`#143`）。
+
+    为什么这一层不需要 `#290` 说的那种"按作用域数读者"的重活：嵌套 def 的名字天然关在同一层函数里，
+    作用域就是它的边界，不需要反推类型。真正要反推接收者的是**类体 def** 那一层——同一趟普查里
+    `Client.complete` 按名字在场数到 28 枚、按"接收者落得到这具类"只数到 15 枚，那 15 枚全在声明它的那本
+    文件里；`scripts` 的类体 def 今天一共 1 枚（非 dunder）、有读者，面只有 1 格，按 `#254` 不加分支。
+
+    尺面的一条已知宽松：`getattr`/`locals`/`vars`/`eval`/`exec` 这类按**字符串名**取的读法这层看不见。
+    `18:49:07Z` 数过：三棵树里同时含这类 token 且有嵌套 def 的文件 4 本（`tests` 那三本加尺子自己），
+    今天没有一枚靠它续命，所以不加降级分支——哪天那一枚出现，这条句子先变成假话。
+    """
+    total, dead = _nested_defs_without_in_scope_reader(("src", "tests", "scripts"))
+    assert total >= 100, f"三棵树只数到 {total} 枚嵌套 def，多半是收集坏了"
+    assert not dead, f"这些嵌套 def 除了自己调用自己，同一层函数里没有一处把它递出去：{dead}"
+
+
+def test_the_nested_def_ruler_names_the_unhanded_one_and_spares_the_handed(tmp_path):
+    """正控制：一枚该红的钉住，四形该放过的逐形钉一次（含"只自己调自己"那一形）。
+
+    仓库侧今天是空的，"检测能力在"只能往 `tmp_path` 写一小段代码来钉。`self_only` 是这一片唯一
+    比"名字在场"更严的那一格：把子树剪掉之后，它除了自己没人递到，必须红。
+    """
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "mod.py").write_text(
+        "def outer():\n"
+        "    def self_only(n):\n"
+        "        return self_only(n - 1) if n else 0\n"
+        "    def handed():\n"
+        "        return 1\n"
+        "    return handed\n"
+        "def caller():\n"
+        "    def by_call():\n"
+        "        return 2\n"
+        "    return by_call()\n"
+        "def attr_side():\n"
+        "    class Box:\n"
+        "        by_attr = 0\n"
+        "    def by_attr():\n"
+        "        return 3\n"
+        "    Box.by_attr = by_attr()\n"
+        "    return Box\n"
+        "def sibling():\n"
+        "    def helper():\n"
+        "        return 4\n"
+        "    def user():\n"
+        "        return helper()\n"
+        "    return user\n", encoding="utf-8")
+    total, dead = _nested_defs_without_in_scope_reader((str(tmp_path),))
+    assert total == 6, f"夹具该数到 6 枚嵌套 def，实际 {total} 枚——收集坏了：{dead}"
+    got = [c.split(".")[-1] for c in dead]
+    assert got == ["self_only"], (
+        f"只有 `self_only` 该红（自己调自己不算被递到），其余四形（返回出去、当场调用、属性位、"
+        f"兄弟引用）都不该红。实际报出：{dead}")
+
+
 # --------------------------------------------------------------------------- #262：顶号代价
 # 名册那一格里不许抄"下一次提交就会顶成新数"的那一族（`#262`）。两种形状：枚数、行号。
 PINNED_IN_TRIAGE = re.compile(r"\d+ 处|第 \d+[、和与\d]* ?行")
