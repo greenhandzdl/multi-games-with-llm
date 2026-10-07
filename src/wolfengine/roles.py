@@ -109,7 +109,7 @@ BOARD_9 = Board(
 BOARDS = {BOARD_9.id: BOARD_9}
 
 
-def board_for(seat_count: int = 9) -> Board:
+def board_for(seat_count: int) -> Board:
     if seat_count != 9:
         # 只实现 9 人板。别的板要么改变阵营平衡（8 人 3 狼太强），要么需要新角色
         # （12 人加守卫/狼王，见 plan §13 判定为过度工程）。宁可报错不要悄悄换板。

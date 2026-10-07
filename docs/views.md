@@ -81,7 +81,7 @@ engine belief（`build_belief(seat, [e for e in events if e.visible_to(seat)])`�
 `game_over`，而不是 `god` 参数——`game_over_event()` 是唯一闸门，也是这个文件里最像"UI 层金丝雀"
 的守卫：删掉它，观众 HTML 立刻变成 spoiler，没有别的症状。
 
-角色名统一走 `roles.board_for()` 的 `name_zh`，两种视图同一份词表。有两处**故意**保留英文 id：
+角色名统一走 `roles.BOARD_9` 的 `name_zh`，两种视图同一份词表。有两处**故意**保留英文 id：
 `data-role="wolf"` 这类机器可读钩子（与 `data-death="9:wolf_kill"` 一致），以及发牌那一行
 `法官（私发）：你的身份是 wolf，队友是 2号、4号`——那是 `render_line` 渲染出的**模型当时被告诉的那句话**，
 时间线渲染器全工程只有一个，不为了排版好看而改它。

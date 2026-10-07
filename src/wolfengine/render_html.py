@@ -154,7 +154,7 @@ def role_zh(seat: int, ids: dict[int, str]) -> str:
     board that grew a role should show it, not hide it.
     """
     try:
-        return roles.board_for().spec(ids[seat]).name_zh
+        return roles.BOARD_9.spec(ids[seat]).name_zh
     except (KeyError, AttributeError, ValueError):
         return ids.get(seat, "?")
 

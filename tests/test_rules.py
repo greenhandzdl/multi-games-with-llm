@@ -551,3 +551,12 @@ def test_teammates_view_is_wolves_only():
     assert st.teammates_of(4) == frozenset()
     st.seats[7].alive = False
     assert st.teammates_of(1) == frozenset({9})
+
+
+# ------------------------------------------------- the factory 9 has one author, in config
+
+def test_board_for_takes_no_default_seat_count():
+    """`Config.seat_count` owns the factory 9, so `board_for` must not restate it as a default:
+    a signature default is a value no caller can steer, and the caller that relied on it wanted
+    the board itself (`BOARD_9`) rather than a seat count."""
+    assert board_for.__defaults__ is None
