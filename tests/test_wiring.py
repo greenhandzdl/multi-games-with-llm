@@ -4184,7 +4184,7 @@ def test_an_engine_default_value_does_not_copy_its_config_or_cli_author():
     只剩一个作者；调用方照旧怎么传都行，只是不再由签名替它编一个。
 
     摘的是这两枚，不是「所有没人走的默认值」：其余那些没有第二个作者——哨兵 `None`、「取前几个」这类本模块
-    自己的口径。它们的处置理由在 `#322` 那一节逐条写着。
+    自己的口径，外加 `#323` 扫出的那一枚真抄本（已被它摘掉）。处置理由在 `#322` 那一节逐条写着。
     """
     import inspect
 
@@ -4207,4 +4207,172 @@ def test_the_missing_default_predicate_also_reads_a_real_default():
 
     assert inspect.signature(with_default).parameters["b2_cap"].default == 1500
     assert inspect.signature(without_default).parameters["b2_cap"].default is inspect.Parameter.empty
+
+
+# ------------------------------------------------- #324: 抄本按名扫，不靠名册点名
+
+def _literal_word(node: ast.expr) -> str | None:
+    """字面量的拼写（`ast.unparse` 归一），非字面量给 `None`。
+
+    「逐字相同」是刻意的：`9` 和 `9.0`、`"data"` 和 `DATA_DIR` 都不算撞上。宁可放过一枚换了写法的抄本，
+    也不要收进一枚靠数值巧合撞上的——`#323` 用宽口径数到 207 枚「同值」，那一面全是哨兵在撞。
+    """
+    if isinstance(node, ast.Constant):
+        return ast.unparse(node)
+    if isinstance(node, (ast.Tuple, ast.List, ast.Set)):
+        if all(_literal_word(e) is not None for e in node.elts):
+            return ast.unparse(node)
+    elif isinstance(node, ast.Dict):
+        if (all(_literal_word(v) is not None for v in node.values)
+                and all(k is None or _literal_word(k) is not None for k in node.keys)):
+            return ast.unparse(node)
+    return None
+
+
+def _default_author_bindings(trees: dict[str, "ast.Module"]) -> list[tuple[str, str, str]]:
+    """作者面：模块级与类级绑定右侧的字面量，遇到函数（含 lambda）就不往下走。
+
+    函数体里的 `seat_count = 9` 不是作者，那是本地重绑：`#323` 量过把它算进来的价，src 一侧光这一档
+    就多收十九枚。argparse 的 `default=` 也不算作者，理由见下面那条用例点名的 `--seed`。
+    """
+    rows: list[tuple[str, str, str]] = []
+    for book, tree in trees.items():
+        def walk(node: ast.AST) -> None:
+            for ch in ast.iter_child_nodes(node):
+                if isinstance(ch, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                    continue
+                if isinstance(ch, ast.Assign):
+                    targets = [(t.id, ch.value) for t in ch.targets if isinstance(t, ast.Name)]
+                elif isinstance(ch, ast.AnnAssign) and isinstance(ch.target, ast.Name):
+                    targets = [] if ch.value is None else [(ch.target.id, ch.value)]
+                else:
+                    targets = []
+                for name, value in targets:
+                    word = _literal_word(value)
+                    if word is not None:
+                        rows.append((name, word, f"{book}:{ch.lineno} {name}"))
+                walk(ch)
+
+        walk(tree)
+    return rows
+
+
+def _parameter_defaults(tree: "ast.Module") -> list[tuple[str, str | None, int, str]]:
+    """每一枚带默认值的入参：名字、值的拼写（非字面量为 `None`）、行号、它挂在哪个函数上。"""
+    rows = []
+    for fn, cls, _depth in _functions_of(tree):
+        a = fn.args
+        positional = list(a.posonlyargs) + list(a.args)
+        paired = list(zip(positional,
+                          [None] * (len(positional) - len(a.defaults)) + list(a.defaults)))
+        paired += list(zip(a.kwonlyargs, a.kw_defaults))
+        for arg, default in paired:
+            if default is not None:
+                rows.append((arg.arg, _literal_word(default), default.lineno,
+                             f"{cls}.{fn.name}" if cls else fn.name))
+    return rows
+
+
+def _restated_defaults(trees: dict[str, "ast.Module"],
+                       authors: list[tuple[str, str, str]]) -> list[str]:
+    """判据只住这一处（同 `#153` 那笔账）：入参名与默认值都逐字撞上作者面 ⇒ 第二份抄本。"""
+    by_pair = {}
+    for name, word, site in authors:
+        by_pair.setdefault((name, word), site)
+    out = []
+    for book, tree in trees.items():
+        for name, word, line, where in _parameter_defaults(tree):
+            site = by_pair.get((name, word))
+            if site is not None:
+                out.append(f"{book}:{line} {where}({name}={word}) ⇐ {site}")
+    return sorted(out)
+
+
+_RESTATION_FIXTURE = '''
+"""合成的一本书：两枚真抄本（作者各在一层），三枚「看着像抄本但不是」。"""
+seat_count: int = 9
+
+
+class Config:
+    out_dir: str = "data"
+    timeout: float = 2.5
+
+
+def board_for(seat_count: int = 9) -> int:
+    return seat_count
+
+
+def boot(timeout: float = 2.5) -> float:
+    return timeout
+
+
+def play(out: str = "data") -> str:
+    return out
+
+
+def draw(other: int = 9) -> int:
+    return other
+
+
+def build():
+    ap.add_argument("--seed", default=7)
+
+
+def cluster(seed: int = 7) -> int:
+    return seed
+'''
+
+
+def test_the_restatement_predicate_fires_on_both_author_layers_and_on_nothing_else():
+    """正控制：判据在这段合成源码上只能点出 `board_for` 与 `boot` 那两枚。
+
+    五格各有去向，缺一个方向这把尺就是钝的：
+
+    - `board_for(seat_count=9)` ⇒ 要红，作者站在模块级那枚 `seat_count = 9` 上。
+    - `boot(timeout=2.5)` ⇒ 要红，作者站在 `Config` 的**类级**字段上。`#323` 摘掉的 `roles.board_for`
+      正是这一形——它的作者在 `config.py` 里 `Config` 的字段上，所以只认模块级的那把尺会放过真抄本。
+    - `play(out="data")` 与 `draw(other=9)` ⇒ 不许红。值撞上而名字没撞上——`#323` 用宽口径数到的那 207
+      枚「同值」就是这么攒出来的，那一面没有分辨力。
+    - `cluster(seed=7)` ⇒ 不许红。它撞的是 `build()` 里 argparse 的 `default=7`：`--seed` 管发牌，
+      `cluster` 的 `seed` 管重采样，两个旋钮各管一件事。这是作者面收 `default=` 要付的误收，`#324` 里
+      记着，所以作者面停在「绑定」这一形。
+
+    `build()` 里那行 `add_argument` 也落在函数体内：它同时替「作者面不潜进函数体」那一档作证。
+    """
+    tree = ast.parse(_RESTATION_FIXTURE)
+    # 合成簿不叫 `*.py`：那句里的 `名:号` 会被行号闸门当成真引用去仓库里找这本书。
+    authors = _default_author_bindings({"fixture": tree})
+    hits = _restated_defaults({"fixture": tree}, authors)
+    assert hits == [
+        "fixture:11 board_for(seat_count=9) ⇐ fixture:3 seat_count",
+        "fixture:15 boot(timeout=2.5) ⇐ fixture:8 timeout",
+    ], (f"判据读出 {hits}——应当只有那两枚同名同值的抄本，一层作者一枚。"
+        "多出来是过收（作者面放得太宽，或逐字比较退成了只看值），少了是漏判（两形作者少认了一层）")
+
+
+DEFAULT_AUTHOR_BOOKS = ("src/wolfengine/config.py", "src/wolfengine/cli.py")
+
+
+def test_no_engine_parameter_default_restates_a_config_or_cli_author_by_name():
+    """`#324`：把上面那条「点名两枚」的名册换成按名扫的尺。
+
+    判据：`src/wolfengine/` 里任何一枚带默认值的入参，只要入参名与默认值都逐字撞上 `config.py` / `cli.py`
+    的模块级或类级绑定，它就是出厂值的第二份抄本。`#323` 摘掉的 `roles.board_for(seat_count=9)` 正是这一形，
+    而那条名册扫不出它——名册只认它被告知过的两个名字，多出来的作者要等下一次有人想起来才红。
+
+    范围停在 `src/`：`tests/` 里同名同值那几十枚全是「把入参往下传」的转发形（`#323` 逐枚读过，包括
+    `tests/live_frame.py` 的 `frame_text`），把它们收进来只会让这把尺去钉测试自己的形状。作者面只认两本
+    出厂值的主人家，不认任意一本——否则「谁先写的」就变成「谁的名字先出现」。
+    """
+    src = {k: v for k, v in _parsed_trees(("src",)).items() if k.startswith("src/wolfengine/")}
+    bindings = _default_author_bindings({b: src[b] for b in DEFAULT_AUTHOR_BOOKS})
+    params = [(name, word, line, book) for book in src
+              for name, word, line, _where in _parameter_defaults(src[book])]
+    assert len(src) >= 26 and len(bindings) >= 40 and len(params) >= 100, (
+        f"扫描面缩水了：src {len(src)} 本、作者面 {len(bindings)} 格绑定、参数面 {len(params)} 枚默认值"
+        "——尺读不到不等于仓库里没有，这一条的 rc 0 只有在三面真扫到东西时才算读数")
+    hits = _restated_defaults(src, bindings)
+    assert not hits, (
+        f"参数默认值又有了第二份抄本 {len(hits)} 枚：{hits}——箭头右边才是主人家。要么摘掉签名里那枚"
+        "（调用方自己传，值只剩一个作者），要么改个名字说清它管的是另一件事")
 
