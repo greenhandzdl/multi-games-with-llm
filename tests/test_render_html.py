@@ -998,3 +998,21 @@ def test_the_cascade_judge_stops_on_forms_it_cannot_compute():
     for exotic, css in _CSS_EXOTIC_FIXTURES.items():
         with pytest.raises(AssertionError, match=re.escape(f"不会算 {exotic!r}")):
             _css_decls(css)
+
+
+def test_the_peace_flag_on_a_chronicle_line_has_no_factory_default():
+    """`_line()` 的 `peace` 必填：`#326` 那趟现量它唯一的真调用点每次都显式交值，出厂默认没人走。
+
+    现量的账（`01:53:32Z` 按绑定解的 AST 普查，六档解法）：`src/wolfengine/render_html.py:337` 是它唯一
+    真调用点，那一行写的就是 `peace=is_dawn(e) and day in peace`；另外四处 `self._line` 属于别的类自己那个
+    `_line`，不算这一枚的读者。留一枚没人走的 `False` 的代价与 `#317`／`#318` 同形：平安夜这一格将来换口径
+    时，忘了交值的那一路不会变红，而是静默退回出厂的那个答案——渲染出的那一行少了 `li.peace` 的墨而没人说。
+    摘掉默认值后少交值的调用方当场抛 TypeError，边界由签名自己钉住；那条 `ul.chron li.peace` 的样式声明不动，
+    它管墨不管账。
+    """
+    import inspect
+
+    from wolfengine import render_html
+    param = inspect.signature(render_html._line).parameters["peace"]
+    assert param.default is inspect.Parameter.empty, \
+        f"`_line()` 的 peace 又带上了默认值 {param.default!r}：没人走的那一格会静默决定平安夜留不留痕"

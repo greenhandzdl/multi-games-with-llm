@@ -120,7 +120,7 @@ def markers(e: Event) -> str:
     return " " + " ".join(out) if out else ""
 
 
-def _line(e: Event, *, peace: bool = False) -> str:
+def _line(e: Event, *, peace: bool) -> str:
     text = render_line(e)
     cls = e.kind if e.kind in ("speech", "vote", "death", "last_words") else ""
     if event_flags(e):
