@@ -763,3 +763,42 @@ def test_the_prose_advertisement_probe_houses_the_archive_and_spares_a_mention()
                   (ROOT / "docs" / ARCHIVE).read_text(encoding="utf-8").splitlines(), 1)
               for name in _advertised_exports(line) if name not in readers]
     assert hidden, "归档豁免这一格没有住户：它谁都不挡，该把归档并进语料面"
+
+
+# ------------------------- 文件面那把形状尺要有证人：埋进去的得被抓到
+
+def test_the_file_face_probe_fires_on_a_planted_key_shape(monkeypatch):
+    """文件面那条守卫的"记下一处命中"此前零读者——`#333` 的执行普查量到的就是这一格。
+
+    整套跑完，`test_no_key_shaped_string_anywhere_in_the_project` 里 `offenders.append(...)`
+    那一次都没执行：今天全绿，而绿分不清"仓库里没有值"和"这条守卫读不到东西"。这一族的其它
+    证人都在别面上——`#190` 那三条钉的是**历史**扫描（`_added_lines` 的语料、截断探针），
+    文件面这一侧连"语料塌空"都有人管（`test_scan_roots_exist` 与 README 那一格），
+    唯独"逐行读到东西并且点得出名"这一路没人开火。
+
+    两具刀的分工（`census333/` 的电池账）：把 `SK_SHAPED` 塌成几乎恒假，这一格与历史那条
+    正控制**一起红**（真历史里的命中全部来自 `sk-` 那一半，`KEY_ASSIGN` 一枚都出不来），
+    所以"尺本身坏了"在两个面上都有人看得见；把 `_text_files()` 的语料塌空，历史那三条全绿，
+    红的只有这一格和 README 那一格——独占的读数在"逐行读到 + 报得出是哪本哪行"这一路。
+
+    所以这一枚直接开那条今值守卫，而不是另抄一把尺（`#153` 那一课：正控制读自己那份拷贝
+    就退化成自我测试）。语料只交给埋在 `data/` 里的一份探针文件——那个目录在 gitignore 里，
+    而 `SCAN` 是被 monkeypatch 顶掉的，所以真实的 `src/`＋`tests/fixtures/`＋`docs/`＋README
+    那一面这趟不动；探针跑完即删，目录是它自己造的就一并删掉。
+    """
+    face_dir = ROOT / "data"
+    made = not face_dir.exists()
+    planted = face_dir / "sk-shape-probe.md"
+    face_dir.mkdir(exist_ok=True)
+    try:
+        planted.write_text("# 这一本由这条用例现造，跑完就删\n\n"
+                           f"curl -H 'Authorization: Bearer {SENTINEL}'\n", encoding="utf-8")
+        monkeypatch.setattr("test_no_secrets.SCAN", [planted])
+        with pytest.raises(AssertionError) as exc:
+            test_no_key_shaped_string_anywhere_in_the_project()
+        assert "sk-shape-probe.md" in str(exc.value), \
+            f"抓到了别的东西，没点名的正是埋下去那一本：{exc.value}"
+    finally:
+        planted.unlink(missing_ok=True)
+        if made:
+            face_dir.rmdir()

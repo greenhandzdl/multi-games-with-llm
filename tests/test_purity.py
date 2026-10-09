@@ -42,6 +42,27 @@ def _sources() -> dict[str, str]:
     return {p.name: p.read_text(encoding="utf-8") for p in sorted(SRC.glob("*.py"))}
 
 
+def _name_copies(face: dict[str, str], names: tuple[str, ...],
+                 *, exempt: tuple[str, ...] = ()) -> dict[str, list[str]]:
+    """〈本名, 正文〉这张表里，哪些名字在哪些本里被手抄了一遍——整词匹配，散文不算。
+
+    `#333` 之前两条守卫各写一遍这四行，逐字相同：抄一份判据的代价不是值会分家（它们算的
+    本来就不是值），而是**证人只能红在其中一条腿上**，另一条腿的尺坏了没人说。现在两条都
+    问这一枚，证人（`test_the_copy_probe_fires_on_a_planted_copy_and_stays_off_prose`）
+    开火的地方和今值守卫用的是同一个函数。
+    """
+    offenders: dict[str, list[str]] = {}
+    for name, text in face.items():
+        if name in exempt:
+            continue
+        stripped = re.sub(r'""".*?"""|\'\'\'.*?\'\'\'', "", text, flags=re.DOTALL)
+        stripped = "\n".join(line.split("#")[0] for line in stripped.splitlines())
+        hits = sorted(f for f in names if re.search(rf"\b{f}\b", stripped))
+        if hits:
+            offenders[name] = hits
+    return offenders
+
+
 @pytest.mark.parametrize("name", PURE_CORE)
 def test_pure_core_has_no_io_edge(name):
     text = _sources()[name]
@@ -95,18 +116,11 @@ def test_the_token_budget_enumeration_is_only_ever_read_through_one_function():
     值是可比对的，出处不能：`actors.py` 若把 `Phase in (...) ? speech : action` 再内联一遍，
     当下两侧完全等价，没有任何一条断言会红——直到有人改了 `SPEECH_PHASES`，于是发出去的和
     普查印出来的再次分家，而这正是 `token_budget_for` 被抽出来的原因。所以这一条不看值，
-    看字面量出现在哪几个文件里（和上面几条守卫同一手法）。
+    看字面量出现在哪几个文件里；这一枚尺与下面那条拒绝点守卫共用（`_name_copies`），
+    它由 `test_the_copy_probe_fires_on_a_planted_copy_and_stays_off_prose` 开火作证。
     """
-    offenders = {}
-    for name, text in _sources().items():
-        if name == "config.py":
-            continue
-        stripped = re.sub(r'""".*?"""|\'\'\'.*?\'\'\'', "", text, flags=re.DOTALL)
-        stripped = "\n".join(line.split("#")[0] for line in stripped.splitlines())
-        hits = sorted({f for f in ("max_tokens_speech", "max_tokens_action", "SPEECH_PHASES")
-                       if re.search(rf"\b{f}\b", stripped)})
-        if hits:
-            offenders[name] = hits
+    offenders = _name_copies(_sources(), ("max_tokens_speech", "max_tokens_action",
+                                          "SPEECH_PHASES"), exempt=("config.py",))
     assert not offenders, (
         f"这些模块自己重抄了计价名单，改一处不会带动另一处：{offenders}")
 
@@ -122,7 +136,7 @@ def test_the_two_refusal_sites_do_not_keep_their_own_copy_of_the_lists():
     （09:59:44Z 那一趟）里那条对账守卫把 `batch.py` 中的字符串常量当成读取点，
     "零读者名单"与源码对不上，于是它也红——那两只的预期写成"行为套件不动"被打掉过一次。
     两条守卫的分工就是这两半：对账那条管点号路径，这一条管顶层那一格有没有被抄走。
-    手法与上面那条计价守卫一致：不看值，看字段名字出现在哪几个文件里，
+    手法与上面那条计价守卫是同一枚函数（`_name_copies`）：不看值，看字段名字出现在哪几个文件里，
     docstring 与 `#` 注释剥掉，所以 `batch.py` 里那句 "`enable_sheriff` is refused because…"
     不算抄。名单只列**拿得出手**的名字：`b0` 和 `warn` 这种两三个字母的格子的**读取点**将来会长在
     `assemble.py` 里（`#63`），按子串扫会把该写的代码挡在外面。
@@ -130,15 +144,30 @@ def test_the_two_refusal_sites_do_not_keep_their_own_copy_of_the_lists():
     names = ("enable_sheriff", "c_persona", "c_belief", "c_private", "c_task",
              "force_compact")
     src = _sources()
-    offenders = {}
-    for name in ("batch.py", "report.py"):
-        stripped = re.sub(r'""".*?"""|\'\'\'.*?\'\'\'', "", src[name], flags=re.DOTALL)
-        stripped = "\n".join(line.split("#")[0] for line in stripped.splitlines())
-        hits = sorted(f for f in names if re.search(rf"\b{f}\b", stripped))
-        if hits:
-            offenders[name] = hits
+    offenders = _name_copies({k: src[k] for k in ("batch.py", "report.py")}, names)
     assert not offenders, (
         f"这两个拒绝点自己重抄了名单，改 `config.py` 不会带动它们：{offenders}")
+
+
+def test_the_copy_probe_fires_on_a_planted_copy_and_stays_off_prose():
+    """正控制：仓库被修干净之后，"扫不到"和"扫不动"是同一句话。
+
+    `#333` 的执行普查量到的两格就在这两条守卫里：那两本"记下一处抄本"的格在整套跑完时
+    一次都没执行过——今天全绿，而绿分不清"没人抄"和"抄了也看不见"。这个证人往合成语料里
+    埋一枚抄本，要求尺点名它。
+
+    两向各钉一半：只证"摘掉判据会红"的话，"把 docstring 与注释也当抄本"那种过收是沉默的，
+    而它一旦成立，`batch.py` 里那句解释就会被当成第二个作者（下面 `prose.py` 那一形钉的正是它）。
+    """
+    face = {"plain.py": "other_name_x = 1\n",
+            "copy.py": "planted_name_x = 2\n",
+            "prose.py": '"""这里写了 planted_name_x，是解释为什么不这么做。"""\n'
+                        "# 还有 planted_name_x 坐在注释里\n"}
+    got = _name_copies(face, ("planted_name_x",))
+    assert got == {"copy.py": ["planted_name_x"]}, \
+        f"抄本那一格没点名、或者把散文也当成了抄本：{got}"
+    assert _name_copies(face, ("planted_name_x",), exempt=("copy.py",)) == {}, \
+        "豁免没挡住被点名的那一本：今值守卫的 `config.py` 那一格就是这么漏的"
 
 
 def test_pure_core_modules_all_exist():
