@@ -162,7 +162,7 @@ def _closed_port() -> int:
     return port
 
 
-def _main(cal, out: Path, monkeypatch, *, base_url: str | None = None, with_key=True) -> None:
+def _main(cal, out: Path, monkeypatch, *, base_url: str | None, with_key=True) -> None:
     """Call `main()` exactly the way the shell does: argv + env. No hook into the script."""
     if with_key:
         monkeypatch.setenv(KEY_ENV, STUB_KEY)

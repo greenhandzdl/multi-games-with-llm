@@ -31,8 +31,8 @@ from wolfengine.config import Config
 from wolfengine.events import Event, Kind
 
 
-def _table(kinds: list[str] | None, game_id: str = "g1", *,
-           played: bool = False) -> metrics.Game:
+def _table(kinds: list[str] | None, game_id: str, *,
+           played: bool) -> metrics.Game:
     """一张只带页眉的桌：三条被拒路径都不读事件，读的是 `actor_kinds` 那一格。
 
     种类为 None 时连那一格都不写 —— 现实里只有被人手改过的日志会这样，而

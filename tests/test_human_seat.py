@@ -120,7 +120,7 @@ async def _turn(tmp_path, lines, *, seat=3, phase=Phase.DAY_VOTE, kind=Kind.VOTE
     return agent, log, console, outcome
 
 
-async def _ctx(tmp_path, *, seat=3, phase=Phase.DAY_VOTE, legal: LegalSet | None = None,
+async def _ctx(tmp_path, *, seat=3, phase: Phase, legal: LegalSet | None = None,
                heard: tuple[str, ...] = ()):
     """玩家那一席真会被递给的一张 `TurnContext`。
 

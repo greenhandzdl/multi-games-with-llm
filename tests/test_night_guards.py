@@ -56,7 +56,7 @@ class NightActor(MockActor):
         return Proposal(action=action, raw=action.model_dump_json())
 
 
-def _table(tmp_path, by_seat: dict[int, dict[Phase, Action]], *, name: str = "n.jsonl"):
+def _table(tmp_path, by_seat: dict[int, dict[Phase, Action]], *, name: str):
     """一桌停在第 1 天夜里的现场：真实发牌、真实 agent，四个夜里角色各拿一份脚本。"""
     cfg = Config()
     state, personas, _ = game.build_game(cfg, SEED, f"g{SEED:08d}")

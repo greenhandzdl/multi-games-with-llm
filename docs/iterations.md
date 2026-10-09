@@ -15928,3 +15928,83 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
 - **这一片没做的事**：`#329` 名单上 tests 面那十一枚没人走的默认值一枚没动——它们的主人家里坐着夹具（`#227` 那一族），
   摘不摘要按 `#265` 逐枚问失效方向，留给下一片；`#322`／`#323`／`#329` 三本的归档不改口（记的都是当时的现量）；
   用量账那把尺仍只在搁板上、没进闸门（`#302` 那一题还没决断），进仓库的只有点名九枚的那一条用例。
+
+
+## `#331` 处置 `#330` 留给下一片的那十一枚：十一枚全摘，四具刀四向都有证人，地板那一条第一次证明它有声
+
+- **摘的十一枚，逐枚的调用点（`#329` 那把尺按 AST 数 `Call` 结点的读数，不是 grep）**：43 处调用点、51 枚次——
+  `game_id` 与 `played` 坐在同一批八处调用点上，各数一枚。
+
+  - `tests/test_batch_paired.py:703` 的 `_cut_tail(i=0)`：三处 `_cut_tail` 调用点在 `tests/test_batch_paired.py:731`、
+    `tests/test_batch_paired.py:738`、`tests/test_batch_paired.py:832`，交的分别是 `0`、`1`、`0`。摘它是因为那枚默认值
+    替调用点挑「撕哪一局」——一省略就把两局同名日志的撕尾悄悄做成一局。
+  - `tests/test_calibrate_rehearsal.py:165` 的 `_main(base_url=None)`：三处 `_main` 调用点 `tests/test_calibrate_rehearsal.py:186`、
+    `tests/test_calibrate_rehearsal.py:207`、`tests/test_calibrate_rehearsal.py:218` 每一处都交一个活端口拼出来的 URL。
+    那枚 `= None` 不是一条合法的「没端点」写法，而是一个会静默改路线的岔口。
+  - `tests/test_human_seat.py:123` 的 `_ctx(phase=Phase.DAY_VOTE)`：六处 `_ctx` 调用点从 `tests/test_human_seat.py:362` 起，
+    其中三处（`tests/test_human_seat.py:427` 与它下面两枚）交的是 `Phase.DAY_SPEECH`。出厂值把「递哪一相的桌」订死在
+    白昼投票上——省略一次就答一张不同的桌。同一条签名上 `seat` 那格没摘（`#329` 判它有人走），`legal` 与 `heard` 也没摘。
+  - `tests/test_m3_gate.py:580` 的 `_loose(games=2)`：七处 `_loose` 调用点从 `tests/test_m3_gate.py:603` 起全交值，
+    `tests/test_m3_gate.py:622` 那处连 `mock` 一起交。这是十一枚里最直白的一枚：那一本断言的就是「打一版几局」，
+    少交一次就把被测的那个量交给夹具自己编。同一条签名的 `mock` 留着——七处里六处省它，是正牌的「有人走」。
+  - `tests/test_night_guards.py:59` 的 `_table(name="n.jsonl")`：五处 `_table` 调用点从 `tests/test_night_guards.py:82` 起，
+    各交一个有含义的文件名（`used.jsonl`／`one_left.jsonl`／`mismatch.jsonl`／`all_checked.jsonl`／`checked.jsonl`）。
+    出厂值让两桌落在同一个文件名上，后写的顶掉先写的。
+  - `tests/test_synthetic_attribution.py:34` 的 `_table(game_id="g1")` 与同一张签名上的 `played=False`：八处 `_table`
+    调用点从 `tests/test_synthetic_attribution.py:58` 到 `tests/test_synthetic_attribution.py:105`，每一处都同时交局名
+    与 `played` 那个 `True`。`played` 摘的理由带一条历史：`#99` 之后「只有页眉的文件」不再算一局而是一份被打断的东西，
+    出厂的 `False` 恰好造的就是那种东西。
+  - `tests/test_wiring.py:687` 的 `_unreached_consts(const_roots=None)`：两处 `_unreached_consts` 调用点
+    `tests/test_wiring.py:724` 与 `tests/test_wiring.py:1020` 都按名交同一个元组。那是尺自己的扫描面开关，省一次等于
+    让尺自己决定扫哪一面。
+  - `tests/test_wiring.py:1206` 的 `bump(origin="")`：四处 `bump` 调用点 `tests/test_wiring.py:1217` 到
+    `tests/test_wiring.py:1230` 全交值。外层 `count_reads` 的 `origin` 出厂值没摘——它有真走默认值的调用点，`#329`
+    判它「有人走」。
+  - `tests/test_wiring.py:1742` 的 `_dead_arguments_in(framework_called=False)`：三处 `_dead_arguments_in` 调用点
+    `tests/test_wiring.py:1783`（转交上游参数）、`tests/test_wiring.py:1901` 与 `tests/test_wiring.py:3876`（各交 `True`）。
+    那一格是 `#86` 名册的口径开关：一被省略，夹具孤儿就悄悄换了算法。
+  - `tests/test_wiring.py:3638` 的 `_nested_defs_without_in_scope_reader(roots=("src", "tests", "scripts"))`：两处
+    `_nested_defs_without_in_scope_reader` 调用点 `tests/test_wiring.py:3694` 交的是与出厂值逐字相同的那个元组（抄本），
+    `tests/test_wiring.py:3730` 交临时目录。摘完之后扫描面只剩一个作者。
+- **按 `#265` 逐枚问失效方向，十一枚同族**：这里被出厂值替调用点决定的不是中性数值，而是「哪一局、哪一桌、扫哪一面」；
+  方向一致 ⇒ 全摘。与 `#330` 那九枚的区别在主人家坐在哪里：那九枚摘的是产品 API 的签名，这一片摘的是夹具的签名，
+  摘错的代价由调用点当场 `TypeError` 承担，不由生产链下游承担。
+- **形状证人（进仓库的只有这一条）**：`tests/test_wiring.py` 尾那条 `test_the_tests_side_defaults_nobody_ever_omits_are_now_required`。
+  先红后绿——写它时 `1 failed`、消息逐枚点名十一枚（`0`、`None`、`Phase.DAY_VOTE`、`2`、`n.jsonl`、`g1`、`False`、
+  `None`、空串、`False`、那枚三元组），摘完才 `1 passed`。取默认值那一支复用 `#324` 的尺，不另写一份（`#153` 的只住
+  一处）；「有出厂值」与「没有」两向的形状证人也不重复，`#322` 与 `#324` 那几条已经读过。
+- **地板那一条是这片的新东西**：用例先断言「这十一格在 tests 扫面里找得着人」，再断言「它们不再有出厂值」。没有前一句，
+  后一句会在有人把那张名单里的函数改名之后 vacuous 地绿——`#313`「地板要按面各钉」在 tests 面的第一次现形，它的牙由
+  下面 K4 那具刀作证。
+- **四具刀**（架 `census331/knife_tests_defaults.py`，配 `k1_cut.log`～`k4_cut.log` 与每具一份 `*_restore.log`；七本
+  baseline 的 sha256 前缀每具还原后逐本 MATCH、四具都行数中性、落盘后 `compile()` 过才信判定）：
+  - K1 顶零方向：把十一枚出厂值原样抄回签名 ⇒ 新用例红、消息点名满十一枚；被改的七本里其余用例 `188 passed` 一字不动
+    （抄回默认值不改变任何行为，这是「没人走」的第二次现量）；`#324` 那把按名对作者的尺连 `#330` 那条用例、四把 src 侧
+    判据 `4 passed` 不被顶红 ⇒ 用量账与「第二作者」正交，`#330` 那一课在 tests 面重演一次。
+  - K2 顶宽方向：只让 `tests/test_m3_gate.py:603` 那一处不交 `games` ⇒ 同书 `1 failed、52 passed`，红的那一格是
+    `TypeError: _loose() missing 1 required keyword-only argument: 'games'` ⇒ 这条用例不过收，运行时真有人被拦住。
+  - K3 顶宽方向：只让 `tests/test_wiring.py:724` 那一处不交 `const_roots` ⇒ 同一枚 `TypeError` 落在
+    `test_no_module_level_engine_constant_is_left_without_a_reader`，同批选出的另外三把常量层尺照旧绿。
+  - K4 地板方向：把 `_nested_defs_without_in_scope_reader` 连同它的两处调用点一起改名（行为不变：它自己那条用例照旧
+    `passed`）⇒ 新用例的「找不着人」那一支当场红、点名那一格 ⇒ 地板不是装饰，改名或搬家必须连名单一起改。
+  - 账：四具 CAUGHT、0 具 MISSED、0 具等价变异。
+- **行号闸门在这片新文本上开过火（负控制一枚）**：本节 43 处调用点引用全写 `path:NNN` 全路径形、同一句里带一枚
+  ≥4 字符的函数名，走的是 `#126` 起就扫归档面的那一条闸门。负控制：往本节插一行假引用——把本书那本 .py 的文件名
+  缀上一个不属于它的号、配名字 `_loose` ⇒ `test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_beside_it`
+  当场 `1 failed`、rc≠0，消息说清那一行没有这个名字、名字真正住在哪一格 ⇒ 这一节的引用不是"看着像对"活着，是有人
+  数的。那枚假号不写进归档，否则本节自己就成了它逮的那一形（描述一种错不能靠复制那种错）；插完删干净再跑，同绿。
+- **一处形状代价，登记**：`_unreached_consts` 摘掉 `= None` 之后，`const_roots` 不能再排在两枚带默认值的位置参后面
+  （Python 的次序规则），于是那一行改成 keyword-only。两处调用点本来就按名交值，所以是两行改形、不改数、也不改行为。
+- **两枚「省略即假」的分支换了来源，登记不动它**：摘默认值不制造新分支，但把旧分支的来路改名了——夹具体里
+  `if not played` 与 `if base_url:` 那两支，今天能走到它们的方式从「省略」变成「显式交 `False`／`None`」，而现量 0 处
+  调用点这么交 ⇒ 这两支从 `#237` 那本执行普查的「有人能走而没人走」落到「没人走」那一档。这一片不给它们补证人：
+  要补的是分支的证人，不是签名的。
+- **今值**（计数是证人，秒数是脏读数）：定向七本 `325 passed`、rc 0（起读 `03:32:14Z`／收读 `03:34:19Z`，122.25s，
+  收读时负载 114.04——本机那阵子有别的进程驻着，秒数不解释原因、只当脏读数）；全量在本节落盘后再跑那一趟
+  `1293 passed`、rc 0（起读 `03:51:27Z`／收读 `03:53:23Z`，115.46s，负载 6.87），落盘前那一趟同样 `1293 passed`
+  rc 0、166.72s——这 80 行归档文字不改枚数。全量比 `#330` 那一格多一枚，多的就是本片那条新用例。定向两本
+  （`tests/test_doc_citations.py`＋`tests/test_wiring.py`）`278 passed`、rc 0（起读 `03:47:20Z`／收读 `03:47:54Z`，
+  34.25s，负载 11.19）；本节最后只挪过这些时刻数字，挪完再跑同一对仍以 `278 passed`、rc 0 收。
+- **这一片做的事与没做的事**：`#330` 那句「留给下一片」在这里兑现，归档不改口（各节记的是当时的现量）；`scripts` 面
+  `#329` 判 0 枚没人走 ⇒ 无片可做；用量账那把尺仍只在搁板上、没进闸门（`#302` 那一题还没决断），进仓库的只有点名
+  十一枚的这一条用例。

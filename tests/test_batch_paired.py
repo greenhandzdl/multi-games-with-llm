@@ -700,7 +700,7 @@ def _arm_games(tmp_path, arm: str) -> list[metrics.Game]:
             if not p.name.endswith(".prompts.jsonl")]
 
 
-def _cut_tail(tmp_path, arm: str, i: int = 0, *, keep: int = 70) -> tuple[str, str]:
+def _cut_tail(tmp_path, arm: str, i: int, *, keep: int = 70) -> tuple[str, str]:
     """把某一局日志的末行只留下前 `keep` 个字节，返回 (文件名, 那半行残句)。
 
     引擎写不出残句（每条记录自带 `\\n`），所以"文件被砍过"只能在文件里造。砍的是**末行**：一局打完

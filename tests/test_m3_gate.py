@@ -577,7 +577,7 @@ def test_the_batch_summary_line_points_at_the_gate(tmp_path, capsys):
 
 
 # ------------------------------------------- 独立 run 出来的日志没有判定可读（#98）
-def _loose(tmp_path, *, mock: bool = False, games: int = 2) -> Path:
+def _loose(tmp_path, *, mock: bool = False, games: int) -> Path:
     """打一版，把日志从臂目录里挑平、manifest 留在原地：这就是三次 `wolf run` 的磁盘形状。
 
     不直接读 `data/` 里那三局真日志——那个目录是 gitignored 的，用例必须在克隆出来的仓库里跑得动。

@@ -687,7 +687,7 @@ def test_the_export_list_is_not_a_caller_and_the_only_name_it_would_have_saved_i
 def _unreached_consts(
     src_roots: tuple[str, ...] = ("src",),
     read_roots: tuple[str, ...] = ("src", "scripts"),
-    const_roots: tuple[str, ...] | None = None,
+    *, const_roots: tuple[str, ...] | None,
 ) -> tuple[dict[str, list[str]], list[str]]:
     """常量层的探测本体：(名册, 零生产读者的名字)。两条判据共用这一具，夹具不许另写一份。"""
     _, readers, consts = _module_defs_and_production_reads(src_roots, read_roots, const_roots)
@@ -1203,7 +1203,7 @@ def _field_defs_and_reads(
     test_readers: dict[str, int] = {}
     defs: dict[str, list[int]] = {}
 
-    def bump(bucket: dict[str, int], key: str, origin: str = "") -> None:
+    def bump(bucket: dict[str, int], key: str, origin: str) -> None:
         bucket[key] = bucket.get(key, 0) + 1
         if origin:
             read_files.setdefault(key, set()).add(origin)
@@ -1740,7 +1740,7 @@ def _argument_comes_from_the_framework(fn, param: str, depth: int,
 
 
 def _dead_arguments_in(all_trees: dict, judged: dict, *,
-                       framework_called: bool = False) -> list[str]:
+                       framework_called: bool) -> list[str]:
     """判据本体：`judged` 里逐函数逐参数问一遍"签名要求它、body 从不读它"。
 
     豁免的来源（契约桩、父类、夹具名册）一律取 `all_trees` 全量，判面只走 `judged`——`tests/` 里
@@ -3635,7 +3635,7 @@ def test_the_local_name_ruler_fires_once_and_spares_the_carved_out_shapes(tmp_pa
         f"裸注解、与参数同名，以及 `for`/`with`/`except`/`:=` 的活样本各钉一次不红。实际报出：{got}")
 
 
-def _nested_defs_without_in_scope_reader(roots: tuple[str, ...] = ("src", "tests", "scripts")):
+def _nested_defs_without_in_scope_reader(roots: tuple[str, ...]):
     """`(候选总数, 名单)`——名单里是**同作用域没人递到它**的嵌套 def。
 
     嵌套 def 的名字只活在那一层 enclosing 函数里，函数外按同名写的东西都属于别的名字空间
@@ -4388,8 +4388,8 @@ def test_the_src_defaults_nobody_ever_omits_are_now_required():
     - 这一条本身把九枚钉成「不许再有出厂值」，否则下一次有人顺手补回去，前面两层的账就白算。
 
     两向的形状证人不在这里重复：`test_the_missing_default_predicate_also_reads_a_real_default` 已经
-    同时读过「有出厂值」和「没有」两支（`#153` 的只住一处）。范围停在 `src/`：名单上 tests 那十一枚的
-    主人家坐在夹具里，摘不摘要按 `#265` 逐枚问失效方向，这一片没做。
+    同时读过「有出厂值」和「没有」两支（`#153` 的只住一处）。这一条只管 `src/` 那九枚；名单上
+    tests 那十一枚由 `test_the_tests_side_defaults_nobody_ever_omits_are_now_required` 逐枚钉住。
     """
     import inspect
 
@@ -4410,4 +4410,46 @@ def test_the_src_defaults_nobody_ever_omits_are_now_required():
     assert not still, (
         f"这 {len(still)} 枚又有了出厂值：{still}——它们每一枚的全部调用点都自己交值，"
         "名单与逐枚调用点现量在 `#329` 那一节")
+
+
+def test_the_tests_side_defaults_nobody_ever_omits_are_now_required():
+    """`#331` 名单上 tests 面那十一枚出厂值：调用点每一枚都自己交值，签名不再替它们编一个。
+
+    失效方向和 `#330` 那九枚不同：那九枚摘的是产品 API 的出厂值，这一片摘的是**夹具替调用点决定
+    "哪一局、哪一桌、哪一面"**。三枚最直白——少交 `games` 就把"打一版几局"这个正被断言的量交给
+    夹具自己编，少交 `phase` 就递出一张白昼投票的桌，少交 `roots` 就把合成语料那格扫成活体全仓。
+    逐枚的调用点现量在 `#331` 那一节。
+
+    取默认值那一支复用 `#324` 的尺（`_parameter_defaults`），不另写一份（`#153`）；「有出厂值」和
+    「没有」两支已由 `test_the_missing_default_predicate_also_reads_a_real_default` 同时读过，
+    这里不重复形状证人。地板钉的是这十一格在扫面里找得着人：一枚改了名或搬了家，上面那条就会
+    vacuous 地绿。
+    """
+    tests = _parsed_trees(("tests",))
+    required = {
+        ("tests/test_batch_paired.py", "_cut_tail", "i"),
+        ("tests/test_calibrate_rehearsal.py", "_main", "base_url"),
+        ("tests/test_human_seat.py", "_ctx", "phase"),
+        ("tests/test_m3_gate.py", "_loose", "games"),
+        ("tests/test_night_guards.py", "_table", "name"),
+        ("tests/test_synthetic_attribution.py", "_table", "game_id"),
+        ("tests/test_synthetic_attribution.py", "_table", "played"),
+        ("tests/test_wiring.py", "_unreached_consts", "const_roots"),
+        ("tests/test_wiring.py", "bump", "origin"),
+        ("tests/test_wiring.py", "_dead_arguments_in", "framework_called"),
+        ("tests/test_wiring.py", "_nested_defs_without_in_scope_reader", "roots"),
+    }
+    located = {(book, fn.name) for book, tree in tests.items()
+               for fn, _cls, _depth in _functions_of(tree)}
+    missing = sorted(t for t in required if (t[0], t[1]) not in located)
+    assert not missing, (
+        f"这 {len(missing)} 格在 tests 扫面里找不着人：{missing}——尺读不到不等于仓库里没有，"
+        "改名或搬家要连这张名单一起改，不许让它空转")
+
+    with_default = {(book, row[3], row[0]) for book, tree in tests.items()
+                    for row in _parameter_defaults(tree)}
+    still = sorted(required & with_default)
+    assert not still, (
+        f"这 {len(still)} 枚又有了出厂值：{still}——它们每一枚的全部调用点都自己交值，"
+        "名单与逐枚调用点现量在 `#331` 那一节")
 
