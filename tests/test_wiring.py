@@ -4413,7 +4413,11 @@ def test_the_src_defaults_nobody_ever_omits_are_now_required():
 
 
 def test_the_tests_side_defaults_nobody_ever_omits_are_now_required():
-    """`#331` 名单上 tests 面那十一枚出厂值：调用点每一枚都自己交值，签名不再替它们编一个。
+    """`#331` 名单上 tests 面的出厂值：调用点每一枚都自己交值，签名不再替它们编一个。
+
+    名单今天十格。`#331` 摘的那十一枚里，`played` 那一格在 `#332` 连参数一起摘了——它出厂的 `False`
+    造的是「只有页眉、没有一局的文件」，那一形早有主人（见 `#332` 登记的主人家的名字），这里不许有
+    第二扇门。
 
     失效方向和 `#330` 那九枚不同：那九枚摘的是产品 API 的出厂值，这一片摘的是**夹具替调用点决定
     "哪一局、哪一桌、哪一面"**。三枚最直白——少交 `games` 就把"打一版几局"这个正被断言的量交给
@@ -4422,8 +4426,9 @@ def test_the_tests_side_defaults_nobody_ever_omits_are_now_required():
 
     取默认值那一支复用 `#324` 的尺（`_parameter_defaults`），不另写一份（`#153`）；「有出厂值」和
     「没有」两支已由 `test_the_missing_default_predicate_also_reads_a_real_default` 同时读过，
-    这里不重复形状证人。地板钉的是这十一格在扫面里找得着人：一枚改了名或搬了家，上面那条就会
-    vacuous 地绿。
+    这里不重复形状证人。地板钉的是这十格**入参本身**在扫面里找得着：一枚改了名、搬了家、或者连参数
+    都被删掉，上面那条「没有出厂值」都会 vacuous 地绿，所以先问这一格还在不在。这一条第一次开火
+    就是它自己：`#332` 摘掉 `played` 那一步让它当场点名那一格。
     """
     tests = _parsed_trees(("tests",))
     required = {
@@ -4433,18 +4438,18 @@ def test_the_tests_side_defaults_nobody_ever_omits_are_now_required():
         ("tests/test_m3_gate.py", "_loose", "games"),
         ("tests/test_night_guards.py", "_table", "name"),
         ("tests/test_synthetic_attribution.py", "_table", "game_id"),
-        ("tests/test_synthetic_attribution.py", "_table", "played"),
         ("tests/test_wiring.py", "_unreached_consts", "const_roots"),
         ("tests/test_wiring.py", "bump", "origin"),
         ("tests/test_wiring.py", "_dead_arguments_in", "framework_called"),
         ("tests/test_wiring.py", "_nested_defs_without_in_scope_reader", "roots"),
     }
-    located = {(book, fn.name) for book, tree in tests.items()
-               for fn, _cls, _depth in _functions_of(tree)}
-    missing = sorted(t for t in required if (t[0], t[1]) not in located)
-    assert not missing, (
-        f"这 {len(missing)} 格在 tests 扫面里找不着人：{missing}——尺读不到不等于仓库里没有，"
-        "改名或搬家要连这张名单一起改，不许让它空转")
+    declared = {(book, fn.name, a.arg) for book, tree in tests.items()
+                for fn, _cls, _depth in _functions_of(tree)
+                for a in [*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs]}
+    gone = sorted(t for t in required if t not in declared)
+    assert not gone, (
+        f"这 {len(gone)} 格连入参本身都不在了：{gone}——这一条钉的是「没有出厂值」，"
+        "参数被删掉时它会空转地绿，所以删参数要连这张名单一起删，不许让它沉默")
 
     with_default = {(book, row[3], row[0]) for book, tree in tests.items()
                     for row in _parameter_defaults(tree)}

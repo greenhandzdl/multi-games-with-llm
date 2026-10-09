@@ -162,16 +162,16 @@ def _closed_port() -> int:
     return port
 
 
-def _main(cal, out: Path, monkeypatch, *, base_url: str | None, with_key=True) -> None:
+def _main(cal, out: Path, monkeypatch, *, base_url: str, with_key=True) -> None:
     """Call `main()` exactly the way the shell does: argv + env. No hook into the script."""
     if with_key:
         monkeypatch.setenv(KEY_ENV, STUB_KEY)
     else:
         monkeypatch.delenv(KEY_ENV, raising=False)
-    if base_url:
-        monkeypatch.setattr(cal.CONF, "base_url", base_url)
+    monkeypatch.setattr(cal.CONF, "base_url", base_url)  # 无条件：跳过它，排练拿的就是配置里那台出厂端点
     monkeypatch.setattr(sys, "argv", ["calibrate.py", "--quick",
-                                      "--out", str(out / "cal.md"), "--json", str(out / "cal.json")])
+                                      "--out", str(out / "cal.md"),
+                                      "--json", str(out / "cal.json")])
     asyncio.run(cal.main())
 
 

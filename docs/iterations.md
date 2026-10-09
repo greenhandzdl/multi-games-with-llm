@@ -15996,9 +15996,9 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
 - **一处形状代价，登记**：`_unreached_consts` 摘掉 `= None` 之后，`const_roots` 不能再排在两枚带默认值的位置参后面
   （Python 的次序规则），于是那一行改成 keyword-only。两处调用点本来就按名交值，所以是两行改形、不改数、也不改行为。
 - **两枚「省略即假」的分支换了来源，登记不动它**：摘默认值不制造新分支，但把旧分支的来路改名了——夹具体里
-  `if not played` 与 `if base_url:` 那两支，今天能走到它们的方式从「省略」变成「显式交 `False`／`None`」，而现量 0 处
+  `if not played` 与 `if base_url:` 那两支，`#331` 落笔时能走到它们的方式从「省略」变成「显式交 `False`／`None`」，而现量 0 处
   调用点这么交 ⇒ 这两支从 `#237` 那本执行普查的「有人能走而没人走」落到「没人走」那一档。这一片不给它们补证人：
-  要补的是分支的证人，不是签名的。
+  要补的是分支的证人，不是签名的。这两支在 `#332` 那一节处置完：一支的证人早已住在别人家，另一支的证人这片现造。
 - **今值**（计数是证人，秒数是脏读数）：定向七本 `325 passed`、rc 0（起读 `03:32:14Z`／收读 `03:34:19Z`，122.25s，
   收读时负载 114.04——本机那阵子有别的进程驻着，秒数不解释原因、只当脏读数）；全量在本节落盘后再跑那一趟
   `1293 passed`、rc 0（起读 `03:51:27Z`／收读 `03:53:23Z`，115.46s，负载 6.87），落盘前那一趟同样 `1293 passed`
@@ -16008,3 +16008,77 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
 - **这一片做的事与没做的事**：`#330` 那句「留给下一片」在这里兑现，归档不改口（各节记的是当时的现量）；`scripts` 面
   `#329` 判 0 枚没人走 ⇒ 无片可做；用量账那把尺仍只在搁板上、没进闸门（`#302` 那一题还没决断），进仓库的只有点名
   十一枚的这一条用例。
+
+## `#332` 那两支没人走的分支处置完：一支连参数摘掉（那一形早有主人），一支摘掉静默那一路、留下当场崩的那条
+
+- **票面**：`#331` 结尾把两支交给下一片，话是「要补的是分支的证人，不是签名的」。这一片按 `#265` 逐支问失效方向，
+  两支的处置相反——因为「那一形有没有主人家」在两处的答案相反。
+- **第一支：`tests/test_synthetic_attribution.py:34` 的 `_table` 里 `if not played` 那一路 ⇒ 支与参数一起摘**。
+  先问这一支造出来的那句话归谁：`played=False` 交的是「只有页眉、没有一局的文件」，那一形的主人家在
+  `tests/test_golden_game.py:701` 的 `_NO_TABLE` 与 `tests/test_golden_game.py:704` 的 `_OPENED_ONLY_LLM`，话由
+  `tests/test_golden_game.py:734` 的 `test_m1_over_a_folder_of_such_files_says_there_is_no_game` 钉着，
+  `tests/test_m3_gate.py` 里 `#99` 那几条用例还借它。再问这一支有没有**属于它自己的措辞**：现量在
+  `census332/probe_no_own_wording.txt`——同一格「没有一局」的文件，`actor_kinds` 分别换成 `mock`、`llm`、`human`、
+  以及连那一格都不写，四趟的 note 去重只剩一种，`hollow` 那一格连 `paths` 都一字不差 ⇒
+  `src/wolfengine/events.py:183` 的 `meta_notice` 与 `src/wolfengine/events.py:198` 的 `empty_notice` 都不读
+  `actor_kinds`，替身桌与真人桌那两条条款在这条路上根本不会被念。⇒ 给它补断言只能是把别人家那句重抄一遍
+  （`#308` 立的「不抄第二份」），所以按「零读者就删分支而不是留断言」摘支。
+- **参数跟着摘的理由**：`_table` 的八处调用点从 `tests/test_synthetic_attribution.py:58` 到
+  `tests/test_synthetic_attribution.py:105` 每一处交的都是那个 `True`，摘支之后 `played` 就是一枚声明了却没人读的
+  入参——那正是 `#86` 判的形，第一具刀 K1 当场把它点出来。八处改写法、13 枚行内替换，全书 154 行不变。
+- **地板那条用例因此换了牙**：`tests/test_wiring.py:4415` 的 `test_the_tests_side_defaults_nobody_ever_omits_are_now_required`
+  原来只断言「这些格所在的函数还找得着人」，参数被删掉时它会空转地绿。现在按 `tests/test_wiring.py:4446` 的
+  `declared` 三元组（书、函数名、入参名）先问这一格**还在不在**，名单由十一格改成十格——`played` 那一格是跟着参数
+  一起从名单里删的，不是被豁免的。K2 是这条新断言第一次开火：`1 failed`，消息「这 1 格连入参本身都不在了」点名
+  那一格，出自 `tests/test_wiring.py:4449` 的 `gone`。
+- **第二支：`tests/test_calibrate_rehearsal.py:165` 的 `_main` 里 `if base_url:` 那一路 ⇒ 摘静默，签名交 `str`**。
+  这一支的失效方向不是中性数值而是「打哪台端点」：那一路被走到时整句 setattr 跳过，排练桌从此打在配置里那台出厂
+  端点上——`scripts/calibrate.py:765` 与 `scripts/calibrate.py:774` 两处都写着 `base_url=CONF.base_url`，而报告
+  页眉那行 `- base_url：` 是给**那次测量**盖章的唯一出处线索。这一支没有现成的主人家，但证人也不必新造：
+  `tests/test_calibrate_rehearsal.py:247` 的 `test_the_report_names_the_endpoint_it_measured` 钉页眉、
+  `tests/test_calibrate_rehearsal.py:307` 的 `test_a_re_render_carries_the_measured_endpoint_not_the_current_config`
+  钉重渲染，两条合起来正好盖住「悄悄换路线」这一形——所以摘它不欠用例，欠的是证明这两条真逮得住，那一具是 K3。
+- **五具刀**（架 `census332/knife_branch_directions.py`，回显 K1…K5 五本与 `knife_console.txt`；两本 baseline 每具
+  还原后 sha256 逐本相等、锚点唯一性在落刀前后各核一次、落盘后先 `compile()` 过再信判定——`#298` 那一课在这里也
+  用上了：K4 那趟是 `2 errors` 不是 `2 failed`，归因按消息而不是按 rc）：
+  - K1 只摘支、留着参数 ⇒ `#86` 那把尺 `1 failed`，红话点名 `tests/test_synthetic_attribution.py:34` 的 `_table`
+    那一格（消息把那张签名写作 `_table(played)`，`played` 排在 `game_id` 之后）⇒ 「摘支要连参数」不是偏好，
+    是那条判据的硬约束。
+  - K2 支与参数都摘、名单不动 ⇒ 地板 `1 failed`，红话见上面那一格。
+  - K3 把分支放回来，同时让 `run` 夹具交空串、并把 `src/wolfengine/config.py` 的出厂值临时换成**第二具本机桩**
+    （IPv6 `[::1]`、端口现取，整趟不出 loopback——不打局域网那台真端点）⇒ `2 failed`，两条都红在断言上：页眉印出
+    的是那台 `[::1]`、重渲染丢了测量当时的地址。这一具要的是「红在断言上而不是红在崩不上」，所以刀先把桩起起来、
+    `GET /models` 回到 200 才落刀，两处地址都起不了就不下这一具。
+  - K4 现行形（setattr 无条件）交空串 ⇒ rc 1、`2 errors`，红在 `scripts/calibrate.py:742` 那句 `SystemExit`
+    端点预检失败——同一个输入，摘掉静默那一路之后从「悄悄改路线」变成「当场拒绝体检」。
+  - K5 只把分支放回来、三处调用点与 config 一个字不动 ⇒ `2 passed`、rc 0 ⇒ **等价变异**：那一支今天走不到，摘它
+    不改变任何调用点的行为；摘它的根据是 K3 量出的失效方向而不是现量差异，按老规矩登记、不藏。
+  - 账：4 具 CAUGHT、1 具等价变异、0 具 MISSED。
+- **散文对账两处，都不改历史数字**：`#331` 那句「那两支，今天能走到它们的方式从……」里的「今天」在本节落盘后过期，
+  改成点名 `#331` 落笔时，并在同一条末尾加一句指向本节；`#328` 那一节抄着的 `_table(["mock"], "g1", played=True)`
+  是当时的现量，按「归档不改口（各节记的是当时的现量）」留着，由本节声明它已不是现行写法。
+- **形状与行号账**：`tests/test_synthetic_attribution.py` 154 行、`tests/test_calibrate_rehearsal.py` 475 行，两本
+  都行数中性（13/13、4/4）；`tests/test_wiring.py` 那 15/10 全落在 4415 之后，而归档点向本书的最大一枚是
+  `tests/test_wiring.py:3876` 的 `_dead_arguments_in`，在改动点上游 ⇒ 一枚号都不用挪。`#331` 点向 `_main` 三处调用点
+  的 `tests/test_calibrate_rehearsal.py:186`、`tests/test_calibrate_rehearsal.py:207`、
+  `tests/test_calibrate_rehearsal.py:218` 三枚逐枚回查，仍各自落在那三行上。
+- **`#263` 那把钝词尺先把本节自己的一句话顶红过一次**：K1 那条最初只把刀消息里的签名写作「`_table(played)`」，
+  而 `tests/test_synthetic_attribution.py:34` 那一行上写的是 `_table` 与 `game_id` 两枚 ⇒ 这一格里唯一在场的
+  那一枚没被写成名字，它在这本书占 11/154 行 ≥ max(8，⌈154÷16⌉＝10)，闸门报「钝词独撑」，那一趟定向六本
+  `1 failed、398 passed`（起读 `04:32:58Z`／收读 `04:34:02Z`）。改的是句子不是判据——把要核对的两枚都写成名字，
+  那串签名照抄、另起一句 ⇒ 同一本闸门书单跑 `141 passed`、rc 0（起读 `04:34:51Z`／收读 `04:35:07Z`，负载 8.97）。
+- **行号闸门在这片新文本上开过火（负控制一枚）**：负控制是往本节末尾插一行假引用——把
+  `tests/test_synthetic_attribution.py` 的一个不属于 `_table` 定义所在那一格的行号配上这个名字当出处 ⇒
+  `test_a_line_number_written_in_the_docs_still_points_at_the_thing_named_beside_it` 当场 `1 failed`、rc 1，
+  消息写着那一行没有这个名字、它真正住在第几行、差多少行（回显 `census332/neg_control_linecite.txt`）。那枚假号
+  不写进本节，否则本节自己就成了它逮的那一形（描述一种错不能靠复制那种错）；插完按字节还原、sha256 与刀前相等。
+- **今值**（计数是证人，秒数是脏读数）：定向六本 `399 passed`、rc 0（起读 `04:39:58Z`／收读 `04:40:28Z`，29.28s，
+  收读时负载 6.47）；定向两本（`tests/test_doc_citations.py`＋`tests/test_wiring.py`）`278 passed`、rc 0
+  （起读 `04:39:25Z`／收读 `04:39:52Z`，26.54s，负载 8.43）；全量离线 `1293 passed`、rc 0（起读 `04:36:56Z`／
+  收读 `04:38:33Z`，96.41s，负载 5.34）——与 `#331` 那一格同数：这一片没加新用例，只把地板那一条换了牙，所以
+  全量不涨。本节最后只挪过这些时刻数字，挪完再跑同一对定向两本仍以 `278 passed`、rc 0 收。
+- **这一片做的事与没做的事**：做的是两支各按失效方向处置（一支连参数摘、一支只摘静默那一路）、地板那条用例
+  第一次有了「参数不在场也会红」的牙、两处过期散文改口；没做的是不给 `tests/test_synthetic_attribution.py`
+  那一形补第二份断言（主人家在 `tests/test_golden_game.py`），不给 `tests/test_calibrate_rehearsal.py` 造新用例
+  （页眉与重渲染那两条现成证人正好盖住这一形），不改 `scripts/calibrate.py` 与 `src` 里任何一本，不打局域网那台
+  真端点，也不把架上的刀搬进仓库——`census332/` 在机器上、不在版本控制里（`#302` 那一题还没决断）。
