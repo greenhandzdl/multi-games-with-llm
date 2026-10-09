@@ -802,3 +802,60 @@ def test_the_file_face_probe_fires_on_a_planted_key_shape(monkeypatch):
         planted.unlink(missing_ok=True)
         if made:
             face_dir.rmdir()
+
+
+# ------------------------- 面级名册 walk 跳过缓存副本：这一格此前零读者
+
+def test_the_face_walk_skips_cached_copies_but_still_counts_the_real_books(monkeypatch, tmp_path):
+    """两条交名判据里那枚 `__pycache__` 过滤，`#333` 的执行普查整趟没落到过。
+
+    现量两件事（`06:27:02Z` 一把合成树探针）：`rglob("*.py")` **认得** `__pycache__` 里的一枚 `.py`
+    （埋一枚就返回它），而今天三面各 0 枚那样的住户（全树 43 枚 `__pycache__` 目录里只有 `.pyc`）。
+    所以这一格是"今天没人走到"而不是"结构上走不到"：摘掉它今天一条都不会红，可一次意外的缓存副本
+    （工具把源码另存进那个目录）就会凭空变成第 N+1 枚调用点，而这两条主张数的是树上真住着的本。
+    摘它的代价是 `#333` 量下的那 30 处入站行号指针——所以按 `#265` 的方向处置：留着，给它一枚独占
+    证人，不替历史改号。
+
+    证人开的是那两条今值守卫本人，不另抄一把尺（`#153` 那一课）。语料交给 `tmp_path` 上一棵合成树：
+    三本真书都把名字交了（计价那本五枚、借正本那两本各两枚，正好压过两条守卫自己的 `>= 5`／`>= 4`
+    地板），另外在 `src/__pycache__/` 里埋一本**无名**的。三腿各钉一件事，缺一条这条证人就是空的：
+
+    * 走得到——合成树上 `rglob("*.py")` 当场返回那一本，所以"看不见"不是 glob 的功劳；
+    * 尺认得出——两枚 helper 直接读那本文本，各读出那一枚没交名的调用点；
+    * 守卫不认——两条今值守卫跑这棵树是绿的，挡下它的只有那枚过滤。
+    """
+    def sites(count: int, call: str) -> str:
+        body = "".join(f"def site_{i}(resp, env):\n    return {call}(resp, env)\n\n\n"
+                       for i in range(count))
+        return f"def {call}(body, key_env):\n    return body\n\n\n{body}"
+
+    cache_book = ("from .transport import redact\n\n\n"
+                  "def stale_scrub(body):\n    return _scrub_string(body)\n\n\n"
+                  "def stale_redact(body):\n    return redact(body)\n")
+    books = {
+        "src/wolfengine/transport.py": sites(5, "_scrub_string"),
+        "src/wolfengine/llm.py": (
+            "from .transport import redact\n\n\n"
+            + sites(2, "redact")),
+        "scripts/calibrate.py": (
+            "from wolfengine.transport import redact\n\n\n"
+            + sites(2, "redact")),
+        "src/__pycache__/transport_probe.py": cache_book,
+    }
+    for rel, text in books.items():
+        target = tmp_path / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+    (tmp_path / "tests").mkdir()
+
+    walked = sorted(str(p.relative_to(tmp_path)) for p in (tmp_path / "src").rglob("*.py"))
+    assert "src/__pycache__/transport_probe.py" in walked, \
+        f"埋下去那一本连 glob 都没返回，那第三腿就成了自测：{walked}"
+    assert [s[2] for s in _scrub_call_sites(cache_book, "src/__pycache__/transport_probe.py")] \
+        == [False], "尺读不出缓存里那枚无名调用点"
+    assert [s[2] for s in _borrowed_sites(cache_book, "src/__pycache__/transport_probe.py")] \
+        == [False], "尺读不出缓存里那枚无名的借用点"
+
+    monkeypatch.setattr("test_no_secrets.ROOT", tmp_path)
+    test_every_scrub_call_site_in_the_production_face_names_the_variable()
+    test_every_borrowed_scrubber_call_site_in_the_production_face_names_the_variable()
