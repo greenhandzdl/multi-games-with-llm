@@ -246,7 +246,7 @@ def render_chronicle_file(path: Path, *, god: bool = False, as_seat: int | None 
     return lines
 
 
-def render_chronicle(events: list[Event], *, god: bool = False, as_seat: int | None = None,
+def render_chronicle(events: list[Event], *, god: bool = False, as_seat: int | None,
                      show_fallback: bool = True) -> list[str]:
     """`as_seat` is not a filter for convenience — it *is* the isolation property made
     visible: give a colleague the same file with `--seat 3` and they watch a different game,

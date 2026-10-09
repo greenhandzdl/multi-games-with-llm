@@ -15877,3 +15877,54 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
 - **这一片没做的事**：名单上 20 枚一枚都没摘——尺修好之前不摘是这一族的规矩，处置留给下一片按 `#265`
   逐枚定性格、按 `#317` 先量形状证人的价；那 22 枚仍不定的绑定没动；`#322` 的归档不需要改口（落格那一格证的
   就是这件事）；这把加宽尺仍只在搁板上、没进闸门（`#302` 那一题还没决断）。
+
+## `#330` 处置 `#329` 名单上 src 那九枚：九枚全摘，两向各有一具证人，`#324` 的地板被自己这一刀顶红一次
+
+- **摘的九枚，逐枚的调用点（AST 枚举 `Call` 结点数的，不是 grep）**：
+  - `assemble._region_b(shrink=)`：唯一调用点 `src/wolfengine/assemble.py:274`，`shrink=shrink` 交得很实。值的主人家是
+    同一本 `assemble.py:270` 那格 `shrink: int = 0`（`assemble()` 的默认值有人走，`#329` 判它「有人走」）⇒ 主人家留、抄本摘。
+  - `assemble._region_c(repeat_fragments=)` 与 `retry_note=`：唯一调用点 `src/wolfengine/assemble.py:277`，两格都显式交值；
+    主人家是 `repeat_fragments` 那格（`src/wolfengine/assemble.py:268`）与 `retry_note` 那格（`src/wolfengine/assemble.py:269`，
+    同一理由：留主人家、摘抄本）。
+  - `cli.render_chronicle(as_seat=)`：两处调用点各自交值——`src/wolfengine/cli.py:236` 交的是 `as_seat=as_seat`，
+    `tests/test_human_seat.py:326` 交的是 `as_seat=3`。**同一条签名上 `god` 那一格没摘**，摘它的价由 K2 量：那一枚
+    调用点 `tests/test_human_seat.py:326` 每一次都省 `god`，只把签名改成必填就当场 `TypeError`（`render_chronicle`）。
+  - `legality._check_citations(known_ids=)`：唯一调用点 `src/wolfengine/legality.py:109`。这一枚的 docstring 自己就写着
+    「it is a parameter rather than a default guess」（`src/wolfengine/legality.py:150`）——签名里那枚 `= None` 是它自己
+    那句话的第二作者。摘的是默认值不是那档位：`src/wolfengine/legality.py:158` 的 `known_ids is None` 那一支照旧可达
+    （调用方显式交 `None`），`src/wolfengine/legality.py:148` 说清了这套 id 从 `agent.py` 来。
+  - `metrics.char_ngrams(n=)`：五处调用点——`src/wolfengine/metrics.py:55` 两枚、`tests/test_readings_floor.py:29` 起的
+    三枚——每一枚都交值。主人家是 `src/wolfengine/metrics.py:49` 的 `jaccard` 那格 `n: int = 4`。反对意见登记：
+    `char_ngrams` 住在 `src/wolfengine/metrics.py:1622` 的 `__all__` 名册里，名册外的读者可能把它当公共入口——按
+    `#292` 的判决（名册层没有机械读者）这不是一枚调用点，压过。
+  - `render_live.draw(god=)` 与 `reveal_seat=`：两处调用点 `src/wolfengine/render_live.py:300` 与 `tests/live_frame.py:29`
+    都两格交值；主人家分别是 `watch()` 自己的签名和 `tests/live_frame.py:23` 的 `frame_text(..., god: bool = False,`。
+  - `report.axis_diff(axis=)`：调用点 `src/wolfengine/batch.py:499` 一枚加 `tests/test_report_stats.py:85` 起十三枚，全交值。
+- **形状证人（进仓库的只有这一条）**：`tests/test_wiring.py` 尾 `test_the_src_defaults_nobody_ever_omits_are_now_required`
+  把九枚钉成「不许再有出厂值」。先红后绿：写它时 `1 failed`、消息逐枚点名九枚今值（`0`、`()`、`''`、`None`、`4`、
+  `False`、`None`、`()`），摘完才绿。它读的是「有没有默认值」而不是值本身，所以两向的形状证人不在这里重复——
+  `#322` 那两条用例（外加 `test_the_missing_default_predicate_also_reads_a_real_default` 那支真默认值）已经同时读过
+  有值与 `empty` 两支（`#153` 的只住一处）。
+- **`#324` 那把闸门的地板被自己这一刀顶红一次**：`test_no_engine_parameter_default_restates_a_config_or_cli_author_by_name`
+  里那句 `len(params) >= 100` 数的是「参数面上带默认值的枚数」，九枚摘掉后参数面 108 → 99，当场红。地板重钉在 90，
+  理由写进了失败消息那一格：地板量的是「尺还活着」，不是枚数。这是 `#313`「地板要按面各钉」的第二次现形。
+- **两具刀**（架 `census330/knife_src_defaults.py`＋`knife.log`＋`knife_k1.log`＋`knife_k2.log`；六本 baseline 的 sha256 前缀
+  逐本 MATCH、两具都行数中性、落盘后 `compile()` 过才信判定）：
+  - K1 顶零方向：把九枚出厂值原样抄回签名 ⇒ `tests/test_wiring.py` `1 failed、135 passed`，红只在新用例那一条，且消息里
+    九枚逐枚点名（九格每一格都被读到，不是读到第一格就返回）。附带一笔：抄回默认值**不**顶红 `#324` 那把按名对作者的
+    闸门 ⇒ 用量账与「第二作者」是两把正交的尺，摘这九枚的证据不能由后者代付。
+  - K2 顶宽方向：只摘名单外那一枚有人走的 `god` ⇒ 新用例仍绿（那一趟 `30 passed` 含它），而唯一省略它的调用方
+    `tests/test_human_seat.py:326` 当场 `TypeError: render_chronicle() missing 1 required keyword-only argument: 'god'`
+    ⇒ 这条用例不过收；「有人走」那一档的主人本来就是调用方，不是签名。
+- **运行时证人**：九枚全摘后整套离线套件 rc 0（今值那一格）——少交任何一枚都会当场 `TypeError`，这才是「没有任何调用点
+  走这九枚默认值」的最后一环；前面的账是 AST 静态数出来的。
+- **诚实边界**：这九枚的函数名在各书唯一（按名 grep 与 AST 枚举两向都核过；`draw` 的第二具 `def draw(other: int = 9)`
+  住在 `tests/test_wiring.py` 的合成夹具字符串里、不是真 def，`#329` 已为它付过一次核验）。动态派发（`getattr` 之类）
+  没有尺覆盖，这一族从 `#237` 起就登记在执行普查的已知盲区里。
+- **今值**（计数是证人，秒数是脏读数）：定向两本（`test_doc_citations.py`＋`test_wiring.py`）`277 passed`、rc 0
+  （起读 `03:06:27Z` 负载 8.61／收读 `03:07:29Z`，61.51s）；全量 `1292 passed`、rc 0（紧接着的上一趟，起读
+  `03:03:28Z` 负载 12.45／收读 `03:06:19Z` 负载 9.01，170.45s）。两处都比 `#329` 那一格多一枚，多的就是本片那一条
+  新用例。下面「这一片没做的事」那一格写完后再跑定向，那一趟与这里的差别只在这两句里的时刻数字。
+- **这一片没做的事**：`#329` 名单上 tests 面那十一枚没人走的默认值一枚没动——它们的主人家里坐着夹具（`#227` 那一族），
+  摘不摘要按 `#265` 逐枚问失效方向，留给下一片；`#322`／`#323`／`#329` 三本的归档不改口（记的都是当时的现量）；
+  用量账那把尺仍只在搁板上、没进闸门（`#302` 那一题还没决断），进仓库的只有点名九枚的那一条用例。

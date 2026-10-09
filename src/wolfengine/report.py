@@ -226,7 +226,7 @@ class AxisDiff:
         return "\n".join(L) + "\n"
 
 
-def axis_diff(a: Any, b: Any, *, axis: Sequence[str] = ()) -> AxisDiff:
+def axis_diff(a: Any, b: Any, *, axis: Sequence[str]) -> AxisDiff:
     """Compare two configs and enforce that only the declared axis moved."""
     fa, fb = flatten(a), flatten(b)
     declared = set(axis)

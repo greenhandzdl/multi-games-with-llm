@@ -111,7 +111,7 @@ def block_tokens(text: str, tok: TokenBudget) -> dict[str, int]:
 
 
 def _region_b(percept: Percept, rb: RegionBudget, cfg: Config, *,
-              shrink: int = 0) -> tuple[str, FoldPlan, dict[str, int]]:
+              shrink: int) -> tuple[str, FoldPlan, dict[str, int]]:
     """B1 folded days + B2 verbatim tail, then B0's status card **last**.
 
     Returns the two halves' token estimates alongside the text because the day floor in
@@ -182,8 +182,8 @@ def _region_c(
     phase: Phase,
     cfg: Config,
     rb: RegionBudget,
-    repeat_fragments: tuple[str, ...] = (),
-    retry_note: str = "",
+    repeat_fragments: tuple[str, ...],
+    retry_note: str,
 ) -> tuple[str, str | None, int]:
     assigned = legal.assigned_act
     card = render_card(belief)

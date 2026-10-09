@@ -4368,11 +4368,46 @@ def test_no_engine_parameter_default_restates_a_config_or_cli_author_by_name():
     bindings = _default_author_bindings({b: src[b] for b in DEFAULT_AUTHOR_BOOKS})
     params = [(name, word, line, book) for book in src
               for name, word, line, _where in _parameter_defaults(src[book])]
-    assert len(src) >= 26 and len(bindings) >= 40 and len(params) >= 100, (
+    assert len(src) >= 26 and len(bindings) >= 40 and len(params) >= 90, (
         f"扫描面缩水了：src {len(src)} 本、作者面 {len(bindings)} 格绑定、参数面 {len(params)} 枚默认值"
-        "——尺读不到不等于仓库里没有，这一条的 rc 0 只有在三面真扫到东西时才算读数")
+        "——尺读不到不等于仓库里没有；地板量的是尺还活着，不是枚数（`#330` 摘 9 枚抄本把参数面摘窄了 9 枚）")
     hits = _restated_defaults(src, bindings)
     assert not hits, (
         f"参数默认值又有了第二份抄本 {len(hits)} 枚：{hits}——箭头右边才是主人家。要么摘掉签名里那枚"
         "（调用方自己传，值只剩一个作者），要么改个名字说清它管的是另一件事")
+
+
+def test_the_src_defaults_nobody_ever_omits_are_now_required():
+    """`#329` 名单上 src 那九枚出厂值：调用点每一枚都自己交值，签名不再替它们编一个。
+
+    证据分三层，缺一层这句话就只是「我以为没人用」：
+
+    - 用量账判这九枚「没人走」——`#329` 那把尺把读者面加宽到全仓四形（同书裸名／跨书裸名／限定名／
+      夹具别名），`#328` 那把带双向账的作用域尺逐枚复核过同一结论；
+    - 摘完之后整套离线套件绿，那才是「没有任何调用点走默认值」的运行时证人：少交一枚当场 TypeError；
+    - 这一条本身把九枚钉成「不许再有出厂值」，否则下一次有人顺手补回去，前面两层的账就白算。
+
+    两向的形状证人不在这里重复：`test_the_missing_default_predicate_also_reads_a_real_default` 已经
+    同时读过「有出厂值」和「没有」两支（`#153` 的只住一处）。范围停在 `src/`：名单上 tests 那十一枚的
+    主人家坐在夹具里，摘不摘要按 `#265` 逐枚问失效方向，这一片没做。
+    """
+    import inspect
+
+    from wolfengine import cli, metrics, report
+
+    required = [
+        (assemble._region_b, "shrink"),
+        (assemble._region_c, "repeat_fragments"), (assemble._region_c, "retry_note"),
+        (cli.render_chronicle, "as_seat"),
+        (legality._check_citations, "known_ids"),
+        (metrics.char_ngrams, "n"),
+        (render_live.draw, "god"), (render_live.draw, "reveal_seat"),
+        (report.axis_diff, "axis"),
+    ]
+    still = {f"{fn.__module__}.{fn.__name__}({name})": inspect.signature(fn).parameters[name].default
+             for fn, name in required
+             if inspect.signature(fn).parameters[name].default is not inspect.Parameter.empty}
+    assert not still, (
+        f"这 {len(still)} 枚又有了出厂值：{still}——它们每一枚的全部调用点都自己交值，"
+        "名单与逐枚调用点现量在 `#329` 那一节")
 

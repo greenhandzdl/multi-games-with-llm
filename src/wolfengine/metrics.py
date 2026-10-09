@@ -33,7 +33,7 @@ from .prompts.templates import EXAMPLE_EVENT_IDS
 # --------------------------------------------------------------------------
 
 
-def char_ngrams(text: str, n: int = 4) -> Counter:
+def char_ngrams(text: str, n: int) -> Counter:
     """Character n-gram multiset.
 
     Deliberately unsegmented: jieba would add a dependency and a failure mode

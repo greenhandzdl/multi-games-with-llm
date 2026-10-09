@@ -135,7 +135,7 @@ def _add(v: Verdict, strict: bool, msg: str) -> None:
 
 
 def _check_citations(
-    action: Action, percept: Percept, *, known_ids: frozenset[str] | None = None
+    action: Action, percept: Percept, *, known_ids: frozenset[str] | None
 ) -> dict[str, object]:
     """Three buckets, because "no citation", "citation from a place you can't see" and
     "citation to an event that never happened" are three different failures.

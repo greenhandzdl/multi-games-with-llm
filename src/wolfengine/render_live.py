@@ -169,7 +169,7 @@ def _reveal(events: list[Event], seat: int) -> list[str]:
 
 
 def draw(console: Console, events: list[Event], meta: dict[str, Any], *,
-         god: bool = False, reveal_seat: int | None = None) -> None:
+         god: bool, reveal_seat: int | None) -> None:
     """One frame. Everything below it is formatting; the three decisions that matter —
     which events, which markers, which belief pairs — are render_html's.
 
