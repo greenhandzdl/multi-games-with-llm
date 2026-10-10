@@ -1642,3 +1642,106 @@ def test_a_log_written_before_the_stamps_prints_no_invented_provenance(played, t
     for word in ("CONTRACT", "RULES", "COMPACT", "板"):
         assert word not in printed, f"没有版本戳的文件被印了「{word}」：{printed[-200:]!r}"
 
+
+def test_the_value_reader_has_two_bool_words_and_no_others():
+    """The `true`/`false` leg had no reader at all: every `--set` in the suite and in the manual
+    hands a number or a list. What the leg is for is the boundary the docstring names — `1` must
+    stay an int, because `apply_overrides` type-checks against the field's current value and a
+    `1`→`True` shortcut would turn a refusal into a silently different arm."""
+    assert cli._coerce("true") is True
+    assert cli._coerce(" false ") is False
+    assert cli._coerce("1") == 1 and not isinstance(cli._coerce("1"), bool)
+
+
+def test_arm_names_have_to_be_distinct_before_the_first_game(tmp_path, capsys):
+    """`--configs A,A` used to reach the batch loop, where two arms sharing a name write into the
+    same directory and the report compares one arm against itself. The empty list (`--configs ,`)
+    is the same refusal with the other cause; neither may leave a run directory behind."""
+    base = ["batch", "--out", str(tmp_path), "--games", "1", "--seed0", "3", "--mock"]
+    assert cli.main([*base, "--configs", "A,A"]) == 2
+    assert "互不重名" in capsys.readouterr().err
+    assert cli.main([*base, "--configs", ","]) == 2
+    assert "互不重名" in capsys.readouterr().err
+    assert not (tmp_path / "A").exists(), "拒判不许已经开了跑"
+
+
+def test_gate_on_a_folder_without_game_logs_names_the_folder(tmp_path, capsys):
+    """`gate` needs a denominator. A directory holding no `*.jsonl` has none, and silence with
+    exit 0 would read as "this batch passes" — so the sentence has to name the directory the
+    reader actually pointed at."""
+    empty = tmp_path / "nope"
+    empty.mkdir()
+    assert cli.main(["gate", str(empty)]) == 2
+    err = capsys.readouterr().err
+    assert "里没有 *.jsonl" in err and str(empty) in err, err
+
+
+def test_the_module_entry_hands_mains_returncode_to_the_shell(tmp_path, monkeypatch):
+    """`python -m wolfengine.cli` is the run-without-installing shape the archive's repro lines
+    use, and the console script never passes through the `__main__` tail. If the tail dropped
+    `SystemExit`, every `-m` run would exit 0 on a refusal — the rc below comes only from
+    `main`'s return value."""
+    import runpy
+    import sys
+
+    empty = tmp_path / "logs"
+    empty.mkdir()
+    monkeypatch.setattr(sys, "argv", ["wolfengine.cli", "gate", str(empty)])
+    monkeypatch.delitem(sys.modules, "wolfengine.cli")
+    with pytest.raises(SystemExit) as exc:
+        runpy.run_module("wolfengine.cli", run_name="__main__")
+    assert exc.value.code == 2
+
+
+
+# 这两格只在「不安静」的那一条路上，而仓库里原先只有子进程走这条路（README 那块整块 bash），
+# 所以窄窗普查尺在本进程从没看见过它们。下面两条把证人接到进程内：一条问那一屏有没有交给人，
+# 一条问 canary 那一跳在端点「不答且不说是谁的错」时报的是哪一句。
+def test_a_finished_run_hands_the_chronicle_to_the_reader(tmp_path, capsys):
+    rc = cli.main(["run", "--mock", "--seed", "7", "--out", str(tmp_path)])
+    out = capsys.readouterr().out
+    assert rc == 0
+    chronicle = [l for l in out.splitlines() if l.startswith("[e")]
+    assert len(chronicle) > 3, f"不安静却没把那一屏交出来：{out[:200]!r}"
+    assert out.splitlines()[0].startswith("[g"), "第一行是汇总，编年史在它后面"
+
+
+def test_the_canary_probe_names_the_outage_when_the_endpoint_stops_answering(monkeypatch):
+    """429 这一形由 `LLM` 交回调用方自己决定怎么报（`TIME_DEPENDENT_STATUSES` 把它算成"不是
+    上游的错"），所以 canary 那句 `EndpointUnavailable` 只能由探针自己抛。
+
+    先把这一形在 `LLM` 那一层**不抛**钉住，否则下面的 `pytest.raises` 分不清抛出的是哪一手。
+    退避用 `sleep=` 注入吃掉，真实时钟不在证人里。
+    """
+    import asyncio
+
+    from wolfengine import llm as llm_layer
+    from wolfengine.transport import TransportResult
+
+    real_llm = llm_layer.LLM
+    waited: list[float] = []
+
+    async def _no_wait(secs):
+        waited.append(secs)
+
+    class _RefusedByRateLimit:
+        async def chat(self, messages, **kw):
+            return TransportResult(ok=False, latency_s=0.1, status=429,
+                                   error="Too Many Requests")
+
+    def _llm(transport, cfg, **kw):
+        return real_llm(transport, cfg, sleep=_no_wait)
+
+    monkeypatch.setattr(llm_layer, "LLM", _llm)
+    cfg = cli.build_config()
+    outage = _RefusedByRateLimit()
+    res = asyncio.run(real_llm(outage, cfg, sleep=_no_wait).complete(
+        [{"role": "user", "content": "一句话"}], max_tokens=8,
+        temperature=0.0, phase_key="canary"))
+    assert not res.ok, "这一形该交回调用方，而不是在 LLM 那一层就地抛"
+
+    probe = cli._canary_probe(cfg, outage)
+    with pytest.raises(llm_layer.EndpointUnavailable) as exc:
+        asyncio.run(probe("一句话"))
+    assert "Too Many Requests" in str(exc.value), str(exc.value)
+    assert waited, "重试的退避没走到，这一形就没花完它的配额"

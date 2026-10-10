@@ -640,3 +640,50 @@ def test_losing_the_terminal_mid_game_still_exits_cleanly(gold, monkeypatch):
         if polls < 2:
             os.close(slave)
     assert polls == 2, "循环没走到按键那一格，这一趟什么也没测"
+
+
+def test_a_key_timeout_is_not_a_keystroke(monkeypatch):
+    """`select` timing out means nobody typed anything: not a keystroke (which would redraw and
+    could retire a view), and not a closed keyboard (which would stop polling altogether). The
+    `eof` and real-character legs have their own witness; the timeout leg had none."""
+    import select as _select
+
+    monkeypatch.setattr(_select, "select", lambda r, w, t, timeout: ([], [], []))
+    assert render_live._read_key(0.4) is None
+
+
+def test_a_poll_without_a_keyboard_wakes_on_the_line_that_lands_later(gold, tmp_path, monkeypatch):
+    """After `eof` retires the keyboard the loop sleeps instead of reading keys, and the frame
+    only advances when a line lands during that sleep. `tail_events` and the file are real here:
+    a loop that slept without picking the new event up, or picked it up without redrawing, would
+    leave a spectator staring at a game that had already ended."""
+    lines = gold[0].path.read_text(encoding="utf-8").splitlines()
+    log = tmp_path / "growing.jsonl"
+    log.write_text("\n".join(lines[:-1]) + "\n", encoding="utf-8")
+    monkeypatch.setattr(render_live, "_read_key", lambda timeout: "eof")
+
+    slept: list[float] = []
+
+    class _Clock:
+        def sleep(self, secs):
+            slept.append(secs)
+            if len(slept) == 1:
+                with log.open("a", encoding="utf-8") as f:
+                    f.write(lines[-1] + "\n")
+
+    polls: list[int] = []
+    real_tail = render_live.tail_events
+
+    def counting_tail(*args, **kw):
+        polls.append(1)
+        if len(polls) > 10:
+            raise _StillPolling(f"没有终局事件可等，循环转了 {len(polls)} 圈")
+        return real_tail(*args, **kw)
+
+    monkeypatch.setattr(render_live, "time", _Clock())
+    monkeypatch.setattr(render_live, "tail_events", counting_tail)
+    con = _Recorder()
+    assert render_live.watch(log, console=con, poll=0.2) == 0
+    assert slept == [0.2], f"没有键盘时该按 poll 打盹：{slept}"
+    assert con.frames[-1] != con.frames[0], "终局那行落了盘却没换出一帧"
+    assert any("好人阵营获胜" in t for t in con.frames[-1]), con.frames[-1]

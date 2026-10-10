@@ -1009,7 +1009,7 @@ ZeroDivisionError 换回来，有了地板它是冗余但不是错误；不顺�
 `#59`/`#60` 之后重数过一次，`#63`/`#67`（C2 的刀与刀的读数）又给这个文件加了两条、`#68`
 （指派的读者）再加一条、`#70`（前缀缓存的读者）再加两条、`run --set` 这一轮再加五条（下面〈把前缀
 长度拧到两档〉那节）：
-现在 `tests/test_cli.py` 70 条、跑起来 83 个用例，含最下面 `#121` 那三条）
+现在 `tests/test_cli.py` 76 条、跑起来 89 个用例，含最下面 `#121` 那三条）
 
 #### 类型过了、范围没过：越界的 `--seat` 印出一份观众视图，要一块不存在的板子留下一个空目录
 
@@ -4217,7 +4217,7 @@ K5 要按样子读：它确实被杀，但**不是一把能定位证人的刀**�
 * **EOF 是一个名字，不是一次代答**：`Proposal(failure="human_input_closed")` 让"这个人走了"落进
   `attempts[]`，而引擎替他做的是 `pass`（`default_action` 的口径），不是替谁编一票。
 
-十用例在 `tests/test_human_seat.py`（现 30 条，一秒钟内，不发请求；这一片落地的是其中前十条，`#124`
+十用例在 `tests/test_human_seat.py`（现 31 条，一秒钟内，不发请求；这一片落地的是其中前十条，`#124`
 又在这份文件里加了两条屏上局况的）。八具变异加两具负控制照
 `/tmp/mut122.py`（2026-09-25T10:33Z，每具点名它期望弄红的那条，跑完按字节 `cmp` 还原，前后基准都是
 0 红，pyc 前缀每轮换新）：
@@ -4370,7 +4370,7 @@ stdin 用管道喂三行后就是 EOF）里，3 号那六回合各自说的是�
 
 ### 这一片的两条主张各自住在哪个文件
 
-"该在的在"是 `tests/test_human_seat.py`（现 30 条）：他听过的两句原话上了屏、屏上说了是谁说的、窗口
+"该在的在"是 `tests/test_human_seat.py`（现 31 条）：他听过的两句原话上了屏、屏上说了是谁说的、窗口
 的**方向**（砍的是最旧的）、以及标题上那个"最近 N 条"和屏上真的条数是同一个数。
 "不该在的不在"是 `tests/test_info_isolation.py`（12 条函数、跑起来 36 个用例，其中三条是这一片新加的，
 展开成 15 个断言）：原来那张板的五条私有
@@ -7838,7 +7838,7 @@ N1 / N4 / N7 / N8 四具红在同一条用例上，但红在不同那半句：�
 #### 摘自 `docs/views.md` 第 252 到 253 行与第 269 行（搬运前那一版，`297d912`），逐字——只有第一行里"渲染层有几条用例"那三个数按今天的树重数过
 
 ```text
-渲染层 83 条用例（`test_render_html.py` 44 + `test_render_live.py` 39）里，每条都被"把被保护的
+渲染层 85 条用例（`test_render_html.py` 44 + `test_render_live.py` 41）里，每条都被"把被保护的
 分支改坏"验过一次它会真的红，改完再按 sha256 校验还原成字节相同的文件。本轮重跑并确认被抓住的：
 ```
 
@@ -8502,7 +8502,7 @@ E           KeyError: 'contract_version'
 
 README 里 `tests/test_cli.py` 那一行：被计数闸门认出来的那个数按 `2b57a58` 之后的每一版重数过（`#197` 这一版又数了一次），其余逐字在册——出处就是 `2b57a58` 那一版的 README：
 ```text
-（现 63 条、跑起来 83 个用例，三条各参数化为 4/6/2 个）。往上数这条链的账、以及「它们各自是那一刻的账」那句规矩，一起搬进了
+（现 63 条、跑起来 89 个用例，三条各参数化为 4/6/2 个）。往上数这条链的账、以及「它们各自是那一刻的账」那句规矩，一起搬进了
 ```
 
 还有一格形状是这两趟红之间现学的：点名锚与模块名的那一行必须**紧贴**围栏，中间不许留空行。`_registered` 的锚窗口和 `_collected_claims` 的取名窗口都是"往上共三行"，而 Markdown 的空行也占一格——段落、空行、点名行、空行、围栏、正文这样排版时，点名行落在窗口外的第三格上，两条闸门同时回到"没主人"和"没锚"（04:33:39Z 那趟就是这个形状：mask 已经配上了，窗口没够着）。把那个空行去掉之后 04:34:12Z 那趟七条合跑全绿，包括这条在册判据原有的那五条夹具。
@@ -8793,7 +8793,7 @@ docstring、以及这一片开头那句。`test_the_reproducibility_flag_reaches
 
 #### 计数账跟着动的六处
 
-`tests/test_cli.py` 现 70 条、跑起来 83 个用例（四条各参数化为 4/6/2/5 个；05:58:23Z 各数一遍，`--collect-only` 报
+`tests/test_cli.py` 今 76 条、跑起来 89 个用例（这一片落地时是 70 与 83；四条各参数化为 4/6/2/5 个；05:58:23Z 各数一遍，`--collect-only` 报
 80，AST 数 `def test_` 报 67）。被计数闸门认出来的六处都跟着动了：归档那一节（〈零局的批次先落了盘，再在摘要行上读一个
 空列表〉）里的两处带模块名的、围栏里那半截在册引文的收集数、`#181` 那节的两处、以及 README 那一处。
 
@@ -8883,7 +8883,7 @@ README 那一处这次不止动了数字：那句"三条各参数化为…"是�
 
 #### 计数账跟着动的五处
 
-`tests/test_cli.py` 现 70 条、跑起来 83 个用例（新加的一正一反都在这一本），`tests/test_wiring.py` 跑起来 100 个
+`tests/test_cli.py` 今 76 条、跑起来 89 个用例（这一片落地时是 70 与 83；新加的一正一反都在这一本），`tests/test_wiring.py` 跑起来 100 个
 用例（名单多一格参数）。07:21:42Z 用闸门自己那三条正则把四本手册页加 README 各扫一遍，被认出来的 `test_cli`
 写法是五处：README〈测试〉那一格的收集数、归档〈零局的批次先落了盘，再在摘要行上读一个空列表〉那节一处、
 `#180` 之后一直挂在册的那半截围栏引文、`#182` 那节里〈计数账跟着动的六处〉一处、以及本节这一处。围栏那一处只动收集数，条数仍是 63，理由与 `#182` 记过的
@@ -15773,8 +15773,8 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
   它的过收控制是摘完之后整套 `1291 passed`——若真有第二个调用方走这枚默认值，红会出现在它自己那一本里，
   而不是只有这一条。样式 `ul.chron li.peace` 一个字没动（它管墨不管账）。
 - **计数账被闸门自己逮住一次**：`docs/views.md` 那句「渲染层 82 条用例（`test_render_html.py` 43 ＋
-  `test_render_live.py` 39）」按今天的树重数，我第一趟写成 84，`test_a_stated_total_has_to_add_up_to_its_own_enumeration`
-  当场顶回——**44＋39＝83**。归档里那一处是自称逐字的摘录块，两处同一句一起改，摘录与正本仍然逐字相同；
+  `test_render_live.py` 41）」按今天的树重数，我第一趟写成 84，`test_a_stated_total_has_to_add_up_to_its_own_enumeration`
+  当场顶回——**44＋39＝83**，今天这棵树已是 44＋41＝85（`#335` 那九枚证人）。归档里那一处是自称逐字的摘录块，两处同一句一起改，摘录与正本仍然逐字相同；
   两次改文都是行内、两本行数不变，所以点向那一句的行号指针没被顶歪。同一把只读的眼睛第二回落在本片最后一格：那里把
   `#326` 的残留写成了"src 那 21 枚"，而 `census326/resolve.run9.log` 的现量是三面合计 **22 枚**（src 10／scripts 4／
   tests 8；两族 15＋7 也加得回 22）——按正本改回分面枚数，仍是行内改，本片行数照旧不变。
@@ -16126,3 +16126,44 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
 - **今值**（计数是证人，秒数是脏读数）：被改那一本 `tests/test_no_secrets.py` 单跑 `30 passed`、rc 0（起读 `06:59:48Z`／收读 `06:59:58Z`，9.44s，负载 24.38→22.84，回显 `census334/books_pair334.txt`）；定向两本（`tests/test_doc_citations.py` 加 `tests/test_wiring.py`）`278 passed`、rc 0（起读 `06:59:58Z`／收读 `07:00:46Z`，47.28s，负载 22.84→26.38，回显 `census334/pair_docs334.txt`）——和 `#333` 那一格同数，因为这一片没往那两本里添用例；全量离线走 `-m "not network"` 口径 `1296 passed`、rc 0（起读 `07:00:46Z`／收读 `07:05:38Z`，290.69s，负载 26.38→103.30，回显 `census334/full_offline334.txt`），比 `#333` 盖章趟的 151.95s 慢在共驻负载上（收读那一分钟的 `uptime` 已经翻到 103），1296 对 1295 之差正是这一片新落的那一枚证人。三趟串行、同一台、旁边没起第二进程（起读前 `pgrep -fl pytest` 空），每趟都带 `-o addopts=--strict-markers`，起读收读时刻与逐趟退出码由 `census334/run_final334.sh` 自己打印。
 - **闸门顶回来的两处都在这一页自己的形状上，判据一枚没动**（第一趟 `06:55:18Z`—`06:56:34Z`，`2 failed, 276 passed`，负载 16.57→39.76）：行号闸门嫌上面第三格里那两枚指针"这句话没写出可核对的名字"——那半句里唯一的英文词只有两字符，进不了取词池（`#320` 那把尺量的正是这一档），改法是把被点那一行的字面内容背引出来，两行逐字同形所以一记背引同时背书两枚指针。提交锚闸门把正本文件的哈希前缀当成提交号收走了，红话点到的是这一页的 16123——`#309` 那一课的第二次，只是这回被顶的是文件哈希不是尺面哈希，改法是哈希只进架上的清点、页上留一句"整本 861 行的哈希"。两处改完复跑文档那一本 `141 passed`、rc 0（`06:58:07Z`—`06:58:43Z`，35.22s，负载 28.78→29.49）。
 - **不动点宣布在这里**：上面那两格把读数写在纸上的同时又一次改了正文，盖章那一趟只能跑在这段话之前，它的读数再写进本节就要第三趟来盖它——`#332`／`#333` 同一手法，第二层递归关不掉。改完这两格之后的复跑只记在提交说明里。
+
+## `#335` src 侧那 17 枚从没落过的格逐枚问完：11 枚补上进程内证人、6 枚按方向各有去处，而那一具 MISSED 的刀是刀与住户不同路（**02:50:19Z** 起笔）
+
+- 来路是 `#333` 的名单：窄窗普查尺在 src 侧那一栏报的 never 是 17 枚。这一片一枚 `src` 代码没动（`git status --porcelain src scripts` 空，`git diff --numstat` 里被改的是三本测试与三本文档），动的是证人。尺与口径都不动（`#237` 那一把：名册由 AST 现推、追踪是 `sys.settrace`、正控制认不出必须落过的行就整趟 `exit 2`）；尺仍住在机器上的架子里、不在版本控制里（`#302` 那一题没决断）。
+- **17 枚先分四档**，分档的问法是"摘掉它会红谁"：
+  - **进程内欠证人 11 枚** ⇒ 九枚新用例补上，逐格对账在下面第三格。
+  - **尺看不见 1 枚**：`src/wolfengine/cli.py:209` 那一行 `"rc = 1"`。它有人证，但那证人坐在子进程里（`tests/test_loopback_endpoint.py::test_a_refused_key_is_one_clean_line_and_exit_1`），而窄窗尺只追本进程那一棵解释器——这是 `#242` 那第五个盲区换了第六个单位：不是"窗口按用例开合"，是"窗口按进程开合"。K10／K11／K13 三具刀逮的就是这一档。
+  - **结构上走不到 1 枚**：`src/wolfengine/human.py:35` 的 `TurnContext` 坐在 `if TYPE_CHECKING:` 里，运行时永远不进这一格。它不是"没人走到的分支"，是"只给类型检查器看的那一面"，与 `#226` 那一族同性质，所以按"零读者就删分支"那条处置对它不成立。
+  - **恒假与没人传 3 枚**：`src/wolfengine/cli.py:54` 的 `temperature_ladder`（`build_config` 的 `name` 参数在仓库里没人传过 `"test"` 那一档）、`src/wolfengine/human.py:97` 的 `return None, text`、`src/wolfengine/schema.py:294` 的 `continue`（后两枚是恒假守卫，摘掉今天一条都不会红）。三枚一起交给 `#336` 处置，那一片还要顺路问 `build_config` 的 `name` 参数本身该不该留。
+  - **已定性的 1 枚**：`src/wolfengine/actors.py:187` 的 `action = self.script[self.i]`——脚本替身在夹具 setup 里喂它，`#333` 已把这一形登记成窗口盲区，本片不重复产证据。
+- **11 枚格 ⇄ 九枚证人逐格对账**（证人只补在欠的那一侧，一条用例可以管两格）：
+  - `src/wolfengine/cli.py:478` 那一行 `'t == "true"'` ⇒ `tests/test_cli.py:1646` 那条 `test_the_value_reader_has_two_bool_words_and_no_others`：`--set` 的取值写法里那两枚布尔词整套与手册都没喂过；同一条还钉 `1` 不许塌成 `True`，因为 `apply_overrides` 是拿字段当前值的类型来验的。
+  - `src/wolfengine/cli.py:536` 那句 `"互不重名的臂"` ⇒ `tests/test_cli.py:1656` 那条 `test_arm_names_have_to_be_distinct_before_the_first_game`：`--configs A,A` 与 `--configs ,` 两形各拒一次，并钉拒判不许已经开了跑。
+  - `src/wolfengine/cli.py:626` 那句 `"里没有 *.jsonl"` ⇒ `tests/test_cli.py:1668` 那条 `test_gate_on_a_folder_without_game_logs_names_the_folder`：空目录要当场点名是哪一本目录。
+  - `src/wolfengine/cli.py:790` 的 `SystemExit` ⇒ `tests/test_cli.py:1679` 那条 `test_the_module_entry_hands_mains_returncode_to_the_shell`：`runpy` 走 `__main__` 那条尾巴，console script 从不经过它。
+  - `src/wolfengine/cli.py:203` 的 `render_chronicle_file` 与 `src/wolfengine/cli.py:204` 那句 `print(line)` ⇒ 同一枚 `tests/test_cli.py:1700` 的 `test_a_finished_run_hands_the_chronicle_to_the_reader`：进程内跑一次 `run --mock`，数那一屏编年史有没有交给人。
+  - `src/wolfengine/cli.py:526` 的 `EndpointUnavailable` ⇒ `tests/test_cli.py:1709` 那条 `test_the_canary_probe_names_the_outage_when_the_endpoint_stops_answering`：429 这一形由 `LLM` 交回调用方自己决定怎么报，所以那句 `raise` 只能由探针自己抛；退避用 `sleep=` 注入吃掉，真实时钟不进证人。
+  - `src/wolfengine/human.py:144` 的 `_act_word` ⇒ `tests/test_human_seat.py:695` 那条 `test_a_missing_target_is_refused_in_chinese_not_in_the_gate_code`：`legality` 那句英文码到人这一侧要换成中文。
+  - `src/wolfengine/render_live.py:278` 那一行 `"return None"` ⇒ `tests/test_render_live.py:645` 那条 `test_a_key_timeout_is_not_a_keystroke`：`select` 超时既不是按键也不是键盘关了。
+  - `src/wolfengine/render_live.py:323` 的 `time.sleep` 与 `src/wolfengine/render_live.py:326` 那句 `events += fresh` ⇒ `tests/test_render_live.py:655` 那条 `test_a_poll_without_a_keyboard_wakes_on_the_line_that_lands_later`：`eof`  retire 键盘之后按 `poll` 打盹，打盹期间落盘的那一行要换出一帧。
+- **证人自己也带进来两格新的**（tests 侧分母因此从 1271 涨到 1273）：`tests/test_render_live.py:671` 那句 `log.open` 今天落了（打盹的第一圈里往日志追加末行），`tests/test_render_live.py:680` 的 `_StillPolling` 仍冷——那根保险丝只在循环转过 10 圈时走得到，它钉的是"这一条证人自己不许无声空转"，方向与 `#266` 那两枚同形。登记，不补第三具。
+- **正控制读的是尺自己**：这一趟把 11 枚 MUSTHIT 换成这 11 格，`POS_CONTROL` 十一条全带 hits 且 rc 0，`CENSUS_RULER_BROKEN` 0 次。hits 的分布本身是证词，逐枚点名、分号各审各：`cli.py:203` 的 `render_chronicle_file` 落 82 次；`cli.py:204` 的 `print(line)` 落 81 次（编年史逐行打印，这两格随每一行走一遍）；`cli.py:790` 的 `SystemExit` 落 1 次；`cli.py:526` 的 `EndpointUnavailable` 落 1 次；`render_live.py:278` 那行 `'return None'` 落 1 次；`render_live.py:323` 的 `time.sleep` 落 1 次；`render_live.py:326` 的 `events += fresh` 落 1 次；`cli.py:478` 那行 `'t == "true"'` 落 2 次；`cli.py:536` 那句 `"互不重名的臂"` 落 2 次；`cli.py:626` 那句 `"里没有 *.jsonl"` 落 2 次；`human.py:144` 的 `_act_word` 落 2 次。**hits=1 的那五枚就是"整套里只有新证人走到过它"**——这一格由尺报出而不是由我数用例名报出（`#334` 立的规矩）；hits=2 的四枚各多走一次，这一档没逐枚归因到具体哪一形，登记成未追问。
+- **十四具刀**（脚本 `knives335.py`＋`knives335b.py`，回显 `knives335.out`＋`knives335b.out`；每具锚点先数唯一、落盘后 `compile()`、跑完按字节还原并比整本 sha256，十四次全部 `landed=True restored=True`）：
+  - 九具问新证人（K1—K9）：把被钉的那一条腿改掉——`return t == "true"` 塌成恒真、拒重名那句改字、`return 2` 换成 `return 0`、空目录那句改字、`raise SystemExit(main())` 摘掉 `SystemExit`、中文拒绝句改字、超时返回改成 `"eof"`、`time.sleep(poll)` 摘成 `pass`、`events += fresh` 摘成 `pass` ⇒ 九具全部 CAUGHT，红的都是点名要它管的那一条。
+  - 三具问"尺看不见"那一档（K10—K12）：K10 与 K11 把 `print(line)` 与 `"rc = 1"` 改掉 ⇒ 各 `1 failed`，红的是随仓库走的子进程证人（`test_the_human_seat_block_runs_verbatim` 与 loopback 那一本）——**这一具红而普查尺从没把这些格记成落过**，正是第六个盲区的直接证人；K12 摘掉 `EndpointUnavailable` 那句 ⇒ MISSED（下面单列）。
+  - 两具补 MISSED 与两面（K13、K14）：K13 重下 K10 那一刀但跑整本 `tests/test_cli.py` ⇒ `2 failed, 87 passed`，红的两枚分别是子进程那枚与这一片新落的进程内那枚——证人从"只有一面"变成"两面都有"，这一具才是那半句的硬证人。K14 重下 K12 那一刀 ⇒ `1 failed, 1 passed`，红的只有新证人（`DID NOT RAISE EndpointUnavailable`），旧证人绿。
+  - **K12 的 MISSED 有第三种读法**：先前登记过两种（用例是假的、格是死的）。这一次两者都不是——刀落在 `cli.py:526` 那句 `EndpointUnavailable`，而在册那枚 canary 证人走的是 401 那一路：401 在上游那一层就被 `src/wolfengine/llm.py:178` 的 `raise EndpointUnavailable(last_error)` 收掉，压根不进 526 那一格。摘掉 `cli.py:526` 那句 `raise` 不改变任何一条在册断言，MISSED 于是只说明**这具刀问的不是这一格的住户**。修法不是放宽刀，是给那一格找它自己的住户（`test_the_canary_probe_names_the_outage_when_the_endpoint_stops_answering`），K14 再下一次同形刀 ⇒ CAUGHT。
+  - 账：14 具 CAUGHT 13／MISSED 1（K12，成因已定并已补证人）／等价变异 0。两枚空白控制 KN0（四本 `164 passed` rc 0）与 KN1（`tests/test_cli.py` 单本 `89 passed` rc 0）。
+- **一次字节码投毒把 `#79` 那一课加了个新前提**：K6 那具措辞刀与正本**等长**（`」要点一个座位` 与 `」需要一个目标` 各 6 个字符），还原又落在同一个整秒里，而 CPython 的时间戳型 `.pyc` 校验字段只有"源文件 mtime 的整秒数＋字节数"两项——两个都没变，缓存就仍然"有效"，于是还原之后的运行执行的是被摘掉那一版：`human.cpython-314.pyc` 服务的是被刀改过的句子，不是磁盘上的正本。处置是删掉那本可再生的 gitignored `.pyc`（只此一本），并按现量核对两面：`src`／`tests`／`scripts` 三面对那三枚被摘的措辞各 0 命中，新证人 `test_a_missing_target_is_refused_in_chinese_not_in_the_gate_code` 单跑绿。**下次电池的规矩**：等长刀要在还原后核 `.pyc` 的 mtime 是否晚于源文件，或者直接让整趟电池带着 `PYTHONDONTWRITEBYTECODE` 跑。
+- **文档面被这一片顶成的 12 处计数全数重钉**（脚本 `patch_docs335.py`、回显 `patch_docs335.out`；九处在归档、一处 `README.md`、两处 `docs/views.md`，每处只动被闸门认出来的那个数，锚点要求在该行恰好出现一次，改完逐处按字面回读）：`tests/test_cli.py` 的条数 70→76 与收集数 83→89（四处，含归档 8796 与 8886 那两格留字面的落地时账 70 与 83）、`tests/test_human_seat.py` 30→31（两处：归档与 `docs/views.md`）、渲染层 83→85（两处：`test_render_live.py` 39→41，加总与枚举同趟重数，`#218` 那条三向对账在 15777 那一行当场把 44＋39＝83 顶回，补的是"今天这棵树已是 44＋41＝85"）。三本的行数在重钉那一趟一格没动（该趟的 `git diff --numstat` 是归档 9/9、README 1/1、views 2/2——本节在归档末尾追加的那一段发生在它之后，两处不是一回事）。
+- **顺手量出一枚尺盲区，留档给 `#337`**：`_collected_claims` 的取词是 `个用例` 紧贴，而它在扫之前先把整本折成一行——折行把换行变成空格，于是"跑起来 N 个"在行尾、"用例"在下一行行首的那一句**整个从面上消失**（不是报错，是安静地少一格）。今值：严格形认得出 11 枚（归档 9 ＋ README 2），把 `个` 与 `用例` 之间的空白容许之后多收 1 枚，多出来那一枚住在 `docs/iterations.md` 的 8886 行：那一行末尾写着「跑起来 100 个」，下一行行首接「用例」，两句合起来是给 `tests/test_wiring.py` 记的一条收集数主张，而那一本今天的真数是 137（`--collect-only -q` 现数）。判据一枚没动——这一枚不是句子写错，是尺看不见，加宽要按 `#265` 的规矩先定价再落尺。
+- **形状与行号账**：三本测试都是纯末尾追加（`git diff -U0` 的三个 hunk 是 `@@ -1644,0 +1645,103 @@`、`@@ -692,0 +693,8 @@`、`@@ -642,0 +643,47 @@`，numstat 103/0、8/0、47/0），而本轮取数（语料 `docs/*.md` 加 `README.md`，逐枚列号后数）数出的入站行号指针最大一枚分别停在 1573、504、214 行——全部在追加起点之前 ⇒ 一枚都没挪。三本各自的入站处数：`test_cli.py` 20 处／去重 16 枚、`test_human_seat.py` 12 处／8 枚、`test_render_live.py` 11 处／7 枚。文档那三本改的行数中性由脚本自己把过关（改前改后各数一次）。
+- **闸门在这片新文本上开了四枪，四处改的都是写法**（第一趟起读 `02:53:58Z`／收读 `02:54:23Z`，负载 15.11→12.75，`4 failed, 274 passed`、rc 1，回显 `gate335_pass1.txt`；判据一枚没动）：
+  - 出厂值那一枚把本节第一格里那一枚 `never_executed` 的跨度当成了"文档写死的 key 与数"主张，红话是"src/ 里没有这个名字"——它要的形状是一个键名、一枚等号、一个整数同在一对反引号里，而普查尺那一行的整本回显坐在同一枚跨度里时才归它管（`#333` 量的正是这一档形状）。改法是键名与数各说各的，一个读数没改。
+  - 收集数那一枚最值钱：本节写"尺看不见的那一句"时把那两半抄在了同一行——「跑起来 100 个」之后直接跟着「用例」——那一形于是当场从"被折行藏掉的旧主张"变成"这一片新写的今值主张"，闸门按真数顶回来（红话末列给的就是 137）。这是"解释一种错不能靠复制那种错"在归档面的第一次——改法是让那两半各引一处、不连成一条主张，被描述的形状留在描述之外。同一枚正则要的是"跑起来"、一枚数、"个用例"三段连着出现，把它拆开它就无从开口；拆开的写法在页面上仍然读得出那一形，只是不再是一条主张。
+  - 形状禁令那一枚逮的是本节指归档自己那一页的 8886 行：markdown 页之间按行号互指没有闸门回读，`#217` 给的替命写法是「`文件名.md` 的 NNN 行」，换成那一形之后它不再进正则。
+  - 行号那一枚嫌今值格里那枚指针"这句话没写出可核对的名字"：句末标点里全角分号也算断句，那一小节被切剩 `tests` 与被点文件的词干，两者都进了减法。改法是把被点那一行的字面内容背引进同一句（`#334` 的同一修法）。
+  第二趟只跑同一对闸门书，`278 passed`、rc 0、26.85s（起读 `02:57:53Z`，负载 13.33，收读 `02:58:20Z`，回显 `gate335_pass2.txt`）——与 `#333`／`#334` 那两格同数，因为这一片没往那两本里添用例。
+- **第五枪是记这四枪的那一句自己挨的**：把上面那一格写进本节之后复跑同一对闸门书，`1 failed, 277 passed`、rc 1（起读 `02:59:29Z`，那一分钟负载 19.59；收读 `02:59:56Z`，回显 `gate335_pass3.txt`），红的还是收集数那一枚，点的正是"收集数那一枚最值钱"这一行——为了说明那一形被折行藏掉，我在同一行里把它连抄了一遍，于是那句话自己成了一条今值主张。同一个坑在这一片里连踩两回，"解释一种错不能靠复制那种错"这条旧课在归档面重演，而且一口气咬了两口。改法还是拆：那三段各引一处、中间垫上别的词，拆完之后同一对闸门书 `278 passed`、rc 0、23.60s（起读 `03:00:37Z`，负载 9.18，收读 `03:01:01Z`，回显 `gate335_pass4.txt`）。判据一枚没动，红话里那一枚数也没动过。
+- **今值**（计数是证人，秒数是脏读数）：被改三本 `161 passed`、rc 0（起读 `02:41:14Z`／收读 `02:41:19Z`，5.13s，负载 3.54→3.33；161 = 89 加 31 加 41，与上一格重钉的三个数同源）；定向两本（`tests/test_doc_citations.py` 加 `tests/test_wiring.py`）`278 passed`、rc 0（起读 `02:40:46Z`／收读 `02:41:09Z`，23.20s，负载 4.47→3.76）；密钥巡检 `30 passed`、rc 0（4.56s）；全量离线走 `-m "not network"` 加普查尺 `1305 passed`、rc 0（起读 `02:41:19Z`／收读 `02:44:53Z`，210.61s，负载 3.33→4.96）。尺的读数：`side=src files=25 cells=714 executed=708 never_executed=6`、`side=tests files=43 cells=1273 executed=1185 never_executed=88`。两本账都对得上：src 697 加 11 枚新落＝708、714 减 708＝6（正是要处置剩下的那 6 枚）；tests 1271 加 2 格＝1273、87 加 1 枚＝88（新那枚是 `tests/test_render_live.py:680` 那行 `raise _StillPolling` 的保险丝）。四趟串行、同一台、旁边没起第二进程（起读前 `pgrep -fl pytest` 空），命令一律带 `-o addopts=--strict-markers`，起读收读时刻与逐趟退出码由 `run_battery335b.sh` 自己打印、回显 `b2_gate_books.txt`／`b2_no_secrets.txt`／`b2_books335.txt`／`b2_census335_full.txt`。
+- **不动点宣布在这里**：上面那一格的读数写在纸上的同时又一次改了正文，盖章那一趟只能跑在这段话之前，它的读数再写进本节就要第三趟来盖它——`#332`／`#333`／`#334` 同一手法，第二层递归关不掉。改完之后跑的两趟（文档那本闸门书与全量）只记在提交说明里。

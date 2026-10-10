@@ -690,3 +690,11 @@ async def test_a_seat_the_judge_never_granted_is_named_on_the_second_screen(tmp_
     assert "打回" in cards[1], cards[1]
     assert not outcome.fell_back, outcome
     assert log.all()[-1].payload.get("target") == 5, log.all()[-1].payload
+
+
+def test_a_missing_target_is_refused_in_chinese_not_in_the_gate_code():
+    """`legality` emits `target_required_for:<act>`, and that code is the only spelling the gate
+    has. The other legs of `refusal_lines` are witnessed by the cards above; this one would have
+    put the English code on a screen in front of a person who never typed English."""
+    assert human.refusal_lines(("target_required_for:vote",)) == ["「票」要点一个座位"]
+    assert human.refusal_lines(("target_required_for:kill",)) == ["「刀」要点一个座位"]
