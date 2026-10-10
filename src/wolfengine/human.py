@@ -93,8 +93,6 @@ def _lead_seat(text: str) -> tuple[int | None, str]:
     if i == 0:
         return None, text
     seat = coerce_seat(text[:i])
-    if seat is None:
-        return None, text
     tail = text[i:]
     # A unit glued to the number and one reached across a space are the same test: 「票5号他说」 fails
     # the boundary check below either way, so the only spelling that needs its own branch is 「5 号」.

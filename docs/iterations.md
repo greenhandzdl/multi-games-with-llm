@@ -4217,7 +4217,7 @@ K5 要按样子读：它确实被杀，但**不是一把能定位证人的刀**�
 * **EOF 是一个名字，不是一次代答**：`Proposal(failure="human_input_closed")` 让"这个人走了"落进
   `attempts[]`，而引擎替他做的是 `pass`（`default_action` 的口径），不是替谁编一票。
 
-十用例在 `tests/test_human_seat.py`（现 31 条，一秒钟内，不发请求；这一片落地的是其中前十条，`#124`
+十用例在 `tests/test_human_seat.py`（现 32 条，一秒钟内，不发请求；这一片落地的是其中前十条，`#124`
 又在这份文件里加了两条屏上局况的）。八具变异加两具负控制照
 `/tmp/mut122.py`（2026-09-25T10:33Z，每具点名它期望弄红的那条，跑完按字节 `cmp` 还原，前后基准都是
 0 红，pyc 前缀每轮换新）：
@@ -4370,7 +4370,7 @@ stdin 用管道喂三行后就是 EOF）里，3 号那六回合各自说的是�
 
 ### 这一片的两条主张各自住在哪个文件
 
-"该在的在"是 `tests/test_human_seat.py`（现 31 条）：他听过的两句原话上了屏、屏上说了是谁说的、窗口
+"该在的在"是 `tests/test_human_seat.py`（现 32 条）：他听过的两句原话上了屏、屏上说了是谁说的、窗口
 的**方向**（砍的是最旧的）、以及标题上那个"最近 N 条"和屏上真的条数是同一个数。
 "不该在的不在"是 `tests/test_info_isolation.py`（12 条函数、跑起来 36 个用例，其中三条是这一片新加的，
 展开成 15 个断言）：原来那张板的五条私有
@@ -4831,7 +4831,7 @@ K2 的刀口要特别说明，不然这一具是**钝刀**。第一版只把判�
 改了两处，各一处判据：`legality.py:95` 的条件收成 `if action.target is not None:`——数字是谁打的都是
 一个关于桌面的主张。不合法的走这套已有的两级严重性：硬阶段（夜间、投票）拒掉重问，软阶段（白天发言）
 只打旗不噤声。`compress.py` 的 `WOLF_CHAT` 分支在说话人后面印 `（指 N号）`。被驳回之后的那一屏不用新
-代码：`#127` 那条链早就把 `target_not_legal` 翻成了人话（`human.py:141` 那一支，印出来是「N 号这一轮
+代码：`#127` 那条链早就把 `target_not_legal` 翻成了人话（`human.py:139` 那一支，印出来是「N 号这一轮
 点不到」），缺的只是让这个码真能为 targetless 的动作发出来。
 
 证人五条新的、一条改判：`tests/test_legality.py` 里两条（硬阶段拒、软阶段只打旗），`tests/test_wiring.py`
@@ -4895,7 +4895,7 @@ if x != seat] if role == "wolf" else []`），`events.py:68` 的形状表也把 
   那一行。写在这里而不是另起一条事件，是因为 `render_line` 是唯一一个渲染器，而念得到发牌事件的
   那几台机器——`--god` 时间线、直播、复盘 HTML、真人屏上的局况——都从它取句子。一次改动四台都
   念得到，也不需要第二条取数据的路。
-* `human.py:180` 的那一句 `mates = sorted(ctx.percept.teammates())` 起了页眉：狼那一席的卡片在
+* `human.py:178` 的那一句 `mates = sorted(ctx.percept.teammates())` 起了页眉：狼那一席的卡片在
   `轮到你了：1 号（wolf）` 下面多一行 `你的队友是 2号、4号。`。这一条不是上一条的重复：真人那一屏
   的局况只有 `SCREEN_TAIL` 等于 12 条，打到第 13 条事件之后发牌那行就从他眼前滚走了，而他的队友
   不会因此变少。这一格也是 `Percept.teammates()` 的第一个真读者。
@@ -5525,7 +5525,7 @@ kind 归因在今天的语料上一条都没多抓到。原因是保守的归因
 
 **量的第二跑（10:59:19Z，`data/measure132b.py`）**：换一条口径——不问"有没有人读这个键名"，问
 "被下标的那个对象像不像一份 payload"。零读者立刻从 1 个键名变成 2 个：多出来的那个是 `evidence`。
-它此前不是没人读，是被一个假读者养着：`schema.py:350` 的 `out.get("evidence")` 读的是**模型答出来
+它此前不是没人读，是被一个假读者养着：`schema.py:348` 的 `out.get("evidence")` 读的是**模型答出来
 的那个 dict**，跟落盘的五份 payload 没有半点关系，而只数键名的尺子把它算成了读者。同一跑把别名
 的账也量了：src 里 base 恰为 `p` 的 Load 点 47 个，其中键名落在形状表里的 24 个**全部**在
 `compress.py`（`p, k = e.payload, e.kind` 那行散出去的别名），所以"像 payload"必须认这个名字，
@@ -6766,7 +6766,7 @@ CONFORM、不符=0、还原字节相同。第一轮那两行照原样留在表�
 全是**只被测试读**的那一类，`#81`/`#155` 都看不见它们；处置词五格里这一片只用了『搬』一具与『待判』五具，没有一具敢写『留』。
 
 **名册的每一格都被逐条回查过，两处假话是回查时打回来的。** `by_kind` 的处置原本写着"孪生 `tail` / `window`
-同样只被测试读"——错：`src/wolfengine/human.py:189` 就调 `percept.tail(SCREEN_TAIL)`，人那一屏是生产读者；
+同样只被测试读"——错：`src/wolfengine/human.py:187` 就调 `percept.tail(SCREEN_TAIL)`，人那一屏是生产读者；
 而 `window` 这一格的名字被 `plan.window`、`p.window` 顶着，按名字数读数根本分不出是哪一具的，这句只能留在
 限界里。`public_state` 的处置原本写着"公开视图那一屏由 render_live 直接从事件算"，回查时撞出更大的一笔：
 `src/wolfengine/state.py` 的**模块页眉**写着 "Region B of the prompt is rendered only from `PublicState`"，
@@ -11362,7 +11362,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
 
 * 普查今值（重测，不是减法）：同一趟带五格正控制名册的整套离线跑 rc=0，`BRANCH_CENSUS side=src files=25 cells=711 executed=687 never_executed=24`，`side=tests cells=945 executed=877 never_executed=68`（五枚 def 没有分支体，tests 侧一字未动）。src 那 24 格按文件：`cli.py` 9、`phases.py` 4、`human.py` 3、`render_live.py` 3、`schema.py` 2、`transport.py` 2、`actors.py` 1。正控制回显 2、1、1、1、1 次命中，没有 `CENSUS_RULER_BROKEN`；这一片的证人住在正常收集路径里，所以不必像 #243 那样 `--ignore` 掉某一本。剩下的进程内七格＝`phases.py` 那四格＋`schema.py` 那两格＋`actors.py:187` 那一格（`script` 取行的窗口效应，归 #242）。
 
-* `schema.py:294` 那一枚 `continue` 的定性走的是探针而不是减法。判据是 `schema.py:293` 那句 `isinstance(data, dict)`，体首句 `schema.py:294` 是一枚 `continue`。探针（同脚本 `probe_296()`）双路并查：trace 数行事件，另外把 `json.loads` 包一层记下真正送进循环的每个候选解析出来的类型。38 形输入（含 `[]`、`[1,2]`、`"a string"`、`5`、`null`、`{`、`}`、围栏、截断、数组套对象、双对象、`x{…}` 这些形状）里 24 个候选解析成功：判定行回显 24 次经过，体首句一次没落，送进循环的解析结果里没有一个是非 dict 的类型。原因是结构性的：那三条候选来源（`extract_first_object` 两次、`salvage_candidates` 一路）返回的都是**从第一个 `{` 起切的切片**，而 JSON 文法里以 `{` 开头的值只会是对象。所以它是 #244 那一族的第二格——到不了，不是没人走；工单口径由"一格欠证人"改成"两格到不了"。
+* 那一枚 `continue` 的定性走的是探针而不是减法。判据是 `parse_action` 里那句 `isinstance(data, dict)`，体首句是一枚 `continue`（这两行 `#336` 按这条探针摘掉了）。探针（同脚本 `probe_296()`）双路并查：trace 数行事件，另外把 `json.loads` 包一层记下真正送进循环的每个候选解析出来的类型。38 形输入（含 `[]`、`[1,2]`、`"a string"`、`5`、`null`、`{`、`}`、围栏、截断、数组套对象、双对象、`x{…}` 这些形状）里 24 个候选解析成功：判定行回显 24 次经过，体首句一次没落，送进循环的解析结果里没有一个是非 dict 的类型。原因是结构性的：那三条候选来源（`extract_first_object` 两次、`salvage_candidates` 一路）返回的都是**从第一个 `{` 起切的切片**，而 JSON 文法里以 `{` 开头的值只会是对象。所以它是 #244 那一族的第二格——到不了，不是没人走；工单口径由"一格欠证人"改成"两格到不了"。
 
 * 尺面登记：这一趟没加新盲区，但把第三号筛子用了第二次。普查的 NEVER 名单要连着过三道筛——证人住哪个进程、夹具窗口、可达性——`schema.py` 现在同一本里两格落在第三道筛、一格落在第一道筛之外，只有 `actors.py` 那五格是"真欠证人"，也只有它们能靠补用例收掉。
 
@@ -11425,7 +11425,7 @@ K3 现场给 `wolf_chat` 接一处真成员测试而名册仍留着它 → 红�
   `rng.getstate()` 的哈希，所以"没挪动被抽样值那条流"是量出来的而不是推出来的。同趟两条控制：换一张不同的
   死亡名册（灵敏度）回"不同"，同一形重跑两遍回"相同"，也就是说那四枚"相同"既不是夹具失灵也不是偶然。
 
-* 留的那一枚是 `schema.py:293`，管的正是"候选不是 dict 就跳过"。同一趟行级 trace 在那 13 形语料上量的分布是：
+* 留的那一枚管的是"候选不是 dict 就跳过"（`#336` 按探针判它恒假，摘了）。同一趟行级 trace 在那 13 形语料上量的分布是：
   条件那一格走 8 次，它体首那一格走 0 次（那一趟 trace 打在删行之前的树上，所以它印的是这两个格子当时的行号，
   与现在差二；这里只写"条件格"与"体首格"，不写号）；把守卫拆掉，非 dict 的候选会带着取值调用撞进下一行、抛
   `AttributeError`。失效方向是崩溃，所以这一片不动它。代价照实登记：它在普查名册上仍是一枚"没证人"的格子，
@@ -11807,7 +11807,7 @@ HTML 那 4 行：新增的两行一行是 `ul.chron li.peace{...}` 那条 CSS �
   一对，`src/wolfengine/phases.py:201` 只取 `assigned[seat][0]`，装进 `src/wolfengine/state.py:75`
   声明的 `assigned_act`。全链路核对的是 act 那一半：`src/wolfengine/legality.py:85` 比的是
   `assigned_act`，提示词卡片印的是 `src/wolfengine/assemble.py:188` 取出的 `assigned_act`，真人屏幕上
-  那句"法官指派本轮使用的动作"读的还是 `src/wolfengine/human.py:200` 的 `assigned_act`。
+  那句"法官指派本轮使用的动作"读的还是 `src/wolfengine/human.py:198` 的 `assigned_act`。
   `target` 那一半在 `tests/test_rules.py:466` 解出来只为了断言它不是 `None`。
 
 **判据：按失效方向选"删"，不选"接"**。把 `target` 接进读数要先给它一个新的落盘键——那是产物字节的变化，
@@ -16134,7 +16134,7 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
   - **进程内欠证人 11 枚** ⇒ 九枚新用例补上，逐格对账在下面第三格。
   - **尺看不见 1 枚**：`src/wolfengine/cli.py:209` 那一行 `"rc = 1"`。它有人证，但那证人坐在子进程里（`tests/test_loopback_endpoint.py::test_a_refused_key_is_one_clean_line_and_exit_1`），而窄窗尺只追本进程那一棵解释器——这是 `#242` 那第五个盲区换了第六个单位：不是"窗口按用例开合"，是"窗口按进程开合"。K10／K11／K13 三具刀逮的就是这一档。
   - **结构上走不到 1 枚**：`src/wolfengine/human.py:35` 的 `TurnContext` 坐在 `if TYPE_CHECKING:` 里，运行时永远不进这一格。它不是"没人走到的分支"，是"只给类型检查器看的那一面"，与 `#226` 那一族同性质，所以按"零读者就删分支"那条处置对它不成立。
-  - **恒假与没人传 3 枚**：`src/wolfengine/cli.py:54` 的 `temperature_ladder`（`build_config` 的 `name` 参数在仓库里没人传过 `"test"` 那一档）、`src/wolfengine/human.py:97` 的 `return None, text`、`src/wolfengine/schema.py:294` 的 `continue`（后两枚是恒假守卫，摘掉今天一条都不会红）。三枚一起交给 `#336` 处置，那一片还要顺路问 `build_config` 的 `name` 参数本身该不该留。
+  - **恒假与没人传 3 枚**：`src/wolfengine/cli.py:54` 的 `temperature_ladder`（`build_config` 的 `name` 参数在仓库里没人传过 `"test"` 那一档）、`_lead_seat` 里 `coerce_seat` 解不出座位时原样交回的那枚 `return None, text`、`parse_action` 里"候选不是 dict 就跳过"的那枚 `continue`（后两枚是恒假守卫，摘掉今天一条都不会红）。三枚一起交给 `#336` 处置，那一片还要顺路问 `build_config` 的 `name` 参数本身该不该留。
   - **已定性的 1 枚**：`src/wolfengine/actors.py:187` 的 `action = self.script[self.i]`——脚本替身在夹具 setup 里喂它，`#333` 已把这一形登记成窗口盲区，本片不重复产证据。
 - **11 枚格 ⇄ 九枚证人逐格对账**（证人只补在欠的那一侧，一条用例可以管两格）：
   - `src/wolfengine/cli.py:478` 那一行 `'t == "true"'` ⇒ `tests/test_cli.py:1646` 那条 `test_the_value_reader_has_two_bool_words_and_no_others`：`--set` 的取值写法里那两枚布尔词整套与手册都没喂过；同一条还钉 `1` 不许塌成 `True`，因为 `apply_overrides` 是拿字段当前值的类型来验的。
@@ -16143,11 +16143,11 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
   - `src/wolfengine/cli.py:790` 的 `SystemExit` ⇒ `tests/test_cli.py:1679` 那条 `test_the_module_entry_hands_mains_returncode_to_the_shell`：`runpy` 走 `__main__` 那条尾巴，console script 从不经过它。
   - `src/wolfengine/cli.py:203` 的 `render_chronicle_file` 与 `src/wolfengine/cli.py:204` 那句 `print(line)` ⇒ 同一枚 `tests/test_cli.py:1700` 的 `test_a_finished_run_hands_the_chronicle_to_the_reader`：进程内跑一次 `run --mock`，数那一屏编年史有没有交给人。
   - `src/wolfengine/cli.py:526` 的 `EndpointUnavailable` ⇒ `tests/test_cli.py:1709` 那条 `test_the_canary_probe_names_the_outage_when_the_endpoint_stops_answering`：429 这一形由 `LLM` 交回调用方自己决定怎么报，所以那句 `raise` 只能由探针自己抛；退避用 `sleep=` 注入吃掉，真实时钟不进证人。
-  - `src/wolfengine/human.py:144` 的 `_act_word` ⇒ `tests/test_human_seat.py:695` 那条 `test_a_missing_target_is_refused_in_chinese_not_in_the_gate_code`：`legality` 那句英文码到人这一侧要换成中文。
+  - `src/wolfengine/human.py:142` 的 `_act_word` ⇒ `tests/test_human_seat.py:695` 那条 `test_a_missing_target_is_refused_in_chinese_not_in_the_gate_code`：`legality` 那句英文码到人这一侧要换成中文。
   - `src/wolfengine/render_live.py:278` 那一行 `"return None"` ⇒ `tests/test_render_live.py:645` 那条 `test_a_key_timeout_is_not_a_keystroke`：`select` 超时既不是按键也不是键盘关了。
   - `src/wolfengine/render_live.py:323` 的 `time.sleep` 与 `src/wolfengine/render_live.py:326` 那句 `events += fresh` ⇒ `tests/test_render_live.py:655` 那条 `test_a_poll_without_a_keyboard_wakes_on_the_line_that_lands_later`：`eof`  retire 键盘之后按 `poll` 打盹，打盹期间落盘的那一行要换出一帧。
 - **证人自己也带进来两格新的**（tests 侧分母因此从 1271 涨到 1273）：`tests/test_render_live.py:671` 那句 `log.open` 今天落了（打盹的第一圈里往日志追加末行），`tests/test_render_live.py:680` 的 `_StillPolling` 仍冷——那根保险丝只在循环转过 10 圈时走得到，它钉的是"这一条证人自己不许无声空转"，方向与 `#266` 那两枚同形。登记，不补第三具。
-- **正控制读的是尺自己**：这一趟把 11 枚 MUSTHIT 换成这 11 格，`POS_CONTROL` 十一条全带 hits 且 rc 0，`CENSUS_RULER_BROKEN` 0 次。hits 的分布本身是证词，逐枚点名、分号各审各：`cli.py:203` 的 `render_chronicle_file` 落 82 次；`cli.py:204` 的 `print(line)` 落 81 次（编年史逐行打印，这两格随每一行走一遍）；`cli.py:790` 的 `SystemExit` 落 1 次；`cli.py:526` 的 `EndpointUnavailable` 落 1 次；`render_live.py:278` 那行 `'return None'` 落 1 次；`render_live.py:323` 的 `time.sleep` 落 1 次；`render_live.py:326` 的 `events += fresh` 落 1 次；`cli.py:478` 那行 `'t == "true"'` 落 2 次；`cli.py:536` 那句 `"互不重名的臂"` 落 2 次；`cli.py:626` 那句 `"里没有 *.jsonl"` 落 2 次；`human.py:144` 的 `_act_word` 落 2 次。**hits=1 的那五枚就是"整套里只有新证人走到过它"**——这一格由尺报出而不是由我数用例名报出（`#334` 立的规矩）；hits=2 的四枚各多走一次，这一档没逐枚归因到具体哪一形，登记成未追问。
+- **正控制读的是尺自己**：这一趟把 11 枚 MUSTHIT 换成这 11 格，`POS_CONTROL` 十一条全带 hits 且 rc 0，`CENSUS_RULER_BROKEN` 0 次。hits 的分布本身是证词，逐枚点名、分号各审各：`cli.py:203` 的 `render_chronicle_file` 落 82 次；`cli.py:204` 的 `print(line)` 落 81 次（编年史逐行打印，这两格随每一行走一遍）；`cli.py:790` 的 `SystemExit` 落 1 次；`cli.py:526` 的 `EndpointUnavailable` 落 1 次；`render_live.py:278` 那行 `'return None'` 落 1 次；`render_live.py:323` 的 `time.sleep` 落 1 次；`render_live.py:326` 的 `events += fresh` 落 1 次；`cli.py:478` 那行 `'t == "true"'` 落 2 次；`cli.py:536` 那句 `"互不重名的臂"` 落 2 次；`cli.py:626` 那句 `"里没有 *.jsonl"` 落 2 次；`human.py:142` 的 `_act_word` 落 2 次。**hits=1 的那五枚就是"整套里只有新证人走到过它"**——这一格由尺报出而不是由我数用例名报出（`#334` 立的规矩）；hits=2 的四枚各多走一次，这一档没逐枚归因到具体哪一形，登记成未追问。
 - **十四具刀**（脚本 `knives335.py`＋`knives335b.py`，回显 `knives335.out`＋`knives335b.out`；每具锚点先数唯一、落盘后 `compile()`、跑完按字节还原并比整本 sha256，十四次全部 `landed=True restored=True`）：
   - 九具问新证人（K1—K9）：把被钉的那一条腿改掉——`return t == "true"` 塌成恒真、拒重名那句改字、`return 2` 换成 `return 0`、空目录那句改字、`raise SystemExit(main())` 摘掉 `SystemExit`、中文拒绝句改字、超时返回改成 `"eof"`、`time.sleep(poll)` 摘成 `pass`、`events += fresh` 摘成 `pass` ⇒ 九具全部 CAUGHT，红的都是点名要它管的那一条。
   - 三具问"尺看不见"那一档（K10—K12）：K10 与 K11 把 `print(line)` 与 `"rc = 1"` 改掉 ⇒ 各 `1 failed`，红的是随仓库走的子进程证人（`test_the_human_seat_block_runs_verbatim` 与 loopback 那一本）——**这一具红而普查尺从没把这些格记成落过**，正是第六个盲区的直接证人；K12 摘掉 `EndpointUnavailable` 那句 ⇒ MISSED（下面单列）。
@@ -16167,3 +16167,26 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
 - **第五枪是记这四枪的那一句自己挨的**：把上面那一格写进本节之后复跑同一对闸门书，`1 failed, 277 passed`、rc 1（起读 `02:59:29Z`，那一分钟负载 19.59；收读 `02:59:56Z`，回显 `gate335_pass3.txt`），红的还是收集数那一枚，点的正是"收集数那一枚最值钱"这一行——为了说明那一形被折行藏掉，我在同一行里把它连抄了一遍，于是那句话自己成了一条今值主张。同一个坑在这一片里连踩两回，"解释一种错不能靠复制那种错"这条旧课在归档面重演，而且一口气咬了两口。改法还是拆：那三段各引一处、中间垫上别的词，拆完之后同一对闸门书 `278 passed`、rc 0、23.60s（起读 `03:00:37Z`，负载 9.18，收读 `03:01:01Z`，回显 `gate335_pass4.txt`）。判据一枚没动，红话里那一枚数也没动过。
 - **今值**（计数是证人，秒数是脏读数）：被改三本 `161 passed`、rc 0（起读 `02:41:14Z`／收读 `02:41:19Z`，5.13s，负载 3.54→3.33；161 = 89 加 31 加 41，与上一格重钉的三个数同源）；定向两本（`tests/test_doc_citations.py` 加 `tests/test_wiring.py`）`278 passed`、rc 0（起读 `02:40:46Z`／收读 `02:41:09Z`，23.20s，负载 4.47→3.76）；密钥巡检 `30 passed`、rc 0（4.56s）；全量离线走 `-m "not network"` 加普查尺 `1305 passed`、rc 0（起读 `02:41:19Z`／收读 `02:44:53Z`，210.61s，负载 3.33→4.96）。尺的读数：`side=src files=25 cells=714 executed=708 never_executed=6`、`side=tests files=43 cells=1273 executed=1185 never_executed=88`。两本账都对得上：src 697 加 11 枚新落＝708、714 减 708＝6（正是要处置剩下的那 6 枚）；tests 1271 加 2 格＝1273、87 加 1 枚＝88（新那枚是 `tests/test_render_live.py:680` 那行 `raise _StillPolling` 的保险丝）。四趟串行、同一台、旁边没起第二进程（起读前 `pgrep -fl pytest` 空），命令一律带 `-o addopts=--strict-markers`，起读收读时刻与逐趟退出码由 `run_battery335b.sh` 自己打印、回显 `b2_gate_books.txt`／`b2_no_secrets.txt`／`b2_books335.txt`／`b2_census335_full.txt`。
 - **不动点宣布在这里**：上面那一格的读数写在纸上的同时又一次改了正文，盖章那一趟只能跑在这段话之前，它的读数再写进本节就要第三趟来盖它——`#332`／`#333`／`#334` 同一手法，第二层递归关不掉。改完之后跑的两趟（文档那本闸门书与全量）只记在提交说明里。
+
+## `#336` 交过来的那三枚格子：两枚恒假的各配一枚结构证人再摘，那枚没人传的按价格留着——它一摘就多出一枚签名谎言（**03:33:21Z** 起笔）
+
+- 来路是 `#335` 最后一格交过来的三枚，分档的问法与 `#332` 同一句：摘掉它会红谁。这一片动了 `src` 两本，各减两行（`git diff --numstat` 里 human 0/2、schema 0/2），`cli.py` 一行没动；被改的还有两本测试（纯末尾追加，22/0 与 34/0）和三本文件里的 15 处文档面。
+- **恒假不是推理，是两枚探针各自把前提问完**（脚本 `probe336.py`，回显在本架里）：
+  - 座位那头：取头的循环只从 `_SEAT_CHARS` 那一行取字，所以"一段非空头部解不出座位"需要字符集里存在一枚既不是 ASCII 数字、又不在中文数词表里的写法。现量 21 枚字符，长度 1 到 4 的全部组合 204204 枚头，`coerce_seat` 解不出的 0 枚。更强的那一枚是集合关系而不是抽样：这 21 枚整个落在「10 枚 ASCII 数字 ∪ 11 枚单字中文数词」里（表里另外两枚「十一」「十二」是多字写法，本来不在字符集里），而 `coerce_seat` 见数字就交值、纯中文则逐枚查表——所以任意长度的头都解得开，枚举只是这条集合关系的一个样本。
+  - 梯子那格：`src/wolfengine/schema.py:253` 那一路（那行写的是 `return [text[start : i + 1]]`）与另外两条候选来源一样，起点定在第一个左花括号，而 JSON 文法里以它开头的值只会是对象。现量 14 枚候选，不带花括号起头的 0 枚；`src/wolfengine/schema.py:290` 那一行是整条梯子上唯一一次 `json.loads`，没有 `object_hook` 也没有 `parse_object`——解出来的东西不可能是非 dict。
+- **两枚证人先落，那两行后摘**，证人钉的是前提而不是"摘了以后行为不变"（前提被造反时证人要红，这就是下面 K1／K2 的用途）：`tests/test_human_seat.py:703` 的 `test_every_seat_char_run_resolves_to_a_seat` 两路并查（集合关系一枚断言加一枚长度 1 到 4 的枚举），`tests/test_schema.py:218` 的 `test_every_candidate_that_reaches_the_ladder_is_braced` 在 13 形语料（含围栏、截断、数组、双对象、尾随垃圾）上把两路来源都跑一遍，要求每枚候选带花括号、解出来的类型只有对象，并带一条"取样面自己不许空"的地板。时序上"先看它红"这一格没走——证人是摘完之后写的，那一红由刀补：K1／K2 就是把前提造反的两具，各红在自己那枚证人上。登记这一条，因为它是顺序上的缺口，不是判据上的。
+- **五具刀**（脚本 `knives336.py`＋`knives336b.py`，回显 `knives336.out`／`knives336b.out`；每具锚点先数唯一、落盘后 `compile()`、跑完按字节还原并比整本 sha256，八次落盘自证全部 `landed=True restored=True`，全程带 `PYTHONDONTWRITEBYTECODE=1`）：
+  - K1 往那行字符集里添一枚解不开的写法 ⇒ CAUGHT，`1 failed, 31 passed`，红的只有新证人，本片零连带。
+  - K2 让一条候选来源多交一枚不带花括号的 ⇒ CAUGHT，`3 failed, 49 passed`：新证人红在"不带花括号"那一腿，另两枚连带的是 `TestRung1` 里钉同一份返回清单的两条 ⇒ 过收 2 枚登记（这具刀与那两条读的是同一个返回值，独占不了）。
+  - K3／K4 把摘掉的那两格原样写回（按构造就是等价变异）⇒ 跑全量各 `1 failed, 1306 passed`，而那一枚红的是行号闸门：写回的两行把同一本里它下游的号全顶偏，这一具红在"它替你普查谁钉着那一行"上，不在行为上（`#330` 那一课的第二次，只是这回顶红的是写回而不是删除）。
+  - K3b／K4b 是同一具刀换了跑面（把行号闸门那一本摘出去再跑全量离线）⇒ 各 `1166 passed`、rc 0，MISSED。**这才是恒假的证人**：写回来没有任何一条在册断言分辨得出它。
+  - K5 把 `cli.py` 那格也摘掉——这不是本片的处置，是"要不要一起处置"的价格测量 ⇒ `2 failed, 1305 passed`，两枚红各自开口：行号闸门一口气点出 49 处指错（45 处在归档、3 处 `docs/views.md`、1 处 `tests/test_loopback_endpoint.py`，全指着 `cli.py`），而 `#86` 那本参数名册当场新增一条 `src/wolfengine/cli.py:50 build_config(name)`——那一格是 `name` 唯一的读者，摘了它，参数本身就从"有读者"变成"签名谎言"。
+  - 账：6 具 CAUGHT（K1、K2、K3、K4、K5，加 K5 的明细重放）／2 具 MISSED（K3b、K4b，判决而非钝刀）／等价变异 2（那两具按构造等价）／过收登记 2（K2 的连带）。空白控制 KN0 两枚证人 `2 passed` rc 0。
+- **留下的那枚为什么留**：`#332` 的分法在这里答案是"那一形有主人家，而主人就是那个参数"。登记为不合：摘它今天不红行为，但要付 49 处指针外加一枚新缺陷——`build_config` 的四个调用点确实全不带实参（`src/wolfengine/cli.py:159` 与 `src/wolfengine/cli.py:541` 两处、测试里两处），所以这一格是"到得了、今天没人走"，不是"走不到"。`#335` 顺路问的那半句（`name` 参数本身该不该留）到此有了答案：它留着，因为它唯一的读者就是这一格。
+- **普查尺重放**（`run_battery336.sh` 第四趟）：`side=src files=25 cells=712 executed=708 never_executed=4`、`side=tests files=43 cells=1278 executed=1190 never_executed=88`。两本账都对得上：src 714 减 2（每摘一枚 `if` 连它体首句正好少一格）＝712，executed 708 一格没动（那两格本来从没落过），never 6 减 2＝4；tests 1273 加 5＝1278、1185 加 5＝1190、88 一格没动——新落下那 5 格全在这两枚证人里（座位那枚的取样循环体 1 格，梯子那枚的两条嵌套循环、一条 `if` 与一条遍历共 4 格）。名单是逐枚对的而不是比总数的：两趟的 NEVER 名单互 diff，差的正是摘掉的那两枚，其余 92 枚一字不差。src 侧剩下的四枚各有各的定性。`src/wolfengine/cli.py:209` 那行写着 "rc = 1"，它坐在子进程里（`#335` 量的第六个盲区）。`src/wolfengine/human.py:35` 那行 `from .actors import TurnContext` 在 `if TYPE_CHECKING:` 那一面。`src/wolfengine/actors.py:187` 那行 `action = self.script[self.i]` 在夹具 setup 那扇窗外。最后一枚就是这一片量过价格留下的 `src/wolfengine/cli.py:54`，那行是 `cfg.temperature_ladder = (0.9,)`。**`#237` 那条链的 src 侧名单从 17 枚走到 4 枚，其中三枚是尺的窗口边界、一枚是量过价格决定留下的。**
+- **正控制与尺面健康**：`POS_CONTROL` 十一条全带 hits 且 rc 0，`CENSUS_RULER_BROKEN` 0 次；hits 分布 2／2／2／1／82／81／1／2／1／1／1 与 `#335` 盖章趟同形，因为那 11 格一枚没动，被动的两格本来不在 MUSTHIT 里（MUSTHIT 里 `src/wolfengine/human.py:142` 那枚——`_act_word` 那一行——随摘行从 144 换到 142，hits 仍是 2）。
+- **文档面 15 处**（脚本 `patch_docs336.py`，每处只动被闸门认出来的那一个数或那一句，锚点要求在该行恰好出现一次，改完逐处按字面回读，三本都行数中性——numstat 是归档 12/12、views 1/1、payload 2/2）：9 枚行号重钉（human 那本 −2 之后的 141→139、180→178、189→187、200→198、144→142，schema 那本 350→348 共三处）、3 枚条数 31→32（`tests/test_human_seat.py` 多了这一片那枚证人，两处归档加一处手册）、3 句改口（`schema` 那两枚与被摘行同宽的指针换成指称，`#335` 交过来那一格里两枚换成"哪一枚守卫"的说法，不留活号）。
+- **一枚尺的建议数字被现量顶掉**：schema 那本重钉时闸门红话建议 349，而 349 那行是 `re.findall`，句里点名的那一枚读法坐在 348——按"被指向的那一行要自己读"落 348（`#310`／`#311` 那条旧课在这一片第二次生效：尺给的号是线索，不是证据）。
+- **今值**（计数是证人，秒数是脏读数）：被改四本 `234 passed`、rc 0（起读 `03:38:43Z`／收读 `03:39:05Z`，21.46s，负载 4.72→5.34）；定向两本（`tests/test_doc_citations.py` 加 `tests/test_wiring.py`）`278 passed`、rc 0（26.12s，起读 `03:38:11Z`，负载 5.83）——与 `#333`—`#335` 那三格同数，这一片没往那两本里添用例；密钥巡检 `30 passed`、rc 0（4.77s）；全量离线走 `-m "not network"` 加普查尺 `1307 passed`、rc 0（起读 `03:39:05Z`，负载 5.34；收读 `03:43:09Z`，负载 8.46；241.38s）。1307 对 `#335` 的 1305 之差正是这一片新落的两枚证人。刀那一侧的墙钟各为 113／130／121／84／103 秒，都是全量口径，起读前 `pgrep -fl pytest` 空、四趟与八具串行跑、旁边没起第二进程，命令一律带 `-o addopts=--strict-markers`，时刻与逐趟退出码由 `run_battery336.sh` 自己打印。
+- **闸门在这一片开了四轮，最后一轮是本节自己开的**：pass1 四本 `2 failed, 360 passed`、rc 1（回显 `gate336_pass1.txt`），红的正是行号（13 枚，两处 -2 的漂移加四枚指向被摘行的号）与条数（3 处 31→32）；pass2 把 `tests/test_payload_shape.py` 也收进跑面之后复跑五本 `371 passed`、rc 0、33.35s（回显 `gate336_pass2.txt`）；pass3 是这一节写进本子之后跑的闸门两本，`1 failed, 277 passed`（回显 `gate336_pass3.txt`），红的六枚全在刚写的那三行里；pass4 把那些指针改对之后 `278 passed`、rc 0（回显 `gate336_pass4.txt`）。判据一枚没动，四轮红账都是这一片自己造成的：行号漂移、条数、以及这一节自己的指针。那六枚的改法顺带量出这扇闸门的一条不对称：一句话里连点四枚号只共用一份取词池，而每个号各要各的名字，所以得一句一号；整串反引号内容落在非注释行上只算「强名字」、不算取词（取词只有 ASCII 标识符与单双引号里的字面量两条通道），所以 `rc = 1` 那行两个字符的名字只有把整串塞进双引号才进得了池子。
+- **不动点宣布在这里**：本节写进本子之后自己顶红过闸门（pass3），补那六枚背引又改了一次文本，所以「写进去之后没被任何改动顶过」那句在本节不成立，改成照实记先后：今值那一格的读数出自把本节写进去之前跑的四趟（`b_*.txt`），把指针改对之后重跑的四趟（`b2_*.txt`）逐格相同——闸门两本 `278 passed`、密钥巡检 `30 passed`、被改四本 `234 passed`、全量加普查尺 `1307 passed`，尺的读数 `side=src cells=712 executed=708 never_executed=4` 与 `side=tests cells=1278 executed=1190 never_executed=88`，`POS_CONTROL` 十一条全带 hits、`CENSUS_RULER_BROKEN` 0 次；而把 pass3／pass4 这两枪写进本节之后，在定稿文本上再跑过的只有闸门两本（`gate336_pass4.txt`），全量那一趟差的只是这两行散文。第二层递归关不掉，`#332`—`#335` 同一手法。

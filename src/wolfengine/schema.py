@@ -290,8 +290,6 @@ def parse_action(text: str) -> ParseOutcome:
             data = json.loads(cand)
         except json.JSONDecodeError:
             continue
-        if not isinstance(data, dict):
-            continue
         coerced, hit = _coerce_fields(data)
         if hit:
             devs.append("coerced_field")

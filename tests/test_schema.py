@@ -213,3 +213,37 @@ def test_no_candidate_is_tried_twice():
     finally:
         json.loads = real
     assert len(seen) == len(set(seen)), seen
+
+
+def test_every_candidate_that_reaches_the_ladder_is_braced():
+    """「候选不是对象就跳过」那一格被摘了，摘它的依据钉在这里。
+
+    梯子三条候选来源都把起点定在第一个左花括号上，而 JSON 文法里以它开头的值只会是对象，
+    所以送进解析的那一列里不可能出现非 dict。这里在一份含围栏、截断、数组、双对象、尾随垃圾
+    的语料上把两路来源都跑一遍：每个候选都要以左花括号开头，解析成功的都必须是 dict。
+    """
+    from wolfengine import schema
+
+    texts = ['{"act":"vote"', '{"act":"vote","target":3}', '前缀 {"a":1} 后缀',
+             '```json\n{"act":"vote"}\n```', '{"act":"vote","speech":"我跟',
+             '{"act":"vote","tar', '{"act":"vote"},', '{bad,}', '{}', '[]', '没有花括号',
+             '{"a":1}}', '{"1":2,"2":3']
+    cands = set()
+    for t in texts:
+        for fixed in (t, schema.repair(t)):
+            obj, _rest = schema.extract_first_object(fixed)
+            if obj is not None:
+                cands.add(obj)
+            cands.update(schema.salvage_candidates(fixed))
+    assert len(cands) >= 10, f"只扫到 {len(cands)} 枚候选：取样面多半坏了"
+    unbraced = sorted(c for c in cands if not c.startswith("{"))
+    assert not unbraced, f"{len(unbraced)} 枚候选不是从左花括号起切：{unbraced[:3]}"
+    import json
+
+    kinds = []
+    for c in cands:
+        try:
+            kinds.append(type(json.loads(c)).__name__)
+        except json.JSONDecodeError:
+            pass
+    assert set(kinds) <= {"dict"}, f"解析成功的候选里出现了非对象：{sorted(set(kinds))}"

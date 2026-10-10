@@ -698,3 +698,25 @@ def test_a_missing_target_is_refused_in_chinese_not_in_the_gate_code():
     put the English code on a screen in front of a person who never typed English."""
     assert human.refusal_lines(("target_required_for:vote",)) == ["「票」要点一个座位"]
     assert human.refusal_lines(("target_required_for:kill",)) == ["「刀」要点一个座位"]
+
+
+def test_every_seat_char_run_resolves_to_a_seat():
+    """「解不出就原样交回」那一格被摘了，摘它的依据钉在这里。
+
+    取头的那个循环只会从座位字符集里取字，所以「一段非空头部解不出座位」需要字符集里存在
+    一枚既不是数字、又不在中文数词表里的写法。这里两路并查：先要求整个字符集落在「ASCII 数字
+    ∪ 中文数词的写法」里——这一枚管任意长度的头，因为 `coerce_seat` 见数字就交值、纯中文则逐枚
+    查表；再抽样把长度 1 到 4 的组合逐枚解一遍。将来往字符集里添一枚解不开的写法，这两路都会先
+    红——那时那一格才该被写回来。
+    """
+    import itertools
+
+    from wolfengine import human, schema
+    chars = sorted(human._SEAT_CHARS)
+    total = set("0123456789") | set(schema._CN_NUM)
+    assert set(chars) <= total, f"字符集里有 {sorted(set(chars) - total)} 枚不是数字也不是中文数词"
+    heads = list(chars)
+    for n in (2, 3, 4):
+        heads += ["".join(p) for p in itertools.product(chars, repeat=n)]
+    unresolved = [h for h in heads if schema.coerce_seat(h) is None]
+    assert not unresolved, f"{len(heads)} 枚头里有 {len(unresolved)} 枚解不出座位：{unresolved[:5]}"
