@@ -740,7 +740,7 @@ def _def_counts() -> dict[str, int]:
     return counts
 
 
-COLLECTED = re.compile(r"跑起来 (\d+) 个用例")
+COLLECTED = re.compile(r"跑起来 (\d+) 个\s*用例")
 MODULE_NEAR = re.compile(r"(test_[a-z0-9_]+)\.py")
 
 
@@ -847,6 +847,20 @@ def test_a_claim_folded_in_the_middle_of_the_number_is_still_a_claim():
              "个用例）\n")
     claims = _collected_claims({"probe.md": probe})
     assert [(no, mod, n) for _, no, mod, n in claims] == [(2, "test_log_recovery", 57)], claims
+
+
+def test_a_claim_folded_between_the_counter_and_the_unit_is_still_a_claim():
+    """折行的缝也可以落在 `个` 与 `用例` 中间——那一格今天整枚看不见，而且它藏着一句假话。
+
+    `#61` 收这一族时只把换行折成空格，正则仍要求 `个` 紧贴一个空格再接 `用例`，所以缝在量词这一侧的
+    主张扫不出来：不是报错，是安静地少一格（和上面那条用例钉的是同一个失效方向，只是缝的位置不同）。
+    代价不是假想的——归档里 `tests/test_wiring.py` 那句写的是 100，而 pytest 今天数出来的是 137，
+    这一枚正是靠这条缝躲过了闸门。
+    """
+    probe = ("另一半住在 `tests/test_log_recovery.py`（跑起来 57 个\n"
+             "用例）\n")
+    claims = _collected_claims({"probe.md": probe})
+    assert [(no, mod, n) for _, no, mod, n in claims] == [(1, "test_log_recovery", 57)], claims
 
 
 def test_a_suite_total_is_not_a_collected_claim():
