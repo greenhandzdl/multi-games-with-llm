@@ -694,17 +694,34 @@ def test_the_help_pointer_counts_a_typed_form_and_not_a_prose_word():
 # 落点判据是一条否定式而非字符表：`条` 后面还接得上词，就是在数别的东西（语料里的 `24 条自报文本`、
 # `22 条渲染行`、`610 条里`），数用例的那一句到这里就收住了。否定式不会随文档换个说法就漏——
 # 白名单每加一种新写法都得改一次表，而"后面是词"这个判据一次覆盖全部。
-MINIMAL = re.compile(r"(test_[a-z0-9_]+)\.py`?[^\n]{0,30}?(\d+) 条(?=\W|$)")
+# `MINIMAL` 那一段窗口不许再跨过第二个模块名：折行把窗口带过换行后，最左端起算会把下一行的
+# 数判给上一行的名字（`#338`），而那是同一枚主张的两个主人。
+MINIMAL = re.compile(r"(test_[a-z0-9_]+)\.py`?(?:(?!test_[a-z0-9_]+\.py)[^\n]){0,30}?(\d+) 条(?=\W|$)")
 BARE = re.compile(r"(test_[a-z0-9_]+)\.py`?\s+(\d+)(?=\s*(?:\+|、|[）)]|$))")
 
 
 def _case_claims(bodies: dict[str, str]) -> list[tuple[str, int, str, int]]:
-    """(文档, 行号, 模块名, 文档写的条数)——同一行里模块名后面出现的"N 条"或枚举裸数。"""
+    r"""(文档, 行号, 模块名, 文档写的条数)——模块名后面出现的"N 条"或同一行里的枚举裸数。
+
+    `MINIMAL` 扫的是把整本折成一行之后那一面：Markdown 渲染时把换行当空格，所以"模块名落在行尾、
+    `N 条` 落在下一行行首"是同一句话，按物理行扫会**整个看不见**它（不是报错，是安静地少一格）。
+    `#337` 给收集数那一族折过同一步，条数这一族当时登记成已知盲区，这一片补上——折进去的那一形
+    当天就逮到五句写歪的账，所以这一步不是假想的加宽。
+    折行报的行号是这句话**开头**所在那一行。
+    `BARE` 仍按物理行扫：它的 `\s+` 一旦能吃掉换行，下一行行首的裸数就会接到上一行的名字上，
+    而这种写法今天在六本面上一枚住户都没有（`#321` 的规矩：没住户不收，量过才收）。
+    """
     out = []
     for doc, body in bodies.items():
+        flat = body.replace("\n", " ")
+        by_line: dict[int, list[tuple[str, int, str, int]]] = {}
+        for m in MINIMAL.finditer(flat):
+            no = body[:m.start()].count("\n") + 1
+            by_line.setdefault(no, []).append((doc, no, m.group(1), int(m.group(2))))
         for no, line in enumerate(body.splitlines(), 1):
+            out += by_line.get(no, [])
             out += [(doc, no, m.group(1), int(m.group(2)))
-                    for pat in (MINIMAL, BARE) for m in pat.finditer(line)]
+                    for m in BARE.finditer(line)]
     return out
 
 
@@ -915,6 +932,42 @@ def test_the_count_scanner_counts_cases_not_whatever_else_the_line_counts():
     # 上面第一行是"写错的数"：模块里 15 条、文档写 14，守卫必须抓到它（真实语料那条红的就是它）。
     stale = [(doc, no, mod, n) for doc, no, mod, n in claims if defined.get(mod) != n]
     assert len(stale) == 3, f"三处都该红（14 对 15、23 对 15、29 对 15），实到 {stale}"
+
+
+def test_a_case_count_folded_onto_the_next_line_is_still_a_claim():
+    """模块名落在行尾、`N 条` 落在下一行行首，渲染出来是同一句话——按物理行扫整枚看不见它。
+
+    这一形不是假想的：README〈测试〉那一节真就长着这个排版，而它那句条数主张今天不归任何闸门管。
+    `#337` 给收集数那一族折过这一步，当时把条数这一族登记成已知盲区，这一片把它补上。
+    报的行号是这句话**开头**所在那一行，不是数所在的那一行。
+    """
+    probe = ("往上数这一格住在 `tests/test_probe.py`\n"
+             "（现 15 条、跑起来 15 个用例）\n")
+    claims = _case_claims({"probe.md": probe})
+    assert claims == [("probe.md", 1, "test_probe", 15)], claims
+
+
+def test_a_folded_neighbour_that_counts_something_else_is_still_not_a_case_claim():
+    """折行让 30 字的窗口跨过换行，那条否定式必须照旧挡住"数的不是用例"的那一句。
+
+    钉的是加宽的另一侧：`24 条自报文本` 与上一行的模块名在折面上只隔三个字，
+    如果 `条` 后面还接得上词这一点不再算数，守卫就会在文档没写错的时候报红。
+    """
+    probe = ("新增的那格住在 `tests/test_probe.py`\n"
+             "把 24 条自报文本逐条断言，又对 22 条渲染行做了同一件事\n")
+    assert _case_claims({"probe.md": probe}) == []
+
+
+def test_a_case_claim_folded_after_two_names_belongs_to_the_nearer_one():
+    """窗口里出现第二个模块名时，主张归**近的那个**——归给上一行的名字就是造出一句假话。
+
+    折面按最左端起算：不加一记"窗口里不许再出现模块名"的断言，第一行那个名字会先把
+    下一行的数吃掉，于是同一枚主张同时有两个主人（另一个还是没人认的）。
+    """
+    probe = ("座位视图住在 `tests/test_probe_a.py`\n"
+             "然后 `tests/test_probe_b.py` 里 15 条\n")
+    claims = _case_claims({"probe.md": probe})
+    assert claims == [("probe.md", 2, "test_probe_b", 15)], claims
 
 
 def test_a_stated_total_has_to_add_up_to_its_own_enumeration():
