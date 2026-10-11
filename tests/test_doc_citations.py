@@ -5589,3 +5589,39 @@ def test_the_manuals_claim_that_audit_takes_exactly_one_external_input_has_a_ros
     assert knobs, "名册空着＝这一条什么都没扫到：`_value_taking_knobs` 或子命令名先坏了，别读成'零外部输入'"
     assert knobs == {"calibration": "--calibration"}, (
         f"README 那句「`audit` 里唯一一处**要显式递进去**的外部」需要改口，多出来的那一格是：{knobs}")
+
+
+def test_a_fallthrough_in_the_corpus_layer_reports_an_empty_face_rather_than_a_pass():
+    """语料层那六格「读不到东西」的出口各被递过一次空面：它们要说空、要说不在场，不许沉默地绿。
+
+    这一族在现行调用里从没落过，因为喂给它们的每一面都恰好有住户——那正是危险所在：
+    一张表被整页摘掉、或 owner 那一格换了写法，判据读的语料就空了，而空面究竟走的是
+    「报空」还是「报零缺陷」这两条路，只有人手递一次空面才分得开（`#310`、`#325` 量的都是这一格）。
+    所以每一格都配一枚只指向它自己的证人：`_owner_column_defects` 那一格返回的是**一句红**，
+    它若退化成返回空清单，owner 对账就变成一把恒假尺——这一条是它唯一能有的失效方向证人。
+    """
+    no_table = "这一页没有那张规则表，只有一句散文。\n"
+    assert _rule_table_measure(no_table) == (0, 0, set()), (
+        "表不在场时量出的是空面：读出非零行数说明切表的那一步认错了一本页")
+    assert _owner_column_cells(no_table) == [], (
+        "表不在场时 owner 格也是空的：与上面那一条同一寸，两面不许各说一套")
+
+    blank_rows = {"README.md": "\n".join([
+        RULE_TABLE_HEADER,
+        "| --- | --- | --- |",
+        "| 名字不在反引号里 | owner 格里也没有模块名 | 问的是别的 |",
+        "",
+    ])}
+    assert _owner_column_cells(next(iter(blank_rows.values()))) == []
+    assert _owner_column_defects(blank_rows, {}) == [
+        f"找不到「{RULE_TABLE_HEADER}」那张表的 owner 格：判据的语料落空了，无东西可对账"], (
+        "表在场而 owner 格数不出名字时必须报这一句红：换成空清单，这一条闸门就再也不会红")
+
+    assert _numbered_headings("docs") is None, (
+        "递过去的那一本不在场（这里是一目录）时给 None——那是「点空」，与「有页而没编号节」两回事")
+    assert _numbered_headings("README.md") is not None
+
+    assert _dead_anchors(ROOT, []) == [], (
+        "一枚锚点都没有时不开 git 进程也不报错：这一格若抛，名册为空那趟会被读成尺坏了")
+    assert _ticket_claim_target("这一句里没有一个以反引号包住的号", "999") == "归档", (
+        "句里找不到那枚号时按归档读——归档是这一族在仓库内唯一的落点，没写被指页的那句更可疑")

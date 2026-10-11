@@ -4458,3 +4458,31 @@ def test_the_tests_side_defaults_nobody_ever_omits_are_now_required():
         f"这 {len(still)} 枚又有了出厂值：{still}——它们每一枚的全部调用点都自己交值，"
         "名单与逐枚调用点现量在 `#331` 那一节")
 
+
+def test_the_word_layer_helpers_answer_an_unrecognized_shape_by_refusing_it():
+    """认不出形状时那几格「不收」的地板，每一格都有人递过一次那种输入。
+
+    补证人而不是删腿的依据：这四格都不是恒假腿（`#336` 那一节只摘恒假的），输入在仓库里现成就有——
+    处置句把 `test_wiring.py` 写成裸名、出厂值里有 `{"a": 1}` 这样的字面字典、
+    一棵没进 `parents` 名册的树也在同一本文件里。它们从没落过，是因为现行调用的那几面恰好没递到过。
+    失效方向都朝「多收」：按名字找落点那一格若返回假、字典那一格若把非字面读成字面、
+    挂不上父亲那一格若猜成当场落盘——每一格都是红起来比绿着可信。
+    """
+    assert _cited_path_exists("落点写成 tests/test_wiring.py 这种全路径")
+    assert _cited_path_exists("落点只写了本文件名 test_wiring.py"), (
+        "按名字找那一格没落到：docstring 承诺「写全路径与只写名字都算」，只写名字时它说没有落点")
+    assert not _cited_path_exists("落点是不存在的 no_such_page_here.py")
+
+    assert _root_literal(ast.parse('"src"').body[0].value) == "src", (
+        "链顶那一截字面直接就是根：这一格返回 None 会把每一条「根是字面量」的派生读成没有根")
+    assert _root_literal(ast.parse('Path("data")').body[0].value) == "data"
+
+    assert _literal_word(ast.parse('{"a": 1}').body[0].value) == "{'a': 1}", (
+        "值与键都是字面的字典该有拼写：返回 None 会把这一形从「逐字相同」的对账面上整个抹掉")
+    assert _literal_word(ast.parse('{name: 1}').body[0].value) is None, (
+        "键是名字的字典不是字面量——字典那一格若什么都收，抄本尺就多出假对")
+
+    tree = ast.parse('Path("x")')
+    assert _touches_the_filesystem(tree, _ast_parents(tree)) is False, (
+        "名册里没有父亲时判「不碰文件系统」：这一格若猜成当场，未名册的结点会自己走进收的那一面")
+
