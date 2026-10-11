@@ -3522,6 +3522,8 @@ def test_the_dangling_member_rule_bites_on_a_never_existing_class_and_grants_his
 
 MANUAL_CUT_ANCHOR = "2b57a58"          # #172 收尾那一版：README〈测试〉一节还没被摘过一行
 TEST_SECTION = "## 测试"
+MANUAL_CUT_FACES = (MANUAL_CUT_ANCHOR, "HEAD")   # 名册读两版手册：当年那一版 + 最近一次提交那一版
+                                                  # 第二面管的是"锚点之后才添进〈测试〉一节的行"
 
 
 def _section_of(text: str, heading: str) -> list[str]:
@@ -3570,21 +3572,54 @@ def _registered(ln: str, archive_lines: list[str], by_mask: dict[str, list[int]]
                for i in by_mask.get(_mask_counts(ln), ()))
 
 
-def _departures(old_text: str, now_lines: list[str], archive_lines: list[str],
-                heading: str = TEST_SECTION,
-                anchor: str = MANUAL_CUT_ANCHOR) -> tuple[list[str], list[str]]:
+def _departures(faces: list[tuple[str, list[str]]], now_lines: list[str],
+                archive_lines: list[str]) -> tuple[list[str], list[str]]:
     """(消失且未在册的行, 消失的行) —— 名册由 git 那头的原文算，测试里不重抄一份被搬走的散文。
 
+    faces 是名册要读的手册版本 [(那一版的锚, 那一版〈测试〉一节的行), ...]，切节由调用方做；
+    每一版的锚同时是"数字重数过"那一格要在归档里点名的那串字。同一行出现在两版里只算一次，
+    记在第一次遇见它的那一版名下。
     口径：逐行整行相等才算"还在"。改一个字就算离开（旧句子是当年的话，要留档才谈得上核对），
     搬到手册外任何地方都算还在（这一条只管"摘了没登记"，不管"挪了个位置"）；空行不进名册。
     唯一的例外是 `_mask_counts` 那一族数字：见上一段的理由。归档那一侧的重数索引一次算完，
     否则每消失一行都要把整本归档重扫一遍。
     """
-    gone = [ln for ln in _section_of(old_text, heading) if ln.strip() and ln not in now_lines]
     by_mask: dict[str, list[int]] = {}
     for i, a in enumerate(archive_lines):
         by_mask.setdefault(_mask_counts(a), []).append(i)
-    return [ln for ln in gone if not _registered(ln, archive_lines, by_mask, anchor)], gone
+    departures: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for anchor, old_lines in faces:
+        for ln in old_lines:
+            if ln.strip() and ln not in now_lines and ln not in seen:
+                seen.add(ln)
+                departures.append((anchor, ln))
+    missing = [ln for anchor, ln in departures
+               if not _registered(ln, archive_lines, by_mask, anchor)]
+    return missing, [ln for _, ln in departures]
+
+
+def _manual_cut_faces() -> list[tuple[str, list[str]]]:
+    """名册要读的那两版手册：当年那一版，和最近一次提交那一版。
+
+    第二面的标签先解成真正的短 SHA 再去 `git show`，因为归档里点名它时要用得着那串字
+    （`#151` 只认带 SHA 的锚）。它只在"本片改了手册、那一笔还没落地"的窗口里有读数：
+    提交一落，HEAD 就追上了工作树。这一面补的是锚点之后才添进〈测试〉一节的行——
+    那一段盲区的价由 `#339` 那一趟量过。
+    """
+    faces: list[tuple[str, list[str]]] = []
+    for spec in MANUAL_CUT_FACES:
+        label = spec
+        if spec == "HEAD":
+            head = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT,
+                                  capture_output=True, text=True)
+            assert head.returncode == 0, f"解不出最近一次提交：{head.stderr.strip()[:120]}"
+            label = head.stdout.strip()
+        shown = subprocess.run(["git", "show", f"{label}:README.md"], cwd=ROOT,
+                               capture_output=True, text=True)
+        assert shown.returncode == 0, f"锚点 {label} 上读不到 README：{shown.stderr.strip()[:120]}"
+        faces.append((label, _section_of(shown.stdout, TEST_SECTION)))
+    return faces
 
 
 def test_a_line_that_left_the_manual_is_registered_verbatim_in_the_archive(full_and_shallow_clone):
@@ -3593,9 +3628,10 @@ def test_a_line_that_left_the_manual_is_registered_verbatim_in_the_archive(full_
     动因是本轮数 README〈测试〉一节时现出来的形状：那一节 228 行（去掉空行 188 行）里坐着 D/K/A
     三段的逐片叙事，而"搬走的东西一字未改"这几句一直只是散文——`#143` 那四张表、`#163` 那 22 行、
     `#168` 那 13 处判决句，每一次都靠写盘脚本自觉，脚本改一半或有人手改 README 删一段，没有任何东西会红。
-    这一条不点名搬了哪些句子（那是第二份账，会和归档各自演化），它去问锚点 `2b57a58`
-    （08:49:01Z，#172 收尾那一跑之后）的 README：那一节里如今不在 README 中的每一行，
-    都要能在 `docs/iterations.md` 里逐字找到。
+    这一条不点名搬了哪些句子（那是第二份账，会和归档各自演化），它去问两版手册——锚点 `2b57a58`
+    （08:49:01Z，#172 收尾那一跑之后）那一版，和最近一次提交那一版：这两版里如今不在 README 中的
+    每一行，都要能在 `docs/iterations.md` 里逐字找到。第二版是 `#339` 补的候选面：锚点之后才添进
+    手册的那一批行从前不在名册里，摘掉它们这一格一声不响。
 
     开头那一段是这条判据自己的正控制：它读的是**历史里那一版**，所以在 `--depth 1`
     的克隆里读不到锚点，只能跳过（下面那个 `pytest.skip`）。跳过没有读者＝一具"永远跳过"
@@ -3611,12 +3647,9 @@ def test_a_line_that_left_the_manual_is_registered_verbatim_in_the_archive(full_
     if git_history_is_shallow(ROOT):
         pytest.skip(f"这份克隆的 git 历史被截断了，锚点 {MANUAL_CUT_ANCHOR} 不在里面——这一条要读那一版的"
                     "README 才答得出「摘走而没登记」。它今天没有读数：`git fetch --unshallow` 之后重跑才有。")
-    shown = subprocess.run(["git", "show", f"{MANUAL_CUT_ANCHOR}:README.md"], cwd=ROOT,
-                           capture_output=True, text=True)
-    assert shown.returncode == 0, f"锚点 {MANUAL_CUT_ANCHOR} 上读不到 README：{shown.stderr.strip()[:120]}"
     now = (ROOT / "README.md").read_text(encoding="utf-8").splitlines()
     archive = (ROOT / "docs" / ARCHIVE).read_text(encoding="utf-8").splitlines()
-    missing, gone = _departures(shown.stdout, now, archive)
+    missing, gone = _departures(_manual_cut_faces(), now, archive)
     assert len(gone) >= 8, (
         f"锚点之后〈测试〉一节一行都没摘（消失 {len(gone)} 行）——名册是空的，这条判据还没活")
     assert not missing, f"这些行从手册里消失了，却没在归档逐字在册：{missing[:3]}"
@@ -3649,7 +3682,8 @@ def test_the_departure_judge_reads_a_reworded_line_as_gone_and_a_moved_one_as_re
                "`tests/test_demo.py`（71 条、跑起来 71 个用例）重数过。",
                "```", "隔开的一行", "再隔开的一行",
                "`tests/test_other.py`（71 条、跑起来 71 个用例）重数过。"]
-    missing, gone = _departures(old, now, archive)
+    missing, gone = _departures([(MANUAL_CUT_ANCHOR, _section_of(old, TEST_SECTION))],
+                               now, archive)
     assert gone == [
         "这一行的旧说法被改了一个字。",
         "这一行整行搬去了归档。",
@@ -3657,6 +3691,22 @@ def test_the_departure_judge_reads_a_reworded_line_as_gone_and_a_moved_one_as_re
         "`tests/test_other.py`（70 条、跑起来 70 个用例）重数过。"], gone
     assert missing == ["这一行的旧说法被改了一个字。",
                        "`tests/test_other.py`（70 条、跑起来 70 个用例）重数过。"], missing
+
+
+def test_a_line_the_manual_gained_after_the_anchor_is_still_a_departure_when_it_leaves():
+    """名册读几版手册：只读锚点那一版时，锚点之后才添进〈测试〉一节的行摘掉它无声。
+
+    夹具里那一行只在第二面出现、第一面没有它，工作树把它改了一个字 ⇒ 只有第二面看得见这次消失。
+    两个标签在夹具里就是字符串（`_registered` 拿它做子串核对），不必是真正的提交号。
+    """
+    first = "## 测试\n从当年就在的那一行。\n\n## 下一节\n"
+    second = "## 测试\n从当年就在的那一行。\n锚点之后才添的那一行。\n\n## 下一节\n"
+    now = ["从当年就在的那一行。", "锚点之后才添的那一行，被改了一个字。"]
+    faces = [("first", _section_of(first, TEST_SECTION)),
+             ("second", _section_of(second, TEST_SECTION))]
+    missing, gone = _departures(faces, now, ["归档里没有这一句。"])
+    assert gone == ["锚点之后才添的那一行。"], gone
+    assert missing == gone, missing
 
 
 def test_the_count_mask_blind_spots_only_the_digits_a_rerun_forgets():
