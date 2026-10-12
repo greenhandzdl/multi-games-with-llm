@@ -78,23 +78,61 @@ def _terminal(events):
 
 
 # ------------------------------------------------------------------ 名册与落盘
-def test_only_one_place_in_the_cli_puts_a_person_in_a_chair():
-    """`HumanActor(` 在 `src/` 里恰好出现一次，且那一次在 `cli.py`：换座位不许有第二份实现。
+def _human_construction_points(root: Path) -> list[str]:
+    """`root` 这棵树里把 `HumanActor` 当名字直接构造的地方，按本名报。
 
-    判据从磁盘上取（和 `test_wiring` 那几把尺同一手法），所以以后往 `batch` 里接真人会立刻红——
-    而那一处该不该红，是 §十五 的另一条决定（含真人的局不进配对语料），不是这条管的事。
+    缓存副本不算那一枚：一次意外的 `.py` 落进 `__pycache__` 不该凭空多出第 N+1 枚构造点，
+    而这把尺数的是树上真住着的本——同族那两枚过滤的账在 `#334`。
     """
     import ast
 
     hits = []
-    for f in sorted((REPO / "src/wolfengine").rglob("*.py")):
+    for f in sorted(root.rglob("*.py")):
         if "__pycache__" in f.parts:
             continue
         for node in ast.walk(ast.parse(f.read_text(encoding="utf-8"))):
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
                     and node.func.id == "HumanActor"):
                 hits.append(f.name)
+    return hits
+
+
+def test_only_one_place_in_the_cli_puts_a_person_in_a_chair():
+    """`HumanActor(` 在 `src/` 里恰好出现一次，且那一次在 `cli.py`：换座位不许有第二份实现。
+
+    判据从磁盘上取（和 `test_wiring` 那几把尺同一手法），所以以后往 `batch` 里接真人会立刻红——
+    而那一处该不该红，是 §十五 的另一条决定（含真人的局不进配对语料），不是这条管的事。
+    """
+    hits = _human_construction_points(REPO / "src/wolfengine")
     assert hits == ["cli.py"], f"名册的构造点不该只有这一处：{hits}"
+
+
+def test_the_cache_copy_is_stopped_only_by_that_filter(tmp_path):
+    """那枚 `__pycache__` 过滤在开发树上零住户——`#342` 的执行普查从没落到过它。
+
+    三腿各钉一件事（照 `#334` 那一格的分工，证人开的是今值守卫本人，不另抄一把尺）：
+
+    * 走得到——同一棵合成树上 `rglob("*.py")` 当场返回缓存里那一本，所以看不见不是 glob 的功劳；
+    * 尺认得出——把同一段源码放到不带 `__pycache__` 的目录下，helper 报出两枚；
+    * 守卫不认——它在 `__pycache__` 下时只剩 `cli.py`，挡下它的只有那枚过滤。
+    """
+    pkg = tmp_path / "src" / "wolfengine"
+    pkg.mkdir(parents=True)
+    (pkg / "cli.py").write_text("def main():\n    return HumanActor(cfg, seat=3)\n", encoding="utf-8")
+    (pkg / "batch.py").write_text("def run():\n    return MockActor(cfg)\n", encoding="utf-8")
+    copy_src = "def reuse():\n    return HumanActor(cfg, seat=3)\n"
+    cache = pkg / "__pycache__"
+    cache.mkdir()
+    (cache / "cli.py").write_text(copy_src, encoding="utf-8")
+
+    picked = sorted(f.name for f in pkg.rglob("*.py"))
+    assert picked == ["batch.py", "cli.py", "cli.py"], \
+        f"glob 没走进缓存目录，下面两腿就都是空的：{picked}"
+    assert _human_construction_points(pkg) == ["cli.py"], \
+        "缓存副本没被那枚过滤挡住，或它把真书一起挡了"
+    (pkg / "extra.py").write_text(copy_src, encoding="utf-8")
+    assert _human_construction_points(pkg) == ["cli.py", "extra.py"], \
+        "helper 认不出这一形构造点，第三条腿就是空的"
 
 
 def test_a_person_at_the_table_is_asked_and_their_words_are_in_the_log(tmp_path, keyboard):
