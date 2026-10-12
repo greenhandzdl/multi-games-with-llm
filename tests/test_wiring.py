@@ -3405,7 +3405,7 @@ def _suppression_markers(roots: tuple[str, ...]) -> list[str]:
     """
     hits = []
     for root in roots:
-        for path in sorted((REPO / root).rglob("*.py")):
+        for path in sorted(p for p in (REPO / root).rglob("*.py") if "__pycache__" not in p.parts):
             lines = path.read_text(encoding="utf-8").splitlines(keepends=True) + [""]
             for tok in tokenize.generate_tokens(iter(lines).__next__):
                 if tok.type == tokenize.COMMENT and SUPPRESSION_RX.search(tok.string):
@@ -4692,3 +4692,26 @@ def test_the_unread_locals_walk_skips_cached_copies_but_keeps_the_real_books(mon
         WIRING_FACE_BOOKS["src/__pycache__/cachedface.py"], encoding="utf-8")
     assert "cached_dropped" in "\n".join(_unread_locals(("src", "tests", "scripts"))), \
         "同一本文本挪出缓存那面就收不到了，那第三腿钉的不是那枚过滤"
+
+
+def test_the_marker_walk_skips_cached_copies_but_still_counts_the_real_books(monkeypatch, tmp_path):
+    """豁免标记那一趟走查以前是本子里唯一不带缓存目录过滤的：`#344` 第四格，三片没动。
+
+    今天开发树的缓存目录里只有字节码，所以这枚过滤落下去是「今天没人走到」的形状，不是恒假——
+    `#334` 量过这条分界（真往缓存目录埋一本源文件，`rglob("*.py")` 就会把它返回）。恒假才摘，
+    没人走到就配证人。三条腿各钉一向：
+    """
+    monkeypatch.setattr("test_wiring.REPO", tmp_path)
+    pkg = tmp_path / "src"
+    pkg.mkdir()
+    (pkg / "real.py").write_text("import os  # noqa: E402\n", encoding="utf-8")
+    cache = pkg / "__pycache__"
+    cache.mkdir()
+    (cache / "copy.py").write_text("import sys  # noqa: E999\n", encoding="utf-8")
+    walked = sorted(p.name for p in (tmp_path / "src").rglob("*.py"))
+    assert walked == ["copy.py", "real.py"], f"glob 走不到缓存副本，后面两腿都是空的：{walked}"
+    got = sorted(h.split(":")[0].split("/")[-1] for h in _suppression_markers(("src",)))
+    assert got == ["real.py"], f"缓存副本没被挡住，或它把真书一起挡了：{got}"
+    (pkg / "extra.py").write_text("import json  # type: ignore\n", encoding="utf-8")
+    got2 = sorted(h.split(":")[0].split("/")[-1] for h in _suppression_markers(("src",)))
+    assert got2 == ["extra.py", "real.py"], f"走查认不出这一形标记，第三条腿就是空的：{got2}"
