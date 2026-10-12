@@ -534,3 +534,20 @@ def test_each_of_the_three_doors_reports_a_checker_and_only_its_own_shape():
     assert _checker_recipients(set(), set(),
                                {"README.md": "we never run ruff or mypy here"}) == []
     assert _checker_recipients(set(), set(), {".github/workflows/ci.yml": "runs-on: ubuntu-latest"}) == []
+
+
+def test_the_import_and_definition_scanners_each_refuse_a_shape_they_do_not_model():
+    """两把尺各有一种「不该认领的形状」，真语料里一枚也没有，所以那两条腿从没落过。
+
+    `_imported_tops` 的语料由 `_tracked_py_files()` 筛过，键全是 `.py`，所以它那句「不是 .py 就跳过」
+    从立起来那天起没跳过任何东西。喂法是把一本 `README.md` 混进语料：它体内那句 `import os` 不许算
+    一次 import，而同一份语料里 `.py` 那一本的 `import json` 必须照算——只钉前半句等于把整把尺关掉。
+    `_defines_toplevel` 见过的顶层绑定只有 `def` 与裸赋值两种（在册入口 `wolfengine.cli:main` 是 `def`），
+    带注解那一形从没落过：`MODE: str = "fast"` 要算「这本定义过它」。同一行同一个谓词今天也把裸注解
+    （只有类型没有值）算作定义过——把它和带值那一形分家与否，是判据主人的一句话，不由这条用例定。
+    """
+    tops = _imported_tops({"README.md": "import os\n", "src/pkg/app.py": "import json\n"})
+    assert tops == {"json"}, tops
+
+    assert _defines_toplevel('MODE: str = "fast"\n', "MODE") is True
+    assert _defines_toplevel("def other():\n    pass\n", "MODE") is False

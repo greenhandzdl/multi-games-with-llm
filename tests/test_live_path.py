@@ -781,3 +781,17 @@ async def test_the_completion_ceiling_stops_the_table_the_cli_sits_at(key, tmp_p
             if e.kind == metrics.Kind.PHASE and "预算耗尽" in str((e.payload or {}).get("text", ""))]
     assert len(note) == 1, note
     assert f"completion_tokens={res.completion_tokens}" in note[0], note[0]
+
+
+def test_the_oracle_abstains_when_a_targeted_act_gets_no_target():
+    """`oracle_answer` 里那句「没有可指的就改判 pass」从没落过：没有一条用例递过这种 prompt。
+
+    判据的接缝在两张清单之间——动作表说 `accuse` 合法，目标表却是空的。今天没有任何一条用例把这一形
+    递进过这个函数，尺的 never 读数说的就是这一件事，它不读引擎会不会产这种 prompt；这一形值得单独钉，
+    因为一旦它出现（目标被削空、或指派与合法性脱钩），替身要么抛 KeyError 要么交出一张没有靶的指控，
+    两者都会被当成模型行为读。prompt 按装配器写下的原句形状现拼，三条正则各喂一枚。
+    """
+    prompt = ("合法动作：accuse/pass\n可选目标：[]\n指派 act = accuse。\n凭据写如 [e100]")
+    answer = json.loads(oracle_answer(prompt))
+    assert answer["act"] == "pass", answer
+    assert "target" not in answer, answer

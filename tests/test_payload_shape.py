@@ -277,3 +277,16 @@ def test_the_two_fallback_copies_are_compared_where_a_reader_can_see_it(written)
     assert metrics.decisions([no_copy]) == [no_copy], "这条反例得先真的是一个决策记录"
     blind = metrics.fallback_copy_check([*(no_copy if e is first else e for e in written)])
     assert blind == {"n_compared": clean["n_compared"] - 1, "divergent": 0}, blind
+
+
+def test_a_payload_key_the_table_never_named_is_reported_by_kind(written):
+    """`undeclared_keys` 里「差集非空才记账」那一格从没落过：真落盘的键全在形状表上。
+
+    「表是诚实的」这一读法的反面（有键没点名 → 按 kind 报出来）今天零次，所以那半句只是散文。
+    喂法是把 `written` 里真的一枚事件换一个多出来的键，其余一字不动——判据读的就是那一个差集。
+    反方向同一条钉住：同一枚事件原样递回去必须一个都不报，否则这一格只是每次都开火的枪。
+    """
+    e = written[0]
+    extra = dataclasses.replace(e, payload={**e.payload, "no_such_key": 1})
+    assert undeclared_keys([extra]) == {e.kind: {"no_such_key"}}
+    assert undeclared_keys([e]) == {}, f"这一枚的键本来全在表上，却报出了：{e.payload}"

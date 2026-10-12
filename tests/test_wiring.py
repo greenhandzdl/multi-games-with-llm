@@ -4486,3 +4486,73 @@ def test_the_word_layer_helpers_answer_an_unrecognized_shape_by_refusing_it():
     assert _touches_the_filesystem(tree, _ast_parents(tree)) is False, (
         "名册里没有父亲时判「不碰文件系统」：这一格若猜成当场，未名册的结点会自己走进收的那一面")
 
+
+
+def test_the_ancestor_walk_skips_a_class_it_already_visited():
+    """`_declared_by_an_ancestor` 里「已经走过就跳过」那一格从没落过：真语料的 `parents` 是棵树。
+
+    环那一形是这条守卫的全部意义：摘掉它，`A` 推 `B`、`B` 又推 `A`，栈永远排不空——
+    所以这一格的正控制不是「红」而是「不许挂」，刀要用超时来判。
+    菱形钉两问：共享祖先声明过那个参数要认下来，没声明则要说不许，两边都得由这一格走一遍。
+    """
+    cycle = {"A": ("B",), "B": ("A",)}
+    assert _declared_by_an_ancestor("A", "go", "x", cycle, set()) is False
+
+    diamond = {"Leaf": ("Left", "Right"), "Left": ("Shared",), "Right": ("Shared",)}
+    inherited = {("Shared", "go", "x")}
+    assert _declared_by_an_ancestor("Leaf", "go", "x", diamond, inherited) is True
+    assert _declared_by_an_ancestor("Leaf", "go", "y", diamond, inherited) is False
+
+
+def test_the_literal_alias_scanner_refuses_bindings_it_cannot_name():
+    """`_literal_alias_homes` 那条「认不出名字就跳」的守卫从没落过：真语料的模块级别名全是单个名字赋值。
+
+    两种拒绝形各喂一枚：`A, B = Literal[...]` 是多目标赋值，`spec.side: tuple = ()` 把注解落在属性位上
+    （Python 不许给元组注解，所以躲过这一格的写法只有这两种）。带值的注解赋值按它 docstring 的承诺要算，
+    今天确实算了。摘掉那半句「target 不是 Name 就跳」会撞 AttributeError；摘掉同座的「value 是 None 就跳」
+    半句却什么都不变——`_is_literal_subscript` 拿到 None 本来就返回 False，那一格是一具等价变异。
+    """
+    corpus = {"m.py": 'A, B = Literal["x", "y"]\n'
+                      "spec.side: tuple = ()\n"
+                      "MODE: TypeAlias\n"
+                      'KIND: TypeAlias = Literal["a"]\n'
+                      'Thing = Literal["t"]\n'}
+    assert _literal_alias_homes(corpus) == {
+        "KIND": [("m.py", 4)], "Thing": [("m.py", 5)]}, _literal_alias_homes(corpus)
+
+
+def test_the_ability_scanner_refuses_module_level_bindings_it_cannot_name():
+    """`_ability_values_and_consultations` 开头那条守卫与别名那一把同形，也同价地从没落过。
+
+    同一份语料里喂四种顶层绑定：只有 `Ability = Literal[...]` 那一格是能力表的作者。
+    多目标赋值与属性位注解都必须被挡在取数之前（挡不住就撞 `.id`），裸注解那一形则与
+    `_is_literal_subscript` 重复——摘掉它取值清单一个字都不少，这一格登记成等价变异的方向。
+    """
+    corpus = {
+        "pkg/r.py": "from typing import Literal\n\n"
+                    'Ability = Literal["asked", "never"]\n'
+                    'A, B = Literal["x"]\n'
+                    "spec.side: tuple = ()\n"
+                    "MODE: TypeAlias\n",
+        "pkg/g.py": "def gate(spec):\n    return \"asked\" in spec.abilities\n",
+    }
+    values, consulted, unenforced = _ability_values_and_consultations(corpus)
+    assert values == ["asked", "never"], values
+    assert sorted(consulted) == ["asked"], consulted
+    assert unenforced == ["never"], unenforced
+
+
+def test_a_relative_path_joined_into_a_chain_still_reaches_its_reader():
+    """`_touches_the_filesystem` 沿斜杠往上爬那一格从没落过：真语料的当场取数都是一口气写完。
+
+    `Path("x").read_text()` 第一跳就撞见 Attribute 而返回了，中间截一截 `Path("x") / "y"` 的写法
+    今天一枚也没有。爬不完这条链就会把「当场」读成「拼给下游」，那一枚就从闸门漏出去；
+    反过来链尾不是取数把手时（`print(...)`）仍要判「不收」，否则这条腿只是把尺子永远扳向收。
+    """
+    for src, want in [('(Path("data") / "x.jsonl").read_text()', True),
+                      ('(Path("data") / "sub" / "x.jsonl").open()', True),
+                      ('print(Path("data") / "x.jsonl")', False)]:
+        tree = ast.parse(src)
+        node = next(n for n in ast.walk(tree)
+                    if isinstance(n, ast.Call) and ast.unparse(n.func) == "Path")
+        assert _touches_the_filesystem(node, _ast_parents(tree)) is want, src

@@ -5625,3 +5625,34 @@ def test_a_fallthrough_in_the_corpus_layer_reports_an_empty_face_rather_than_a_p
         "一枚锚点都没有时不开 git 进程也不报错：这一格若抛，名册为空那趟会被读成尺坏了")
     assert _ticket_claim_target("这一句里没有一个以反引号包住的号", "999") == "归档", (
         "句里找不到那枚号时按归档读——归档是这一族在仓库内唯一的落点，没写被指页的那句更可疑")
+
+
+def test_a_parenthetical_that_is_not_an_enumeration_is_not_summed():
+    """`_case_totals` 那句「没有加号就不是枚举」从没跳过东西——尺扫过真语料那一趟，带括号的条数主张每枚都写了加号。
+
+    松的那一格才是这条判据的全部意义：括号里若是一句话（`今天全绿`），取数那一刀数出零枚、
+    相加得 0，无条件相加就把「跑起来 52 条用例（今天全绿）」报成 52 对 0 的缺陷。正反各钉一次：
+    散文括号不许报，`23 + 29` 那种对不上的枚举照报。
+    """
+    assert _case_totals({"p.md": "跑起来 52 条用例（今天全绿）\n"}) == []
+    assert _case_totals({"p.md": "跑起来 53 条用例（`a.py` 23 + `b.py` 29）\n"}) == [
+        ("p.md", 1, 53, 52)]
+
+
+def test_an_excerpt_that_cannot_be_located_is_reported_rather_than_raised():
+    """`_verbatim_blocks` 的「围栏没关上」与 `_excerpt_defects` 的「出处读不到」两条坏消息腿各落一次。
+
+    尺扫过真语料那一趟两条腿都没落：每一块自称逐字的 ```text 围栏都关上了，所以那一格跳过残缺围栏
+    （而不是把文件尾巴全吞成一块摘录）从没落过；`source` 在这里是现场给的假读者，它一律答「读不到」，
+    于是报错那条也从没落过。
+    两形都要答得出一句能改的话：前者不许凭空认领一块，后者要点名是哪一本哪一行的哪一枚锚读不到，
+    而不是把 None 递给下游的 splitlines 去炸。
+    """
+    open_block = "整块逐字照抄：\n```text\nalpha\n"
+    assert _verbatim_blocks({"p.md": open_block}) == [], "未闭合的围栏被吞成了一整块摘录"
+
+    closed = _verbatim_blocks({"p.md": "摘自 `0a70bd7`:README.md 那一版，整块逐字照抄：\n"
+                                      "```text\nalpha\n```\n"})
+    assert len(closed) == 1, closed
+    defects = _excerpt_defects(closed, lambda sha, path: None)
+    assert len(defects) == 1 and defects[0].startswith("p.md:2 读不到 0a70bd7"), defects
