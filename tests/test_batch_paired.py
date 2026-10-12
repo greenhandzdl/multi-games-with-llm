@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from wolfengine import batch, events, game, metrics, report
+from wolfengine import batch, cli, events, game, metrics, report
 from wolfengine.config import Config
 from wolfengine.llm import EndpointUnavailable
 
@@ -922,6 +922,47 @@ def _invent_clock(tmp_path, seconds: float) -> None:
             rec["response"] = {**(rec.get("response") or {}), "latency_s": seconds}
             lines[i] = json.dumps(rec, ensure_ascii=False)
         p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def test_inventing_a_clock_untouched_the_prompt_dump(tmp_path, no_network):
+    """补时钟那一格「换了后缀就不是局日志」的跳过，此前一次也没被走到过。
+
+    跳过语句在 `*/*.jsonl` 这一圈里等的是 prompt 转储，而 `_paired` 只在臂目录里落下局日志——
+    转储另有作者：`cli._cmd_dry_run` 把那个名字写在自己的 f-string 里。所以这一格由真写入方请进
+    这棵树，名字与字节都由 `--dry-run` 现场产，夹具只挑落点。
+
+    落点选 `tmp_path` 下另一个子目录而不是臂目录，是现量决定的：`_cmd_dry_run` 每写一份转储都先
+    `play` 一局（它要用替身桌走到折叠路径），写进臂目录等于给批次多加一局，`games=2` 的分母当场
+    被顶歪。`*/*.jsonl` 那一层照样 visit 得到这个子目录里的两份，所以摘掉跳过语句时转储会被盖上
+    时钟——那正是第一条断言会红的方向。
+
+    第二条断言管反方向的空转：helper 若对整个批次一个字都没改，「转储没动」就只是「什么都没发生」
+    的同义反复。
+    """
+    _paired(tmp_path, _arms(A={}, B={"temperature": 0.6}), games=2)
+    scratch = tmp_path / "dry"
+    scratch.mkdir()
+    assert cli.main(["run", "--dry-run", "--seed", "7", "--out", str(scratch)]) == 0
+    assert no_network == []
+    dumps = sorted(p.name for p in scratch.glob("*.prompts.jsonl"))
+    kinds = sorted(p.name for p in scratch.glob("*.jsonl"))
+    assert len(dumps) == 1 and len(kinds) == 2, \
+        f"写入方没把两种 `*.jsonl` 落进同一个目录，用例就在空转：{kinds}"
+    dump = scratch / dumps[0]
+    before = dump.read_bytes()
+    assert b"\n" in before, f"转储是空文件，用例就在空转：{dumps}"
+
+    _invent_clock(tmp_path, 3.0)
+
+    assert dump.read_bytes() == before, \
+        "prompt 转储被当成局日志改写了：它每一行是一次装配，不是一条事件"
+    stamped = 0
+    for p in sorted(tmp_path.glob("*/*.jsonl")):
+        if p.name.endswith(".prompts.jsonl"):
+            continue
+        stamped += sum(1 for line in p.read_text(encoding="utf-8").splitlines()
+                       if '"latency_s": 3.0' in line)
+    assert stamped > 20, f"helper 一个字都没盖（{stamped} 条），前一条断言就没内容"
 
 
 def test_relabelling_a_mock_batch_cannot_turn_the_m3_gate_green(tmp_path):

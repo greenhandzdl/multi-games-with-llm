@@ -26,7 +26,7 @@ import asyncio
 import json
 from pathlib import Path
 
-from wolfengine import batch, metrics
+from wolfengine import batch, cli, metrics
 from wolfengine.config import Config
 from wolfengine.events import Event, Kind
 
@@ -138,6 +138,37 @@ def _rehumanise(tmp_path, kinds: list[str]) -> None:
     man_path = tmp_path / "run_manifest.json"
     man = json.loads(man_path.read_text(encoding="utf-8"))
     assert man["actor_kinds"] == ["mock"], "改的就是『manifest 与局文件不一致』这个前提"
+
+
+def test_rehumanising_a_batch_untouched_the_prompt_dump(tmp_path, no_network):
+    """改页眉那一格的跳过同样零住户：`_mock_batch` 落下的是局日志，转储得由 `--dry-run` 带来。
+
+    这一格的失效方向不是"改错了内容"而是"当场崩"：转储的第一行是一次装配记录，页眉那一格
+    根本不在它的键里，所以摘掉跳过语句之后 `_rehumanise` 会拿 KeyError 停在那份文件上。
+    名字与字节都出自真写入方（`cli._cmd_dry_run`），夹具只挑落点——写进臂目录会顺带多出一局
+    真桌（`_cmd_dry_run` 每次都先 `play`），把批次分母顶歪。
+
+    第二条断言管空转方向：页眉若一个字都没改，「没崩」只是「什么都没发生」。
+    """
+    _mock_batch(tmp_path)
+    scratch = tmp_path / "dry"
+    scratch.mkdir()
+    assert cli.main(["run", "--dry-run", "--seed", "7", "--out", str(scratch)]) == 0
+    assert no_network == []
+    dumps = sorted(p.name for p in scratch.glob("*.prompts.jsonl"))
+    kinds = sorted(p.name for p in scratch.glob("*.jsonl"))
+    assert len(dumps) == 1 and len(kinds) == 2, \
+        f"写入方没把两种 `*.jsonl` 落进同一个目录，用例就在空转：{kinds}"
+    dump = scratch / dumps[0]
+    before = dump.read_bytes()
+
+    _rehumanise(tmp_path, ["llm"] * 8 + ["human"])
+
+    assert dump.read_bytes() == before, \
+        "prompt 转储被当成局日志动了：它没有页眉可改"
+    head = json.loads(sorted(tmp_path.glob("A/*.jsonl"))[0].read_text(
+        encoding="utf-8").splitlines()[0])
+    assert head["meta"]["actor_kinds"] == ["llm"] * 8 + ["human"], head["meta"]
 
 
 def test_compare_names_the_seats_that_actually_played(tmp_path):
