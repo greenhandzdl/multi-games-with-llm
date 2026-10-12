@@ -5656,3 +5656,134 @@ def test_an_excerpt_that_cannot_be_located_is_reported_rather_than_raised():
     assert len(closed) == 1, closed
     defects = _excerpt_defects(closed, lambda sha, path: None)
     assert len(defects) == 1 and defects[0].startswith("p.md:2 读不到 0a70bd7"), defects
+
+
+# ---------------- 面级 walk 那五枚 `__pycache__` 过滤：`#344` 数出来的「今天没人走到」，各配一位证人
+
+FACE_BOOKS: dict[str, str] = {
+    "src/wolfengine/bookface.py": (
+        "import argparse\n\n\n"
+        "class BookHost:\n    single_field = 3\n\n"
+        "    pair_left, pair_right = 1, 2\n\n"
+        "    def spoken_in_book(self):\n        return argparse\n\n\n"
+        "def book_helper():\n    return BookHost\n"),
+    "scripts/calibface.py": (
+        "import sys\n\n\n"
+        "class CalibHost:\n    def calib_method(self):\n        return sys\n"),
+    "tests/test_bookface.py": (
+        "import json\n\n\n"
+        "def test_book_reader():\n    assert book_helper\n"),
+    "src/__pycache__/cachedface.py": (
+        "import cachedonlymod\n\n\n"
+        "class CachedHost:\n    single_cached = 5\n\n"
+        "    def cached_method(self):\n        return CachedOnlyToken\n\n\n"
+        "def cached_only_fn():\n    return 1\n"),
+    "scripts/__pycache__/cachedcalib.py": "def cached_calib_fn():\n    return 1\n",
+    "tests/__pycache__/cachedtest.py": "def cached_test_fn():\n    return 1\n",
+}
+
+
+def _face_with_cached_copy(base: Path) -> None:
+    """把 `FACE_BOOKS` 那棵合成树种到 `base` 上：三面各一本真书，三面各一本缓存副本。"""
+    for rel, text in FACE_BOOKS.items():
+        target = base / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+
+
+def test_the_residence_walk_skips_cached_copies_but_keeps_the_real_books(monkeypatch, tmp_path):
+    """`_code_residence` 那枚过滤的独占证人：三腿各钉一件事，缺一条就成了自测。
+
+    其一，`rglob` 认得缓存里那一本（所以"收不到"不是 glob 的功劳）；其二，真书的名字全在读数里
+    （所以摘掉整条腿也不会绿）；其三，把同一本文本挪出 `__pycache__`，那些名字当场进读数
+    （所以挡下它的只有那枚过滤，不是尺认不出那种形状）。
+    """
+    _face_with_cached_copy(tmp_path)
+    walked = {str(p.relative_to(tmp_path)) for p in (tmp_path / "src").rglob("*.py")}
+    assert "src/__pycache__/cachedface.py" in walked, \
+        f"缓存里那一本连 glob 都没返回，第三腿就成了自测：{sorted(walked)}"
+
+    monkeypatch.setattr("test_doc_citations.ROOT", tmp_path)
+    hidden = _code_residence()
+    cached_names = {"CachedHost", "cached_method", "cached_only_fn", "CachedOnlyToken",
+                    "single_cached", "cachedonlymod", "cached_calib_fn", "cached_test_fn"}
+    assert cached_names & hidden == set(), f"缓存副本漏进了名册：{sorted(cached_names & hidden)}"
+    assert {"BookHost", "spoken_in_book", "calib_method", "CalibHost"} <= hidden
+
+    (tmp_path / "src" / "movedout.py").write_text(
+        FACE_BOOKS["src/__pycache__/cachedface.py"], encoding="utf-8")
+    shown = _code_residence()
+    assert {"CachedHost", "cached_method", "CachedOnlyToken"} <= shown, \
+        "同一本文本挪出缓存那面就收不到了，那第三腿钉的不是那枚过滤"
+
+
+def test_the_member_roster_skips_cached_copies_and_grants_the_tuple_target_names(monkeypatch, tmp_path):
+    """`_class_member_roster` 的两格：`__pycache__` 那一枚 `continue`，和类体里"目标是元组"那一枚 `own.update`。
+
+    两枚各一条独立断言。元组那一格另按 `#158` 的手法逐格问一次：把 `assign` 那一格关掉，那两枚名字
+    就该从名册里消失——它们只靠这一格活着。
+    """
+    _face_with_cached_copy(tmp_path)
+    monkeypatch.setattr("test_doc_citations.ROOT", tmp_path)
+
+    roster = _class_member_roster()
+    assert "CachedHost" not in roster, "缓存副本进了成员名册"
+    assert "BookHost" in roster and "CalibHost" in roster
+    assert {"spoken_in_book", "single_field"} <= roster["BookHost"]
+    assert {"pair_left", "pair_right"} <= roster["BookHost"]
+
+    narrowed = _class_member_roster(kinds=("def", "ann", "self"))
+    assert {"pair_left", "pair_right"} & narrowed["BookHost"] == set(), \
+        "那两枚成员不只靠元组那一格活着，上面那条断言就没牙"
+
+    (tmp_path / "src" / "movedout.py").write_text(
+        FACE_BOOKS["src/__pycache__/cachedface.py"], encoding="utf-8")
+    assert "CachedHost" in _class_member_roster(), "第三腿钉的不是那枚过滤"
+
+
+def test_the_module_class_roster_skips_cached_copies_but_keeps_the_real_books(monkeypatch, tmp_path):
+    """`_engine_module_classes` 那枚过滤：按 `f.stem` 建键，所以缓存里那一本一旦进树就是凭空多一本模块。"""
+    _face_with_cached_copy(tmp_path)
+    walked = {p.stem for p in (tmp_path / "src").rglob("*.py")}
+    assert "cachedface" in walked, f"glob 没返回那本缓存副本：{sorted(walked)}"
+
+    monkeypatch.setattr("test_doc_citations.ROOT", tmp_path)
+    modules = _engine_module_classes()
+    assert "cachedface" not in modules and "cachedcalib" not in modules
+    assert "BookHost" in modules["bookface"] and "CalibHost" in modules["calibface"]
+
+    (tmp_path / "src" / "movedout.py").write_text(
+        FACE_BOOKS["src/__pycache__/cachedface.py"], encoding="utf-8")
+    assert "CachedHost" in _engine_module_classes()["movedout"], "第三腿钉的不是那枚过滤"
+
+
+def test_the_src_name_roster_skips_cached_copies_but_keeps_the_real_books(monkeypatch, tmp_path):
+    """`_src_name_roster` 那枚过滤：名册的键是**扁**的，缓存里一个同名绑定就替整本假模块付账。"""
+    _face_with_cached_copy(tmp_path)
+    monkeypatch.setattr("test_doc_citations.ROOT", tmp_path)
+
+    names, stems = _src_name_roster()
+    assert "cachedface" not in stems, "缓存副本的 stem 进了模块名册"
+    assert {"CachedHost", "cached_only_fn", "single_cached"} & names == set()
+    assert "bookface" in stems and {"BookHost", "book_helper"} <= names
+
+    (tmp_path / "src" / "movedout.py").write_text(
+        FACE_BOOKS["src/__pycache__/cachedface.py"], encoding="utf-8")
+    moved_names, _ = _src_name_roster()
+    assert {"CachedHost", "cached_only_fn"} <= moved_names, "第三腿钉的不是那枚过滤"
+
+
+def test_the_imported_stems_walk_skips_cached_copies_but_keeps_the_real_books(monkeypatch, tmp_path):
+    """`_imported_stems` 那枚过滤：它算的是豁免一的名单，缓存里一本假模块的 import 会替假模块开门。"""
+    _face_with_cached_copy(tmp_path)
+    walked = {p.stem for p in (tmp_path / "scripts").rglob("*.py")}
+    assert "cachedcalib" in walked, f"glob 没返回那本缓存副本：{sorted(walked)}"
+
+    monkeypatch.setattr("test_doc_citations.ROOT", tmp_path)
+    external = _imported_stems()
+    assert "cachedonlymod" not in external, "缓存里那本假模块的 import 进了豁免名单"
+    assert {"argparse", "sys", "json"} <= external
+
+    (tmp_path / "src" / "movedout.py").write_text(
+        FACE_BOOKS["src/__pycache__/cachedface.py"], encoding="utf-8")
+    assert "cachedonlymod" in _imported_stems(), "第三腿钉的不是那枚过滤"

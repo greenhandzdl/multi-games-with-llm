@@ -8118,7 +8118,7 @@ README——〈测试〉一节里如今不在手册中的每一行，都要能�
 
 说明：下面 13 段整行逐字摘自 `2b57a58` 那一版的 README〈测试〉一节，只有第一段那一行的两个计数按今天的树重数过（10:15Z 为 `#279` 新立的七条用例重数过一次，`12:05Z` 又为 `#281` 新立的一条抹字符串几何证人再重数一次，`12:39Z` 再为 `#282` 新立的一条 f-string 证人重数一次，`14:13Z` 再为 `#286` 新立的两条 .py 面判据重数一次，`16:52Z` 再为 `#287` 新立的三条仓内文档节号判据重数一次，`17:35Z` 再为 `#288` 新立的两条代码面票号判据重数一次，`09:07Z` 再为 `#337` 新立的一条收集数折行证人重数一次，`07:55Z` 再为 `#339` 新立的一条在册面证人重数一次，`11:23Z` 再为 `#338` 新立的三条条数折行证人重数一次，`09:56Z` 再为 `#342` 新立的两条证人重数一次，`14:02Z` 再为 `#343` 新立的四条证人重数一次：括号里那两枚现在都是 149，其余逐字）。
 ```text
-重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（149 条、跑起来 149 个用例，
+重跑这一片：`PYTHONPATH=src .venv/bin/pytest tests/test_doc_citations.py`（154 条、跑起来 154 个用例，
 两秒内，不发请求）。D1 不是凭空设计的——第一次写这个闸门时确实只走了 `ast.FunctionDef`，于是把
 `test_a_marker_is_public_but_never_becomes_chronicle`（`test_live_path.py` 里的协程）误报成了
 文档过期。**误报也是这个闸门的输出**，所以它的红用例名要留在账上（那张表 D1 那一格记着它误报了谁）。
@@ -8883,8 +8883,8 @@ README 那一处这次不止动了数字：那句"三条各参数化为…"是�
 
 #### 计数账跟着动的五处
 
-`tests/test_cli.py` 今 76 条、跑起来 89 个用例（这一片落地时是 70 与 83；新加的一正一反都在这一本），`tests/test_wiring.py` 跑起来 142 个
-用例（名单多一格参数；100 是这一片落地那天数出来的，已被往后的片顶成历史，`#342` 为这本新立一枚拒形证人后重数，`#343` 再添四枚后在 14:03:50Z 再重数）。07:21:42Z 用闸门自己那三条正则把四本手册页加 README 各扫一遍，被认出来的 `test_cli`
+`tests/test_cli.py` 今 76 条、跑起来 89 个用例（这一片落地时是 70 与 83；新加的一正一反都在这一本），`tests/test_wiring.py` 跑起来 147 个
+用例（名单多一格参数；100 是这一片落地那天数出来的，已被往后的片顶成历史，`#342` 为这本新立一枚拒形证人后重数，`#343` 再添四枚后在 14:03:50Z 再重数，`#345` 再添五枚后在 04:01:49Z 再重数）。07:21:42Z 用闸门自己那三条正则把四本手册页加 README 各扫一遍，被认出来的 `test_cli`
 写法是五处：README〈测试〉那一格的收集数、归档〈零局的批次先落了盘，再在摘要行上读一个空列表〉那节一处、
 `#180` 之后一直挂在册的那半截围栏引文、`#182` 那节里〈计数账跟着动的六处〉一处、以及本节这一处。围栏那一处只动收集数，条数仍是 63，理由与 `#182` 记过的
 同一条：`_mask_counts` 只许重数被认出来的那个数。
@@ -16369,3 +16369,32 @@ A 向（定义了既没人抛也没人接）与 C 向（接住而全仓没有抛
 - **今值**（计数是证人，秒数是脏读数）：本节写进本子之前那一趟闸门书（`tests/test_doc_citations.py` 加 `tests/test_wiring.py` 加密钥巡检，带 `-m "not network"`）03:28:04Z 起、03:29:10Z 收，`321 passed`、rc 0，与 `#343` 补记落地后那一趟同数——一枚代码没动，所以没有可改的计数。普查尺本趟没重跑（没有改动可让它读），所以 `#343` 今值那一格里两面的四个数与它那份六十八行的 NEVER 名册照旧引用、不重新盖章。命令一律带 `-o addopts=--strict-markers`，起读收读与退出码记在搁板的 `gate344_pre.out` 里。本节只往末尾追加，前面一行没挪 ⇒ 归档里那六十九枚入站指针这一趟一枚都不必重钉；本片新点名的十八枚号由闸门书当场逐枚核对。
 - **不动点宣布在这里**：上面那一格的读数出自本节写进本子之前跑的那一趟；本节带进十八枚新号，而闸门书那一条用例是按号参数化的，所以写进去之后还要再跑一趟才能确认"新号全对"，那一趟的读数照旧只记在提交说明里——`#332` 到 `#343` 同一手法，第二层递归关不掉。
 - **交下一片**：一是这一档那十三枚的证人，形状照 `#334` 那位 `tests/test_no_secrets.py:809` 的 `test_the_face_walk_skips_cached_copies_but_still_counts_the_real_books`：一棵合成树、逐枚把两本的模块级树根换掉、每枚一条独立腿，再配两向刀（摘掉过滤 ⇒ 证人红；把过滤顶宽 ⇒ 今值守卫自己红在空集地板）。二是合成树那一档十枚，与这一档的区别要写明白——那十枚里九枚的循环头是往临时目录递 `*.jsonl` 模式、腿是「名字以 `.prompts.jsonl` 收尾就跳过」，而批次落盘真的会产出那种名字的文件，所以那一形真能造，一棵临时树能管好几格；剩下那一枚是反向扫日志时「那条记录的 kind 不是终局就跳过」，造法是在末尾少写一条终局记录。三是 `test_` 用例体里那十七枚与嵌套 def 那十三枚仍要逐枚另问，问法是"改这条用例自己的输入会不会挪动它此刻钉着的那句话"。四是 `_suppression_markers` 缺那枚 `__pycache__` 过滤那一笔的定夺：它的循环体只有 tokenize 一条腿，别的十一本同类 helper 都带过滤。五是端点那一格（`#5`、`#96`、`#10`、`#40`）与 `#302` 那三道豁免照旧等用户动作。
+## `#345` 仓库根起树那一档的十二枚喂得进的腿全配到证人：三腿形状把"这枚过滤挡的"从 glob 与尺手里摘出来单独钉住，第十三枚按 `#344` 的定性继续不配（**04:11:31Z** 起笔）
+
+- 来路是 `#344` 交下来的第一格。这一档的形状那位证人早已给过（`tests/test_no_secrets.py:809` 那一行的 `test_the_face_walk_skips_cached_copies_but_still_counts_the_real_books`），本片把它的做法搬到起树那两本的十一枚面级过滤与一枚元组腿上，并按 `#344` 的定性把第十三枚留在不配证人那一档：它唯一的喂法是往仓库里挂一枚零读者豁免标记，那正是 `#253` 刚收掉的一族。落点是两本闸门书各自长了一截——`tests/test_doc_citations.py` 从五千六百五十八行长到 5789 行，`tests/test_wiring.py` 从四千五百五十八行长到 4694 行——整段都往末尾追加，前面一行没挪 ⇒ `#344` 数下的那六十九枚入站指针这一趟一枚都不必重钉。
+- **三腿的形状是本片的贡献**，缺一腿那位证人就是空的。其一：当场证明 glob 认得缓存里的源码——递 `*.py` 那根循环头会把种在 `__pycache__` 里的那本返回进 walked，所以"名册里没有它"不是模式看不见。其二：过滤在场时缓存那批名字一个都不进名册、正本那批全进。其三：**同一本文本**挪出缓存目录（builder 把那本副本原样另存到树根的 `movedout` 那一本）之后那批名字立刻进名册。第三腿把"这枚过滤挡的"从"尺的层次不认它""名字形状不匹配"里摘出来——`#344` 写下的具体危害（一次意外的缓存副本会凭空变成名册里的第 N+1 枚调用点）于是有了能重跑的证人。判据一律读仓库里那十一本 helper 本人，没有第二份谓词（`#153` 那一课）。
+- **十位证人分食十二枚腿**，逐枚点名（每一行写的是那位证人自己的定义行，钉子那一枚按 `#344` 点名的宿主称呼，不再重贴它的号）：
+  * `tests/test_doc_citations.py:5694` 那一行的 `def test_the_residence_walk_skips_cached_copies_but_keeps_the_real_books`，钉 `_code_residence` 那一面。
+  * `tests/test_doc_citations.py:5720` 那一行的 `def test_the_member_roster_skips_cached_copies_and_grants_the_tuple_target_names`，一位管两枚：`_class_member_roster` 的过滤与那枚元组腿；同一位证人里另有一根腿把 kinds 收窄，收窄之后元组那三个名字就没了，这才叫"落在这枚元组格上"。
+  * `tests/test_doc_citations.py:5744` 那一行的 `def test_the_module_class_roster_skips_cached_copies_but_keeps_the_real_books`，钉 `_engine_module_classes`。
+  * `tests/test_doc_citations.py:5760` 那一行的 `def test_the_src_name_roster_skips_cached_copies_but_keeps_the_real_books`，钉 `_src_name_roster`。
+  * `tests/test_doc_citations.py:5776` 那一行的 `def test_the_imported_stems_walk_skips_cached_copies_but_keeps_the_real_books`，钉 `_imported_stems`。
+  * `tests/test_wiring.py:4597` 那一行的 `def test_the_refs_walk_skips_cached_copies_but_keeps_the_real_books`，钉 `scan` 那本 helper 递出去的读者名册。
+  * `tests/test_wiring.py:4618` 那一行的 `def test_the_module_defs_walk_skips_cached_copies_but_keeps_the_real_books`，钉 `_module_defs_and_production_reads`。
+  * `tests/test_wiring.py:4636` 那一行的 `def test_the_class_member_walk_skips_cached_copies_but_keeps_the_real_books`，钉 `_class_defs_and_reads`。
+  * `tests/test_wiring.py:4654` 那一行的 `def test_the_class_reach_walk_skips_cached_copies_on_both_walks`，一位管两枚：`_classes_no_reader_reaches` 的过滤与同一座宿主的第二根腿；两条断言各问一件事——零读者的那具类没进名册、缓存里那本假模块的类进了死类名册。
+  * `tests/test_wiring.py:4680` 那一行的 `def test_the_unread_locals_walk_skips_cached_copies_but_keeps_the_real_books`，钉 `_unread_locals`。
+- **两棵合成树各由一本 builder 建**，名册常量各一枚：
+  * `tests/test_doc_citations.py:5686` 那一行的 `def _face_with_cached_copy`，建树的那本；它读的名册常量在 `tests/test_doc_citations.py:5663` 那一行的 `FACE_BOOKS`。
+  * `tests/test_wiring.py:4589` 那一行的 `def _wiring_face_with_cached_copy`，建树的那本；它读的名册常量在 `tests/test_wiring.py:4563` 那一行的 `WIRING_FACE_BOOKS`。
+  每棵树是三面各一本真名册加各一本种在 `__pycache__` 里的同名副本，副本里的名字（`CachedHost`、`cached_method`、`CachedOnlyToken` 这一族）与正本没有一个重合；簿名逐枚写在上面那两本常量里，只有 tmp 树里有实体，仓库里没有那几本，所以本节不贴它们的路径。
+- **刀按方向量到十四具，头一遍的回显被自己的读法削短了**（登记成工具教训，与判据无关）：头一遍带 `-x`，第一具红就收趟，而 `-k` 只选了邻居三枚，于是 `knives345.out` 那十四行只有 rc、刀落盘与汇总，断言句那一列全空。第二趟不带 `-x` 重下三具，把消息取回来（回显 `knife345_repro.out` 与 `knife345_wide.out`，都在仓库外的搁板上）。
+  * K1 摘掉 `tests/test_doc_citations.py:235` 那一行的 `continue` 与它上面那行条件 ⇒ 一位证人红，红在它自己那句把缓存名与名册求交的判断上，回显把漏进来的八枚逐枚打出来。
+  * K3 是一具**割错行的刀**：割 `tests/test_doc_citations.py:3314` 那一行的 `ast.Tuple` 割到的是那枚分支**头**，留在下面的赋值挂到了 Name 分支上，于是红的是尺自己的 `AttributeError`——它说 `Name` 那具结点没有 `elts`。元组腿的真身在 `tests/test_doc_citations.py:3315` 那一行的 `own.update`。这具的 rc 仍是 1，按 `#336` 那条"判 CAUGHT 不够，得读它红在哪一句"归因之后不算那一格的证人，所以重下了 K3b：把那一行整行换成 `pass` ⇒ 红的才是名册少收元组目标那三个成员名。
+  * K13b 是顶宽方向那一具，也是整本跑的：把 `tests/test_doc_citations.py:234` 那一行的 `__pycache__` 换成一个仓里绝不会出现的那串（行数中性）⇒ `1 failed, 153 passed in 18.96s`。整本一百五十四枚里只红这一位证人，说明这枚过滤今天的读者就是它——这一格与 `#333` 用 hits=1 钉"独占"是同一形状，只不过这回的证据来自"顶宽只红一枚"，不来自追溯。
+- **十二枚腿真落过，这不是推断**：`#343` 与 `#342` 用的是仓库外那把执行普查尺（不在版本控制里，见 `#341`），本片没重放它，改由搁板上 `leghits.py` 那本自带的 `sys.settrace` 直接读十位证人自己那十二行——回显 `LEGHITS` 里 `tests/test_doc_citations.py` 的 235、3296、3315、3360、4983、5011 与 `tests/test_wiring.py` 的 487、621、1066、1403、1420、3521 十二枚全为 true，跑面 `10 passed, 291 deselected in 2.57s`。这把小尺只答"这十二行落没落"，答不了别的格，所以它不进仓库，也不替任何今值盖章。
+- **一次踩到的计数坑**：`tests/test_wiring.py:466` 那一行的 `def_roots` 递的是 `src/wolfengine` 那一片，同一行的 `ref_roots` 递的是 `src`、`tests`、`scripts` 三面，于是同一批本被走两遍，每一枚读数是双份。证人第一版按"等于一枚"断言，被自己的尺顶红；改成"名字在不在"与"大于零"两种形，判据一个字没放宽。`#330` 那条「同一趟里两把尺的分母不换算」在这里换了个方向：同一把尺自己走两遍时也没有唯一分母。
+- **两处手册收集数被这次追加顶成新数，按判据自己的路子重钉**：归档里 `test_doc_citations.py` 那一格的读数重钉成 154，`test_wiring.py` 那一格重钉成 147，逐片重数账那一格补上「`#345` 再添五枚后在 04:01:49Z 再重数」这笔。三处都是行内换数字、行数中性，收集数尺与条数尺本身一字节没动——判据变更归用户，这一片没有可改的判据。旧数不抄进本节：那是 `#338` 收过的那一族，历史账要用不带那一形的写法。
+- **今值**（计数是证人，秒数是脏读数）：本节写进本子之前那一趟闸门书（`tests/test_doc_citations.py` 加 `tests/test_wiring.py` 加密钥巡检，带 `-o addopts=--strict-markers -m "not network"`）04:15:51Z 起、04:16:27Z 收，`331 passed`、rc 0；三本之和是一五四加一四七加三十，与上面两处重钉的计数互咬。命令一律带 `-o addopts=`，否则 `-qq` 会把汇总行吞掉（`#154`）。整套全量那一趟本片区没重跑，`#344` 与 `#343` 今值那几格里引用的读数照旧引用、不重新盖章；执行普查尺也没重放，故 `#343` 那张六十八行的 NEVER 名册仍按 `#344` 的引用读。
+- **不动点宣布在这里**：上面的读数出自本节写进本子之前那一趟。本节带进一批新的行号指针，而闸门书按号参数化，所以落进本子之后还要再跑一趟才能确认"新号全对"，那一趟的读数照旧只记在提交说明里——`#332` 到 `#344` 同一手法，第二层递归关不掉。
+- **交下一片**：一是 `#344` 交下来的第二档十枚（合成树那一族：九枚的循环头往临时目录递 `*.jsonl` 模式、腿是「名字以 `.prompts.jsonl` 收尾就跳过」，剩下那枚是反向扫日志时「kind 不是终局就跳过」），形状可以照本片这十位证人抄，但批次落盘真的会产出那种文件，所以喂法要先现量。二是 `test_` 用例体里那十七枚与嵌套 def 那十三枚仍逐枚另问，问法照 `#344` 第三格那句。三是 `_suppression_markers` 缺 `__pycache__` 过滤那一笔的定夺（`#344` 第四格，本片没动）。四是整套全量数与执行普查尺的重放——本片只把十二枚腿配到证人，没有替任何今值盖章。五是端点那一格（`#5`、`#96`、`#10`、`#40`）与 `#302` 那三道豁免照旧等用户动作。

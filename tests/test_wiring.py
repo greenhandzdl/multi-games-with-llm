@@ -4556,3 +4556,139 @@ def test_a_relative_path_joined_into_a_chain_still_reaches_its_reader():
         node = next(n for n in ast.walk(tree)
                     if isinstance(n, ast.Call) and ast.unparse(n.func) == "Path")
         assert _touches_the_filesystem(node, _ast_parents(tree)) is want, src
+
+
+# ---------------- 接线层那六枚 `__pycache__` 过滤：`#344` 数出来的「今天没人走到」，各配一位证人
+
+WIRING_FACE_BOOKS: dict[str, str] = {
+    "src/wolfengine/bookface.py": (
+        "class BookHost:\n    def spoken_in_book(self):\n        return 1\n\n\n"
+        "class NeverHost:\n    def unused_in_book(self):\n        return 2\n\n\n"
+        "def book_helper(state):\n    return 1\n\n\n"
+        "def book_entry(state):\n    return book_helper(state)\n\n\n"
+        "def book_local():\n    dropped_marker = 1\n    return 2\n\n\n"
+        "LEFT_CONST = 3\n\n\nREAD_CONST = LEFT_CONST\n"),
+    "scripts/calibface.py": (
+        "from wolfengine.bookface import BookHost\n\n\n"
+        "def calib_helper(state):\n    return BookHost\n"),
+    "tests/test_bookface.py": (
+        "from wolfengine.bookface import BookHost\n\n\n"
+        "def test_book_reader():\n    assert BookHost\n"),
+    "src/__pycache__/cachedface.py": (
+        "def cached_helper(state):\n    return cached_only_ref(state)\n\n\n"
+        "def cached_local():\n    cached_dropped = 1\n    return 2\n\n\n"
+        "class CachedHost:\n    def cached_method(self):\n        return 1\n\n\n"
+        "cached_const = 7\n"),
+    "src/wolfengine/__pycache__/cacheddeep.py": (
+        "def deep_cached_fn():\n    return deep_only_ref(1)\n\n\n"
+        "class DeepCached:\n    def deep_method(self):\n        return 1\n"),
+    "tests/__pycache__/cachedreader.py": "def cached_entry():\n    return NeverHost\n",
+}
+
+
+def _wiring_face_with_cached_copy(base: Path) -> None:
+    """把 `WIRING_FACE_BOOKS` 那棵合成树种到 `base` 上：三面各一本真书，三面各一本缓存副本。"""
+    for rel, text in WIRING_FACE_BOOKS.items():
+        target = base / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text, encoding="utf-8")
+
+
+def test_the_refs_walk_skips_cached_copies_but_keeps_the_real_books(monkeypatch, tmp_path):
+    """`_py_refs` 里 `scan` 那枚过滤的独占证人：三腿各钉一件事，缺一条就成了自测。"""
+    _wiring_face_with_cached_copy(tmp_path)
+    walked = {str(p.relative_to(tmp_path)) for p in (tmp_path / "src/wolfengine").rglob("*.py")}
+    assert "src/wolfengine/__pycache__/cacheddeep.py" in walked, \
+        f"缓存里那一本连 glob 都没返回，第三腿就成了自测：{sorted(walked)}"
+
+    monkeypatch.setattr("test_wiring.REPO", tmp_path)
+    refs, defined = _py_refs(("src/wolfengine",), ("src", "tests", "scripts"))
+    assert "deep_cached_fn" not in defined and "deep_only_ref" not in refs
+    assert "cached_helper" not in refs and "cached_only_ref" not in refs
+    assert {"book_helper", "book_entry", "spoken_in_book"} <= defined
+    assert refs["book_helper"] > 0
+
+    (tmp_path / "src/wolfengine" / "movedout.py").write_text(
+        WIRING_FACE_BOOKS["src/wolfengine/__pycache__/cacheddeep.py"], encoding="utf-8")
+    shown_refs, shown_defined = _py_refs(("src/wolfengine",), ("src", "tests", "scripts"))
+    assert "deep_cached_fn" in shown_defined and shown_refs["deep_only_ref"] > 0, \
+        "同一本文本挪出缓存那面就收不到了，那第三腿钉的不是那枚过滤"
+
+
+def test_the_module_defs_walk_skips_cached_copies_but_keeps_the_real_books(monkeypatch, tmp_path):
+    """`_module_defs_and_production_reads` 那枚过滤：三张表都从这一趟起树，副本进来就是第 N+1 枚落点。"""
+    _wiring_face_with_cached_copy(tmp_path)
+    monkeypatch.setattr("test_wiring.REPO", tmp_path)
+
+    defs, readers, consts = _module_defs_and_production_reads()
+    assert "cached_helper" not in defs and "cached_const" not in consts
+    assert "cached_only_ref" not in readers
+    assert "book_helper" in defs and "LEFT_CONST" in consts and readers["book_helper"] == 1
+
+    (tmp_path / "src" / "movedout.py").write_text(
+        WIRING_FACE_BOOKS["src/__pycache__/cachedface.py"], encoding="utf-8")
+    shown_defs, shown_readers, shown_consts = _module_defs_and_production_reads()
+    assert "cached_helper" in shown_defs and shown_consts and "cached_const" in shown_consts, \
+        "同一本文本挪出缓存那面就收不到了，那第三腿钉的不是那枚过滤"
+    assert shown_readers["cached_only_ref"] == 1
+
+
+def test_the_class_member_walk_skips_cached_copies_but_keeps_the_real_books(monkeypatch, tmp_path):
+    """`_class_defs_and_reads` 那枚过滤：键是 `文件::类.名字`，缓存里那一本会凭空多一本"文件"。"""
+    _wiring_face_with_cached_copy(tmp_path)
+    walked = {p.name for p in (tmp_path / "scripts").rglob("*.py")}
+    assert "calibface.py" in walked, f"三面起树走不到 scripts：{sorted(walked)}"
+
+    monkeypatch.setattr("test_wiring.REPO", tmp_path)
+    roster = _class_defs_and_reads()
+    assert not [k for k in roster if "CachedHost" in k or "DeepCached" in k], \
+        f"缓存副本进了方法名册：{sorted(k for k in roster if 'Cached' in k)}"
+    assert "bookface.py::BookHost.spoken_in_book" in roster
+
+    (tmp_path / "src" / "movedout.py").write_text(
+        WIRING_FACE_BOOKS["src/__pycache__/cachedface.py"], encoding="utf-8")
+    shown = _class_defs_and_reads()
+    assert "movedout.py::CachedHost.cached_method" in shown, "第三腿钉的不是那枚过滤"
+
+
+def test_the_class_reach_walk_skips_cached_copies_on_both_walks(monkeypatch, tmp_path):
+    """`_classes_no_reader_reaches` 的两枚过滤：读者那一趟、候选那一趟，两腿各钉一件事。
+
+    读者那一趟收进副本 ⇒ 一本假模块替死类付账，那条主张会把死的读成活；候选那一趟收进副本 ⇒
+    假类凭空进名册。两个方向各一棵挪出缓存的对照，所以两腿分得开是谁的牙。
+    """
+    _wiring_face_with_cached_copy(tmp_path)
+    monkeypatch.setattr("test_wiring.REPO", tmp_path)
+
+    dead = _classes_no_reader_reaches()
+    joined = "\n".join(dead)
+    assert "NeverHost" in joined, f"零读者的那具类没进名册：{dead}"
+    assert "DeepCached" not in joined, "缓存里那本假模块的类进了死类名册"
+    assert "BookHost" not in joined
+
+    (tmp_path / "tests" / "movedreader.py").write_text(
+        WIRING_FACE_BOOKS["tests/__pycache__/cachedreader.py"], encoding="utf-8")
+    assert "NeverHost" not in "\n".join(_classes_no_reader_reaches()), \
+        "副本挪出来也没能替死类付账，第一腿钉的不是那枚过滤"
+
+    (tmp_path / "src" / "wolfengine" / "moveddeep.py").write_text(
+        WIRING_FACE_BOOKS["src/wolfengine/__pycache__/cacheddeep.py"], encoding="utf-8")
+    assert "DeepCached" in "\n".join(_classes_no_reader_reaches()), \
+        "副本挪出来也没进候选名册，第二腿钉的不是那枚过滤"
+
+
+def test_the_unread_locals_walk_skips_cached_copies_but_keeps_the_real_books(monkeypatch, tmp_path):
+    """`_unread_locals` 那枚过滤：每条落点是 `文件:行号`，副本进来就是多一枚假死名。"""
+    _wiring_face_with_cached_copy(tmp_path)
+    walked = {str(p.relative_to(tmp_path)) for p in (tmp_path / "tests").rglob("*.py")}
+    assert "tests/__pycache__/cachedreader.py" in walked, \
+        f"glob 没返回那本缓存副本：{sorted(walked)}"
+
+    monkeypatch.setattr("test_wiring.REPO", tmp_path)
+    cells = "\n".join(_unread_locals(("src", "tests", "scripts")))
+    assert "cached_dropped" not in cells and "dropped_marker" in cells
+
+    (tmp_path / "src" / "movedout.py").write_text(
+        WIRING_FACE_BOOKS["src/__pycache__/cachedface.py"], encoding="utf-8")
+    assert "cached_dropped" in "\n".join(_unread_locals(("src", "tests", "scripts"))), \
+        "同一本文本挪出缓存那面就收不到了，那第三腿钉的不是那枚过滤"
