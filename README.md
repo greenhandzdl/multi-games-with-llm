@@ -1,6 +1,6 @@
 # 多智能体博弈数据引擎（狼人杀）
 
-九个 LLM 座位自己打一局中文狼人杀：引擎判定一切合法动作、把每个决策落成一条 append-only JSONL 事件，然后离线复盘给其他人看。产品形态是数据引擎，不是聊天机器人——日志是唯一真相源，指标和界面都只是它的纯函数，所以端点明天被重启、换权重、下线，演示照样能跑。引擎拥有真值（发牌、合法性、结算、胜负），模型只拥有语言（发言文本、它自报的怀疑排序）；这条分工决定了本仓库几乎所有代码的形状。全部命令、离线演示与真人上桌的配方在 [docs/cli.md](docs/cli.md)，指标口径在 [docs/metrics.md](docs/metrics.md)，统计协议在 [docs/comparison.md](docs/comparison.md)，视图与颜色在 [docs/views.md](docs/views.md)，延迟常数只住 [docs/calibration.md](docs/calibration.md)。手册里那些 `#NNN` 形的号是任务清单的编号，那本清单不随仓库发布，仓库内唯一的落点是 `docs/iterations.md`——要复核就按号检索，别把它当成点得开的链接。
+九个 LLM 座位自己打一局中文狼人杀：引擎判定一切合法动作、把每个决策落成一条 append-only JSONL 事件，然后离线复盘给其他人看。产品形态是数据引擎，不是聊天机器人——日志是唯一真相源，指标和界面都只是它的纯函数，所以端点明天被重启、换权重、下线，演示照样能跑。引擎拥有真值（发牌、合法性、结算、胜负），模型只拥有语言（发言文本、它自报的怀疑排序）；这条分工决定了本仓库几乎所有代码的形状。全部命令、离线演示与真人上桌的配方在 [docs/cli.md](docs/cli.md)，指标口径在 [docs/metrics.md](docs/metrics.md)，统计协议在 [docs/comparison.md](docs/comparison.md)，视图与颜色在 [docs/views.md](docs/views.md)，延迟常数只住 [docs/calibration.md](docs/calibration.md)。手册里那些 `#NNN` 形的号是任务清单的编号，那本清单不随仓库发布，仓库内唯一的落点是 `docs/iterations.md`——要复核就按号检索，别把它当成点得开的链接。那些「具数见某节」式的节名指针也同理：它们大半住在 `docs/iterations.md` 里，不在手册的任何一页上——要复核就按节名在那一本里检索。
 
 ## 安装与配置：密钥的值永远不进文件
 

@@ -16,7 +16,7 @@ wolf batch --out data/plumbing --configs A,B --set B.temperature=0.6 \
            --games 2 --seed0 1000 --mock                            # 只验管线
 wolf compare data/plumbing --axis temperature                       # → comparison.md，退出码 1
 wolf compare data/plumbing --axis temperature --json -o data/plumbing/A-vs-B.md   # 落点可改名，机器侧另存一份
-# 真端点那一条留在可粘贴区外面，规矩和 README〈命令一览〉那条一样：它要 `100.87.65.60:13000`
+# 真端点那一条留在可粘贴区外面，规矩和 `docs/cli.md`〈命令一览〉那条一样：它要 `100.87.65.60:13000`
 # 上那个判官，而照着这一块粘进终端的人不一定带着导出的 key——粘错了不是慢，是 401。
 # wolf batch --out data/temp09-vs-06 --configs A,B \
 #            --set B.temperature=0.6 --games 20 --seed0 1000
@@ -47,7 +47,7 @@ wolf compare data/plumbing --axis temperature --json -o data/plumbing/A-vs-B.md 
 那一格**：只把 `enable_sheriff` 内联进 `report.py` 时，整套 742 条只红这一条；内联一份含点号路径的
 完整名单时另有第二个读者——`test_the_no_reader_list_and_the_source_agree_in_both_directions`
 （住在 `tests/test_batch_paired.py`）把 `"regions.b0"` 这样的字符串常量也算读取点，于是"零读者名单"
-与源码对不上。四具变异、以及"行为套件不动"那句被打掉的预期，记在 README〈一根不存在的处理轴〉。
+与源码对不上。四具变异、以及"行为套件不动"那句被打掉的预期，记在 `docs/iterations.md`〈一根不存在的处理轴〉。
 
 拒绝有两类，报错的话也分两类。上面那四个是**身份**：改了就不是同一批数据。另一类是**还没做**：
 `Config._INERT`（顶层那一格是 `enable_sheriff`——plan §13 要求的就是"默认关的 flag"，不是"能开的
@@ -89,7 +89,7 @@ wolf compare data/plumbing --axis temperature --json -o data/plumbing/A-vs-B.md 
 板子，六者都在建目录、写 manifest 之前落到 stderr 的一行 `配置错误：…` 上。后两格是 2026-09-22 补的
 ——`batch --games 0` 以前先把批次目录写出去、再在摘要行上读那份空配对表崩掉，脚本于是拿到一个由崩溃
 给的退出码；`--seat 10` 那一类则是"类型过了、范围没过"，印一份看着正常的时间线再退 0。判据与变异见
-[README.md](../README.md) 的〈零局的批次先落了盘…〉与〈类型过了、范围没过…〉。
+`docs/iterations.md` 的〈零局的批次先落了盘…〉与〈类型过了、范围没过…〉。
 
 ## compare 的七道闸门（按执行顺序）
 
