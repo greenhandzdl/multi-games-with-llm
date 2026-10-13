@@ -2111,15 +2111,15 @@ def test_readme_carries_no_prose_battery_verdict():
 
 
 def test_the_other_manual_pages_carry_no_prose_battery_verdict():
-    """同一族判据扫其余手册页：`#143` 搬走的是 README，那三本页里的逐片电池账一处没动过。
+    """同一族判据扫其余手册页：`#143` 搬走的是 README，那几本页里的逐片电池账一处没动过（`#352` 起这一面多一本 `cli.md`）。
 
     `#167` 那一条只管 README，是因为 `docs/metrics.md`、`docs/views.md`、
     `docs/comparison.md` 里这批句子的唯一出处（当年那份跑批输出）已经不在仓库里——先逐字登记进
     归档（`#168` 第一步那张 13 行的表）才有资格摘，否则"精简"就是销毁记录。
     """
     pages = [f for f in _manual_pages() if f.name != "README.md"]
-    assert [f.name for f in pages] == ["calibration.md", "comparison.md", "metrics.md", "views.md"], \
-        "语料面不叫这四本就不是「手册为零」：扫空了这条闸门照样绿"
+    assert [f.name for f in pages] == ["calibration.md", "cli.md", "comparison.md", "metrics.md", "views.md"], \
+        "语料面不叫这五本就不是「手册为零」：扫空了这条闸门照样绿"
     sites = [(f.name, n, s) for f in pages for n, s in _verdict_readings(f.read_text(encoding="utf-8"))]
     assert not sites, f"这些手册页里还坐着逐片电池的判决读数（带时间戳的历史值）：{sites}"
 

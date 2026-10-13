@@ -1299,7 +1299,7 @@ def test_the_json_lands_beside_whichever_markdown_was_asked_for(tmp_path):
     assert (out / "my.json").exists(), "JSON 落在了批次目录，而 markdown 在 `-o` 指的地方"
 
 
-# --------------------------------------------------- README 的演示块整块能跑（#136）
+# --------------------------------------------------- cli.md 的演示块整块能跑（#136，原先住在 README）
 DEMO_HEADING = "## 三分钟离线演示"
 # 一块一条：每条命令只留一句"别人替不了它"的读数。挑标记前先按 `head -3` 的那个窗口逐命令实测
 # 过谁印了什么（`/tmp/percmd136.txt`，2026-09-26T07:10Z）——`[e1] 法官：开局座位` 那种三条命令
@@ -1419,7 +1419,7 @@ def _dialer_statements(live: list[str]) -> list[str]:
 def test_the_readme_demo_block_runs_verbatim(tmp_path, no_network):
     """把人照着 README 敲的那一段整块交给 bash，看它有没有真打到一局日志上。
 
-    现场是 README 上一节自己造出来的：`--dry-run --out data` 与 `run --out data` 共用一个
+    现场是那一页上一节自己造出来的：`--dry-run --out data` 与 `run --out data` 共用一个
     目录，于是那个目录里合法地住着两种 `*.jsonl`。引擎的两个读取器都把转储按名字跳过
     （`metrics.read_dir` / `batch.read_arm`），演示块里那句 `LOG=` 是同一句判据的第三份
     抄写——而它此前那份抄错了：`ls data/*.jsonl | tail -1` 挑中的是转储，因为 `g` 排在任何
@@ -1431,7 +1431,7 @@ def test_the_readme_demo_block_runs_verbatim(tmp_path, no_network):
     dumps = sorted(p.name for p in (tmp_path / "data").glob("*.prompts.jsonl"))
     assert dumps, "夹具没能造出「同一目录里两种 jsonl」这个现场，用例就在空转"
 
-    block = _doc_block(Path("README.md"), DEMO_HEADING)
+    block = _doc_block(Path("docs/cli.md"), DEMO_HEADING)
     proc = _bash_the_block(tmp_path, block, "demo", None)
     evidence = (f"--- 块 ---\n{block}\n--- stdout ---\n{proc.stdout}\n"
                 f"--- stderr ---\n{proc.stderr}")
@@ -1441,7 +1441,7 @@ def test_the_readme_demo_block_runs_verbatim(tmp_path, no_network):
     assert "这不是一局日志" not in proc.stdout + proc.stderr, evidence
 
 
-# ------------------------------------------- README〈人怎么上桌〉那一块整块能跑（#137）
+# ------------------------------------------- cli.md〈人怎么上桌〉那一块整块能跑（#137，原先住在 README）
 HUMAN_HEADING = "## 人怎么上桌：`--human 座位`"
 # 一块一条，和 `#136` 那块同一口径，但这里的"一条"要更严：`桌边坐着一个真人` 那一行 `run` 收尾
 # 时也印（实测那一趟 `run` 的标准输出台账第 205 行，2026-09-26T07:37Z），所以第一版拿它当 replay 的独证，被 K4 那具刀
@@ -1471,7 +1471,7 @@ def test_the_human_seat_block_runs_verbatim(tmp_path):
     """
     import shutil
 
-    block = _doc_block(Path("README.md"), HUMAN_HEADING)
+    block = _doc_block(Path("docs/cli.md"), HUMAN_HEADING)
     live = [text for kind, text in _block_statements(block) if kind == "live"]
     dialers = _dialer_statements(live)
     assert not dialers, (
@@ -1503,9 +1503,9 @@ def test_the_human_seat_block_runs_verbatim(tmp_path):
         f"replay 被指成了上帝视角：{evidence}")
 
 
-# ------------------------------------------- README〈命令一览〉那一块逐条能跑（#138）
+# ------------------------------------------- cli.md〈命令一览〉那一块逐条能跑（#138，原先住在 README）
 MENU_HEADING = "## 命令一览：只有 `run` 和 `batch` 需要端点"
-# 一条一格，按 README 里出现的顺序对齐（所以条数变了就必须先改这里，见下面的等式断言）。
+# 一条一格，按那一页里出现的顺序对齐（所以条数变了就必须先改这里，见下面的等式断言）。
 # 每格的读数与退出码都来自 2026-09-26T07:58Z 的一次逐条实跑（`/tmp/m138b`）：`run` 与
 # `--dry-run` 那两条在同一秒内落到同一个 `--out data` 时，第二条的 rc 是 2 而不是 0——那
 # 就是这一片要修的 bug，所以这里的 0 是**修完之后**的形状，见 docs/iterations.md 的 `#138`。
@@ -1521,7 +1521,7 @@ MENU_EXPECTATIONS = [
 
 
 def test_the_command_menu_lines_run_in_sequence(tmp_path):
-    """把〈命令一览〉围栏里的每一条举例按 README 的顺序、一条一次 bash 敲进同一个空目录。
+    """把〈命令一览〉围栏里的每一条举例按那一页的顺序、一条一次 bash 敲进同一个空目录。
 
     为什么是"一条一次"而不是整块一次：这一节的最后一格是 `gate`，而它对合成批次**故意**返
     回 1。整块交给 bash 时进程的退出码就是最后那条的退出码，`returncode == 0` 这条断言因此
@@ -1532,7 +1532,7 @@ def test_the_command_menu_lines_run_in_sequence(tmp_path):
     条挪到 `batch` 之前，它们会在空目录里撞上「配置错误」而 rc 变 2——这一格的 1 因此同时
     在替"这一节的读法是从上往下"作证。
     """
-    block = _doc_block(Path("README.md"), MENU_HEADING)
+    block = _doc_block(Path("docs/cli.md"), MENU_HEADING)
     statements = _block_statements(block)
     live = [text for kind, text in statements if kind == "live"]
     dialers = _dialer_statements(live)
